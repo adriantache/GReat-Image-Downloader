@@ -1,22 +1,25 @@
-package com.example.greatimagedownloader.data.di
+package com.example.greatimagedownloader.data
 
+import com.example.greatimagedownloader.data.storage.WifiStorage
 import com.example.greatimagedownloader.domain.data.Repository
 
-class RepositoryImpl: Repository {
+class RepositoryImpl(
+    private val wifiStorage: WifiStorage,
+) : Repository {
     override fun getWifiSsid(): String? {
-        TODO("Not yet implemented")
+        return wifiStorage.getWifiSsid()
     }
 
     override fun getWifiPassword(): String? {
-        TODO("Not yet implemented")
+        return wifiStorage.getWifiPassword()
     }
 
     override fun saveWifiSsid(ssid: String) {
-        TODO("Not yet implemented")
+        wifiStorage.saveWifiSsid(ssid)
     }
 
     override fun saveWifiPassword(password: String) {
-        TODO("Not yet implemented")
+        wifiStorage.saveWifiPassword(password)
     }
 
     override fun getSavedPhotos(): List<String> {

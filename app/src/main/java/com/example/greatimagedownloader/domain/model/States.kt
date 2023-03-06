@@ -6,7 +6,7 @@ sealed interface States {
     class RequestPermissions(val onPermissionsGranted: () -> Unit) : States
 
     class RequestWifiCredentials(
-        onWifiCredentialsInput: (ssid: String, password: String) -> Unit,
+        val onWifiCredentialsInput: (ssid: String, password: String) -> Unit,
     ) : States
 
     class ConnectWifi(
