@@ -1,11 +1,16 @@
 package com.example.greatimagedownloader.data
 
+import com.example.greatimagedownloader.data.api.RicohApi
+import com.example.greatimagedownloader.data.storage.FilesStorage
 import com.example.greatimagedownloader.data.storage.WifiStorage
 import com.example.greatimagedownloader.domain.data.Repository
+import com.example.greatimagedownloader.domain.data.model.PhotoInfo
 import com.example.greatimagedownloader.domain.data.model.WifiDetails
 
 class RepositoryImpl(
     private val wifiStorage: WifiStorage,
+    private val filesStorage: FilesStorage,
+    private val ricohApi: RicohApi,
 ) : Repository {
     override fun getWifiDetails(): WifiDetails {
         val ssid = wifiStorage.getWifiSsid()
@@ -23,18 +28,34 @@ class RepositoryImpl(
     }
 
     override fun getSavedPhotos(): List<String> {
-        TODO("Not yet implemented")
+        return filesStorage.getSavedPhotos()
     }
 
-    override fun getCameraPhotoList(): List<String> {
-        TODO("Not yet implemented")
+    override suspend fun getCameraPhotoList(): Result<List<PhotoInfo>> {
+        val response = ricohApi.getPhotos()
+
+        return if (response.isSuccessful) {
+            val photoInfo = response.body()?.dirs?.flatMap { dir ->
+                dir.files.map { file ->
+                    PhotoInfo(
+                        directory = dir.name,
+                        name = file
+                    )
+                }
+            }.orEmpty()
+
+            Result.success(photoInfo)
+        } else {
+            Result.failure(Throwable(response.errorBody().toString()))
+        }
     }
 
-    override suspend fun downloadPhotoToStorage(name: String) {
-        TODO("Not yet implemented")
+    override suspend fun downloadPhotoToStorage(photo: PhotoInfo) {
+        val photoData = ricohApi.getPhoto(photo.directory, photo.name)
+        filesStorage.savePhoto(photoData, photo.name)
     }
 
-    override fun shutDownCamera() {
-        TODO("Not yet implemented")
+    override suspend fun shutDownCamera() {
+        ricohApi.finish()
     }
 }

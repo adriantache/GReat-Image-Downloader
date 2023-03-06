@@ -1,5 +1,6 @@
 package com.example.greatimagedownloader.domain.data
 
+import com.example.greatimagedownloader.domain.data.model.PhotoInfo
 import com.example.greatimagedownloader.domain.data.model.WifiDetails
 
 interface Repository {
@@ -11,7 +12,7 @@ interface Repository {
     fun getSavedPhotos(): List<String>
 
     // Camera operations
-    fun getCameraPhotoList(): List<String>
-    suspend fun downloadPhotoToStorage(name: String)
-    fun shutDownCamera()
+    suspend fun getCameraPhotoList(): Result<List<PhotoInfo>>
+    suspend fun downloadPhotoToStorage(photo: PhotoInfo)
+    suspend fun shutDownCamera()
 }

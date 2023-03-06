@@ -4,6 +4,7 @@ import android.util.Log
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.Button
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -24,6 +25,7 @@ import com.example.greatimagedownloader.domain.model.States.Init
 import com.example.greatimagedownloader.domain.model.States.RequestPermissions
 import com.example.greatimagedownloader.domain.model.States.RequestWifiCredentials
 import com.example.greatimagedownloader.ui.permissions.PermissionsRequester
+import com.example.greatimagedownloader.ui.util.KeepScreenOn
 import com.example.greatimagedownloader.ui.view.PermissionsView
 import com.example.greatimagedownloader.ui.view.StartView
 import com.example.greatimagedownloader.ui.view.WifiInputView
@@ -69,11 +71,18 @@ fun MainScreenStateMachine(
                 onChangeWifiDetails = state.onChangeWifiDetails,
             )
 
-            GetPhotos -> TODO()
-            is DownloadPhotos -> TODO()
-            Disconnect -> TODO()
+            GetPhotos -> Text("Getting existing photos")
+            is DownloadPhotos -> {
+                KeepScreenOn()
+                Text("Downloading photos: ${state.currentPhotoNum}/${state.totalPhotos}")
+            }
 
-            Disconnected -> TODO()
+            Disconnect -> Text("Disconnecting")
+
+            // TODO: reset after delay in use case?
+            is Disconnected -> Button(onClick = state.onRestart) {
+                Text("Restart process")
+            }
         }
     }
 }
@@ -82,5 +91,6 @@ fun MainScreenStateMachine(
 private fun HandleEvent(event: Events) {
     when (event) {
         Events.InvalidWifiInput -> Text(stringResource(R.string.error_invalid_wifi_input))
+        Events.CannotDownloadPhotos -> Text("Cannot download photo list from camera!")
     }
 }

@@ -59,6 +59,9 @@ dependencies {
     implementation "io.insert-koin:koin-android:3.3.3"
     implementation "io.insert-koin:koin-androidx-compose:3.4.2"
     implementation "com.google.accompanist:accompanist-permissions:0.29.1-alpha"
+    implementation 'com.squareup.retrofit2:retrofit:2.9.0'
+    implementation "com.squareup.retrofit2:converter-moshi:2.4.0"
+    implementation 'com.squareup.okhttp3:logging-interceptor:4.2.1'
 
     testImplementation 'junit:junit:4.13.2'
     testImplementation("org.assertj:assertj-core:3.24.2")

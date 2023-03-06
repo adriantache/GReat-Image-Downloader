@@ -10,20 +10,20 @@ import android.net.wifi.WifiManager
 import android.net.wifi.WifiNetworkSpecifier
 import android.util.Log
 import com.example.greatimagedownloader.domain.ui.model.WifiDetails
+import kotlin.coroutines.resume
+import kotlin.coroutines.suspendCoroutine
 
 private const val CONNECT_TIMEOUT_MS = 10_000
 
 class WifiUtilImpl(
     private val context: Context,
 ) : WifiUtil {
-    override fun connectToWifi(
+    override suspend fun connectToWifi(
         wifiDetails: WifiDetails,
         onConnectionSuccess: () -> Unit,
         onConnectionLost: () -> Unit
     ) {
-        val wifiManager = context.getSystemService(Context.WIFI_SERVICE) as WifiManager
-        // TODO: fix wifi scan not starting automatically
-        wifiManager.startScan()
+        scanForWifi()
 
         val wifiNetworkSpecifier = WifiNetworkSpecifier.Builder()
             .setSsid(wifiDetails.ssid)
@@ -97,5 +97,34 @@ class WifiUtilImpl(
         }
 
         connectivityManager.requestNetwork(networkRequest, networkCallback, CONNECT_TIMEOUT_MS)
+    }
+
+    // TODO: fix this scan code
+    private suspend fun scanForWifi() {
+        return suspendCoroutine { continuation ->
+            val wifiManager =
+                context.applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
+
+
+//            val wifiScanReceiver = object : BroadcastReceiver() {
+//                override fun onReceive(context: Context, intent: Intent) {
+//                    val success = intent.getBooleanExtra(WifiManager.EXTRA_RESULTS_UPDATED, false)
+//                    if (success) {
+//                        continuation.resume(Unit)
+//                    } else {
+//                        continuation.resume(Unit)
+//                    }
+//                }
+//            }
+//
+//            val intentFilter = IntentFilter()
+//            intentFilter.addAction(WifiManager.SCAN_RESULTS_AVAILABLE_ACTION)
+//            context.registerReceiver(wifiScanReceiver, intentFilter)
+
+            val success = wifiManager.startScan()
+            if (!success) {
+                continuation.resume(Unit)
+            }
+        }
     }
 }

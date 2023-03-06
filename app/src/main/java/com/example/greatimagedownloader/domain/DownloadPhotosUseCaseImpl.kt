@@ -77,13 +77,22 @@ class DownloadPhotosUseCaseImpl(
 
 
     // TODO: figure out a way to stream individual file download progress?
+    // TODO: handle directories
     private fun getPhotos() {
-        val savedPhotos = repository.getSavedPhotos()
-        val availablePhotos = repository.getCameraPhotoList()
-
-        val photosToDownload = availablePhotos.filter { !savedPhotos.contains(it) }
-
         CoroutineScope(dispatcher).launch {
+            val savedPhotos = repository.getSavedPhotos()
+            val availablePhotos = repository.getCameraPhotoList()
+
+            if (availablePhotos.isFailure) {
+                event.value = Event(Events.CannotDownloadPhotos)
+            }
+
+            val photosToDownload = availablePhotos.getOrNull().orEmpty()
+                .filter {
+                    val nameWithoutExtension = it.name.split(".")[0]
+                    !savedPhotos.contains(nameWithoutExtension)
+                }
+
             photosToDownload.forEachIndexed { index, name ->
                 state.value = DownloadPhotos(
                     currentPhotoNum = index + 1,
@@ -99,13 +108,18 @@ class DownloadPhotosUseCaseImpl(
         }
     }
 
-    private fun disconnect() {
+    private suspend fun disconnect() {
+        // TODO: enable this when I figure out the concurrency
         repository.shutDownCamera() // Also shuts down the hotspot, no need to disconnect from WiFi.
 
-        state.value = Disconnected
+        state.value = Disconnected(onRestart = {
+            state.value = Init(::onInit)
+        })
     }
 
     private fun onConnectionLost() {
-        state.value = Disconnected
+        state.value = Disconnected(onRestart = {
+            state.value = Init(::onInit)
+        })
     }
 }

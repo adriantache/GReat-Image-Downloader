@@ -10,6 +10,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -17,6 +18,7 @@ import androidx.compose.ui.unit.dp
 import com.example.greatimagedownloader.domain.ui.model.WifiDetails
 import com.example.greatimagedownloader.ui.wifi.WifiUtil
 import com.example.greatimagedownloader.ui.wifi.WifiUtilImpl
+import kotlinx.coroutines.launch
 
 @Composable
 fun StartView(
@@ -26,6 +28,7 @@ fun StartView(
     onChangeWifiDetails: () -> Unit,
 ) {
     val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
 
     val wifiUtil: WifiUtil by remember { mutableStateOf(WifiUtilImpl(context)) }
 
@@ -37,12 +40,14 @@ fun StartView(
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Button(onClick = {
-            connectToWifi(
-                wifiUtil = wifiUtil,
-                wifiDetails = wifiDetails,
-                onConnectionSuccess = onConnectionSuccess,
-                onConnectionLost = onConnectionLost
-            )
+            coroutineScope.launch {
+                connectToWifi(
+                    wifiUtil = wifiUtil,
+                    wifiDetails = wifiDetails,
+                    onConnectionSuccess = onConnectionSuccess,
+                    onConnectionLost = onConnectionLost
+                )
+            }
         }) {
             Text("Connect and start download")
         }
@@ -54,7 +59,7 @@ fun StartView(
 }
 
 // TODO: implement timeout, retry mechanism
-private fun connectToWifi(
+private suspend fun connectToWifi(
     wifiUtil: WifiUtil,
     wifiDetails: WifiDetails,
     onConnectionSuccess: () -> Unit,

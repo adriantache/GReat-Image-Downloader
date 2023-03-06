@@ -27,5 +27,7 @@ sealed interface States {
 
     object Disconnect : States
 
-    object Disconnected : States
+    class Disconnected(
+        val onRestart: () -> Unit,
+    ) : States
 }
