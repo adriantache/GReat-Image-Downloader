@@ -26,3 +26,6 @@ While there are many improvements that can be added to this project, here is the
 - implement camera API methods
 - implement foreground service 
 
+# Extra
+
+Thank you to https://github.com/JohnMaguire/photo_sync and https://github.com/clyang/GRsync for inspiration regarding the Ricoh API and how to handle downloading the photos!
