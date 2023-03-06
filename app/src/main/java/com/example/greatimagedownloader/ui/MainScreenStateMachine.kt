@@ -11,7 +11,7 @@ import com.example.greatimagedownloader.domain.model.States.GetPhotos
 import com.example.greatimagedownloader.domain.model.States.Init
 import com.example.greatimagedownloader.domain.model.States.RequestPermissions
 import com.example.greatimagedownloader.domain.model.States.RequestWifiCredentials
-import com.example.greatimagedownloader.ui.view.InitView
+import com.example.greatimagedownloader.ui.permissions.PermissionsRequester
 import com.example.greatimagedownloader.ui.view.PermissionsView
 import org.koin.core.context.GlobalContext.get
 
@@ -22,13 +22,19 @@ fun MainScreenStateMachine(
     val stateValue by viewModel.downloadPhotosState.collectAsState()
 
     when (val state = stateValue) {
-        is Init -> InitView(onReady = state.onInit)
-        is RequestPermissions -> PermissionsView(onPermissionsGranted = state.onPermissionsGranted)
+        is Init -> state.onInit()
+
+        is RequestPermissions -> PermissionsRequester(onPermissionsGranted = state.onPermissionsGranted) {
+            PermissionsView()
+        }
+
         is RequestWifiCredentials -> TODO()
         is ConnectWifi -> TODO()
+
         GetPhotos -> TODO()
         is DownloadPhotos -> TODO()
         Disconnect -> TODO()
+
         Disconnected -> TODO()
     }
 }
