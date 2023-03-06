@@ -11,15 +11,13 @@ import com.example.greatimagedownloader.domain.model.States.GetPhotos
 import com.example.greatimagedownloader.domain.model.States.Init
 import com.example.greatimagedownloader.domain.model.States.RequestPermissions
 import com.example.greatimagedownloader.domain.model.States.RequestWifiCredentials
+import com.example.greatimagedownloader.domain.model.WifiDetailsEntity
 import com.example.greatimagedownloader.domain.utils.model.Event
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
-
-// TODO: move to entity
-private const val WIFI_PASS_MIN_LENGTH = 8
 
 // TODO: add tests
 class DownloadPhotosUseCaseImpl(
@@ -38,29 +36,30 @@ class DownloadPhotosUseCaseImpl(
     }
 
     private fun connectToWifi() {
-        val ssid = repository.getWifiSsid()
-        val password = repository.getWifiPassword()
+        val wifiDetails = repository.getWifiDetails().toEntity()
 
-        state.value = if (ssid != null && password != null) {
+        state.value = if (wifiDetails.isValid) {
             ConnectWifi(
-                savedSsid = ssid,
-                savedPassword = password,
+                wifiDetails = wifiDetails.toUi(),
                 onConnectionSuccess = ::onConnectionSuccess,
                 onConnectionLost = ::onConnectionLost,
             )
         } else {
-            RequestWifiCredentials(::onWifiCredentialsInput)
+            RequestWifiCredentials(
+                onWifiCredentialsInput = {
+                    onWifiCredentialsInput(it.toEntity())
+                }
+            )
         }
     }
 
-    private fun onWifiCredentialsInput(ssid: String, password: String) {
-        if (ssid.isBlank() || password.isBlank() || password.length < WIFI_PASS_MIN_LENGTH) {
+    private fun onWifiCredentialsInput(details: WifiDetailsEntity) {
+        if (!details.isValid) {
             event.value = Event(Events.InvalidWifiInput)
             return
         }
 
-        repository.saveWifiSsid(ssid)
-        repository.saveWifiPassword(password)
+        repository.saveWifiDetails(details.toData())
 
         connectToWifi()
     }

@@ -1,17 +1,18 @@
 package com.example.greatimagedownloader.domain.model
 
+import com.example.greatimagedownloader.domain.ui.model.WifiDetails
+
 sealed interface States {
     class Init(val onInit: () -> Unit) : States
 
     class RequestPermissions(val onPermissionsGranted: () -> Unit) : States
 
     class RequestWifiCredentials(
-        val onWifiCredentialsInput: (ssid: String, password: String) -> Unit,
+        val onWifiCredentialsInput: (WifiDetails) -> Unit,
     ) : States
 
     class ConnectWifi(
-        val savedSsid: String,
-        val savedPassword: String,
+        val wifiDetails: WifiDetails,
         val onConnectionSuccess: () -> Unit,
         val onConnectionLost: () -> Unit,
     ) : States

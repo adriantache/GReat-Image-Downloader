@@ -1,11 +1,11 @@
 package com.example.greatimagedownloader.domain.data
 
+import com.example.greatimagedownloader.domain.data.model.WifiDetails
+
 interface Repository {
     // Wifi
-    fun getWifiSsid(): String?
-    fun getWifiPassword(): String?
-    fun saveWifiSsid(ssid: String)
-    fun saveWifiPassword(password: String)
+    fun getWifiDetails(): WifiDetails
+    fun saveWifiDetails(wifiDetails: WifiDetails)
 
     // Data storage
     fun getSavedPhotos(): List<String>

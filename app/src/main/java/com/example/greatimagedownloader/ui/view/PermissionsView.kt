@@ -5,5 +5,6 @@ import androidx.compose.runtime.Composable
 
 @Composable
 fun PermissionsView() {
+    // TODO: make this nicer
     Text("Request permissions")
 }

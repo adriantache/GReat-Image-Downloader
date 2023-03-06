@@ -2,24 +2,24 @@ package com.example.greatimagedownloader.data
 
 import com.example.greatimagedownloader.data.storage.WifiStorage
 import com.example.greatimagedownloader.domain.data.Repository
+import com.example.greatimagedownloader.domain.data.model.WifiDetails
 
 class RepositoryImpl(
     private val wifiStorage: WifiStorage,
 ) : Repository {
-    override fun getWifiSsid(): String? {
-        return wifiStorage.getWifiSsid()
+    override fun getWifiDetails(): WifiDetails {
+        val ssid = wifiStorage.getWifiSsid()
+        val password = wifiStorage.getWifiPassword()
+
+        return WifiDetails(
+            ssid = ssid,
+            password = password,
+        )
     }
 
-    override fun getWifiPassword(): String? {
-        return wifiStorage.getWifiPassword()
-    }
-
-    override fun saveWifiSsid(ssid: String) {
-        wifiStorage.saveWifiSsid(ssid)
-    }
-
-    override fun saveWifiPassword(password: String) {
-        wifiStorage.saveWifiPassword(password)
+    override fun saveWifiDetails(wifiDetails: WifiDetails) {
+        wifiStorage.saveWifiSsid(requireNotNull(wifiDetails.ssid))
+        wifiStorage.saveWifiPassword(requireNotNull(wifiDetails.password))
     }
 
     override fun getSavedPhotos(): List<String> {
