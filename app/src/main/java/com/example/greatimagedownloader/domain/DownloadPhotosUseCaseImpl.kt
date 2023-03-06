@@ -43,6 +43,11 @@ class DownloadPhotosUseCaseImpl(
                 wifiDetails = wifiDetails.toUi(),
                 onConnectionSuccess = ::onConnectionSuccess,
                 onConnectionLost = ::onConnectionLost,
+                onChangeWifiDetails = {
+                    state.value = RequestWifiCredentials(onWifiCredentialsInput = {
+                        onWifiCredentialsInput(it.toEntity())
+                    })
+                }
             )
         } else {
             RequestWifiCredentials(

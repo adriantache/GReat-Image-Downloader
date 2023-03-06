@@ -1,4 +1,6 @@
 <resources>
     <string name="app_name">GReat Image Downloader</string>
     <string name="connect">Connect</string>
+    <string name="error_invalid_wifi_input">Invalid wifi details, please check your inputs.</string>
+    <string name="wifi_details_hint">Please enter the wifi details from your camera below.</string>
 </resources>
