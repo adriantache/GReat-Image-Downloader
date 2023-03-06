@@ -13,6 +13,7 @@ import com.example.greatimagedownloader.domain.model.States.RequestPermissions
 import com.example.greatimagedownloader.domain.model.States.RequestWifiCredentials
 import com.example.greatimagedownloader.ui.permissions.PermissionsRequester
 import com.example.greatimagedownloader.ui.view.PermissionsView
+import com.example.greatimagedownloader.ui.view.WifiInputView
 import org.koin.core.context.GlobalContext.get
 
 @Composable
@@ -28,7 +29,7 @@ fun MainScreenStateMachine(
             PermissionsView()
         }
 
-        is RequestWifiCredentials -> TODO()
+        is RequestWifiCredentials -> WifiInputView(state.onWifiCredentialsInput)
         is ConnectWifi -> TODO()
 
         GetPhotos -> TODO()
