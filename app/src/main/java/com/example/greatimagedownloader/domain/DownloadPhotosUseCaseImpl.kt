@@ -80,7 +80,11 @@ class DownloadPhotosUseCaseImpl(
     // TODO: handle directories
     private fun getPhotos() {
         CoroutineScope(dispatcher).launch {
-            val savedPhotos = repository.getSavedPhotos()
+            val savedPhotos = repository.getSavedPhotos().map {
+                // TODO: check this is still necessary after we fix the bug
+                // We might need to remove the extension for files that get saved .JPG.jpg
+                it.split(".")[0]
+            }.distinct()
             val availablePhotos = repository.getCameraPhotoList()
 
             if (availablePhotos.isFailure) {
@@ -93,13 +97,13 @@ class DownloadPhotosUseCaseImpl(
                     !savedPhotos.contains(nameWithoutExtension)
                 }
 
-            photosToDownload.forEachIndexed { index, name ->
+            photosToDownload.forEachIndexed { index, photo ->
                 state.value = DownloadPhotos(
                     currentPhotoNum = index + 1,
                     totalPhotos = photosToDownload.size,
                 )
 
-                repository.downloadPhotoToStorage(name)
+                repository.downloadPhotoToStorage(photo)
             }
 
             state.value = Disconnect

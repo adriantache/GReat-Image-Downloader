@@ -75,7 +75,7 @@ class FilesStorageImpl(private val context: Context) : FilesStorage {
     private fun getOutputStream(context: Context, name: String): OutputStream? {
         val resolver: ContentResolver = context.contentResolver
         val contentValues = ContentValues()
-        contentValues.put(MediaStore.MediaColumns.DISPLAY_NAME, "$name.jpg")
+        contentValues.put(MediaStore.MediaColumns.DISPLAY_NAME, name)
         contentValues.put(MediaStore.MediaColumns.MIME_TYPE, "image/jpg")
         contentValues.put(
             MediaStore.MediaColumns.RELATIVE_PATH,
