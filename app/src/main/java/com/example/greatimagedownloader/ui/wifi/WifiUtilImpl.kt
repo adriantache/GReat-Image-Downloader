@@ -10,8 +10,7 @@ import android.net.wifi.WifiManager
 import android.net.wifi.WifiNetworkSpecifier
 import android.util.Log
 import com.example.greatimagedownloader.domain.ui.model.WifiDetails
-import kotlin.coroutines.resume
-import kotlin.coroutines.suspendCoroutine
+import kotlinx.coroutines.delay
 
 private const val CONNECT_TIMEOUT_MS = 10_000
 
@@ -101,10 +100,12 @@ class WifiUtilImpl(
 
     // TODO: fix this scan code
     private suspend fun scanForWifi() {
-        return suspendCoroutine { continuation ->
-            val wifiManager =
-                context.applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
+        val wifiManager =
+            context.applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
 
+        wifiManager.startScan()
+
+        delay(3000)
 
 //            val wifiScanReceiver = object : BroadcastReceiver() {
 //                override fun onReceive(context: Context, intent: Intent) {
@@ -120,11 +121,10 @@ class WifiUtilImpl(
 //            val intentFilter = IntentFilter()
 //            intentFilter.addAction(WifiManager.SCAN_RESULTS_AVAILABLE_ACTION)
 //            context.registerReceiver(wifiScanReceiver, intentFilter)
-
-            val success = wifiManager.startScan()
-            if (!success) {
-                continuation.resume(Unit)
-            }
-        }
+//
+//            val success = wifiManager.startScan()
+//            if (!success) {
+//                continuation.resume(Unit)
+//            }
     }
 }
