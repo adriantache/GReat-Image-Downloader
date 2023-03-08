@@ -22,11 +22,14 @@ While there are many improvements that can be added to this project, here is the
 - implement permissions request UI
 - code cleanup, there's a lot of quickly put together stuff
 - add tests, and lots of them
+- proper error handling
 - implement foreground service instead of keeping screen on
 - test on API <33
 - handle wifi edge cases (camera not on, camera shutting down)
 - show warning if camera battery level is low, and see what other goodies the API exposes (maybe we can make the waiting more fun)
 - (maybe) per file progress indicator
+- (maybe) localization
+- (maybe) test tablet UI/dark mode
 
 # Extra
 Thank you to https://github.com/JohnMaguire/photo_sync and https://github.com/clyang/GRsync for inspiration regarding the Ricoh API and how to handle downloading the photos!
