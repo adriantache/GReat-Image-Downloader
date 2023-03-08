@@ -1,13 +1,11 @@
 package com.example.greatimagedownloader.ui
 
-import android.util.Log
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Button
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -37,15 +35,6 @@ fun MainScreenStateMachine(
 ) {
     val stateValue by viewModel.downloadPhotosState.collectAsState()
     val eventValue by viewModel.downloadPhotosEvents.collectAsState()
-
-    // TODO: remove this debug code when all conditions are covered
-    LaunchedEffect(key1 = stateValue, key2 = eventValue) {
-        Log.i(
-            this::class.java.simpleName,
-            "State: ${stateValue.javaClass.simpleName}\n" +
-                    "Event: ${eventValue?.value?.javaClass?.simpleName}"
-        )
-    }
 
     Column(
         modifier = Modifier.fillMaxSize(),
