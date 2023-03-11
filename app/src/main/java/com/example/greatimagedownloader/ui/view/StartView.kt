@@ -38,6 +38,8 @@ fun StartView(
 
     var isLoading by remember { mutableStateOf(false) }
 
+    // TODO: move this logic to the use case and add a new WifiConnectionPending state for it
+    //  and send an event if we time out to show a snackbar or something
     if (isLoading) {
         LaunchedEffect(Unit) {
             delay(7000)
