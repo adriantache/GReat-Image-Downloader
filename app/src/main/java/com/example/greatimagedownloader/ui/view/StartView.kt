@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -17,7 +18,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import com.example.greatimagedownloader.R
 import com.example.greatimagedownloader.domain.ui.model.WifiDetails
 import com.example.greatimagedownloader.ui.wifi.WifiUtil
 import com.example.greatimagedownloader.ui.wifi.WifiUtilImpl
@@ -53,7 +56,7 @@ fun StartView(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterVertically),
+            verticalArrangement = Arrangement.spacedBy(18.dp, Alignment.CenterVertically),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Button(onClick = {
@@ -74,11 +77,11 @@ fun StartView(
                     )
                 }
             }) {
-                Text("Connect and start download")
+                Text(stringResource(R.string.connect_and_start_download))
             }
 
-            Button(onClick = onChangeWifiDetails) {
-                Text("Change wifi details")
+            TextButton(onClick = onChangeWifiDetails) {
+                Text(stringResource(R.string.change_wifi_details))
             }
         }
     }

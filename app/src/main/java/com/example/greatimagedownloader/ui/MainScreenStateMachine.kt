@@ -48,8 +48,14 @@ fun MainScreenStateMachine(
         when (val state = stateValue) {
             is Init -> state.onInit()
 
-            is RequestPermissions -> PermissionsRequester(onPermissionsGranted = state.onPermissionsGranted) {
-                PermissionsView()
+            is RequestPermissions -> PermissionsRequester(
+                onPermissionsGranted = state.onPermissionsGranted
+            ) { isLocationPermissionGranted, isPhotosPermissionGranted, onRequestPermissions ->
+                PermissionsView(
+                    isLocationPermissionGranted = isLocationPermissionGranted,
+                    isPhotosPermissionGranted = isPhotosPermissionGranted,
+                    onRequestPermissions = onRequestPermissions,
+                )
             }
 
             is RequestWifiCredentials -> WifiInputView(state.onWifiCredentialsInput)
