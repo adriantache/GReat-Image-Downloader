@@ -4,7 +4,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -59,7 +58,7 @@ fun StartView(
             verticalArrangement = Arrangement.spacedBy(18.dp, Alignment.CenterVertically),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            Button(onClick = {
+            DownloadButton(onClick = {
                 coroutineScope.launch {
                     isLoading = true
 
@@ -76,9 +75,7 @@ fun StartView(
                         }
                     )
                 }
-            }) {
-                Text(stringResource(R.string.connect_and_start_download))
-            }
+            })
 
             TextButton(onClick = onChangeWifiDetails) {
                 Text(stringResource(R.string.change_wifi_details))
