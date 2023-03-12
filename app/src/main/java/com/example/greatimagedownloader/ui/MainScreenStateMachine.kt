@@ -23,7 +23,7 @@ import com.example.greatimagedownloader.domain.model.States.Init
 import com.example.greatimagedownloader.domain.model.States.RequestPermissions
 import com.example.greatimagedownloader.domain.model.States.RequestWifiCredentials
 import com.example.greatimagedownloader.ui.permissions.PermissionsRequester
-import com.example.greatimagedownloader.ui.util.KeepScreenOn
+import com.example.greatimagedownloader.ui.view.DownloadingView
 import com.example.greatimagedownloader.ui.view.PermissionsView
 import com.example.greatimagedownloader.ui.view.StartView
 import com.example.greatimagedownloader.ui.view.WifiInputView
@@ -67,9 +67,13 @@ fun MainScreenStateMachine(
             )
 
             GetPhotos -> Text("Getting existing photos")
+
             is DownloadPhotos -> {
-                KeepScreenOn()
-                Text("Downloading photos: ${state.currentPhotoNum}/${state.totalPhotos}")
+                DownloadingView(
+                    currentPhoto = state.currentPhotoNum,
+                    totalPhotos = state.totalPhotos,
+                    photoUris = state.downloadedPhotos,
+                )
             }
 
             Disconnect -> Text("Disconnecting")

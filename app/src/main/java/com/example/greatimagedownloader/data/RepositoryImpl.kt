@@ -50,9 +50,9 @@ class RepositoryImpl(
         }
     }
 
-    override suspend fun downloadPhotoToStorage(photo: PhotoInfo) {
+    override suspend fun downloadPhotoToStorage(photo: PhotoInfo): String? {
         val photoData = ricohApi.getPhoto(photo.directory, photo.name)
-        filesStorage.savePhoto(photoData, photo.name)
+        return filesStorage.savePhoto(photoData, photo.name)?.toString()
     }
 
     override suspend fun shutDownCamera() {

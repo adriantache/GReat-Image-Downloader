@@ -97,13 +97,23 @@ class DownloadPhotosUseCaseImpl(
                     !savedPhotos.contains(nameWithoutExtension)
                 }
 
+            state.value = DownloadPhotos(
+                downloadedPhotos = emptyList(),
+                currentPhotoNum = 0,
+                totalPhotos = photosToDownload.size,
+            )
+
+            var downloadedPhotoUris = mutableListOf<String?>()
+
             photosToDownload.forEachIndexed { index, photo ->
+                val imageUri = repository.downloadPhotoToStorage(photo)
+                downloadedPhotoUris.add(imageUri)
+
                 state.value = DownloadPhotos(
                     currentPhotoNum = index + 1,
                     totalPhotos = photosToDownload.size,
+                    downloadedPhotos = downloadedPhotoUris
                 )
-
-                repository.downloadPhotoToStorage(photo)
             }
 
             state.value = Disconnect

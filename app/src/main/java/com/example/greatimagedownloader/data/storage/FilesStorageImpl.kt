@@ -13,7 +13,6 @@ import okhttp3.ResponseBody
 import java.io.IOException
 import java.io.InputStream
 import java.io.OutputStream
-import java.util.Objects
 
 private const val PATH = "Pictures/Image Sync"
 
@@ -64,15 +63,15 @@ class FilesStorageImpl(private val context: Context) : FilesStorage {
     }
 
     // TODO: clean up this implementation
-    override suspend fun savePhoto(photoData: ResponseBody, name: String) {
-        photoData.parseImage(context, name)
+    override suspend fun savePhoto(photoData: ResponseBody, name: String): Uri? {
+        return photoData.parseImage(context, name)
     }
 
-    private suspend fun ResponseBody.parseImage(context: Context, name: String): Boolean {
+    private suspend fun ResponseBody.parseImage(context: Context, name: String): Uri? {
         return writeResponseBody(this, context, name)
     }
 
-    private fun getOutputStream(context: Context, name: String): OutputStream? {
+    private fun getOutputStream(context: Context, name: String): Pair<OutputStream?, Uri?> {
         val resolver: ContentResolver = context.contentResolver
         val contentValues = ContentValues()
         contentValues.put(MediaStore.MediaColumns.DISPLAY_NAME, name)
@@ -82,20 +81,22 @@ class FilesStorageImpl(private val context: Context) : FilesStorage {
             Environment.DIRECTORY_PICTURES + "/Image Sync"
         )
         val imageUri = resolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, contentValues)
-        return resolver.openOutputStream(Objects.requireNonNull<Uri?>(imageUri))
+        return imageUri?.let { resolver.openOutputStream(it) } to imageUri
     }
 
     private suspend fun writeResponseBody(
         body: ResponseBody,
         context: Context,
         name: String
-    ): Boolean {
+    ): Uri? {
         return withContext(Dispatchers.IO) {
             val inputStream: InputStream =
                 body.byteStream() ?: throw IllegalArgumentException("No bytes")
-            val outputStream: OutputStream =
+            // TODO: clean this up
+            val (outputStream, fileUri) =
                 getOutputStream(context, name)
-                    ?: throw IllegalArgumentException("No output stream.")
+
+            if (outputStream == null) return@withContext null
 
             try {
                 val fileReader = ByteArray(4096)
@@ -111,9 +112,9 @@ class FilesStorageImpl(private val context: Context) : FilesStorage {
                     //fileSizeDownloaded += read;
                 }
                 outputStream.flush()
-                true
+                fileUri
             } catch (e: IOException) {
-                false
+                null
             } finally {
                 inputStream.close()
                 outputStream.close()

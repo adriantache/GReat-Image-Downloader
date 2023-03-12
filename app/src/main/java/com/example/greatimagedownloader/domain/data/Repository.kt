@@ -13,6 +13,6 @@ interface Repository {
 
     // Camera operations
     suspend fun getCameraPhotoList(): Result<List<PhotoInfo>>
-    suspend fun downloadPhotoToStorage(photo: PhotoInfo)
+    suspend fun downloadPhotoToStorage(photo: PhotoInfo): String?
     suspend fun shutDownCamera()
 }
