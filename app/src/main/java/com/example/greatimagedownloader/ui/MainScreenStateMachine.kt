@@ -26,6 +26,7 @@ import com.example.greatimagedownloader.ui.permissions.PermissionsRequester
 import com.example.greatimagedownloader.ui.view.DownloadingView
 import com.example.greatimagedownloader.ui.view.PermissionsView
 import com.example.greatimagedownloader.ui.view.StartView
+import com.example.greatimagedownloader.ui.view.SyncView
 import com.example.greatimagedownloader.ui.view.WifiInputView
 import org.koin.androidx.compose.getViewModel
 
@@ -66,7 +67,7 @@ fun MainScreenStateMachine(
                 onChangeWifiDetails = state.onChangeWifiDetails,
             )
 
-            GetPhotos -> Text("Getting existing photos")
+            GetPhotos -> SyncView()
 
             is DownloadPhotos -> {
                 DownloadingView(

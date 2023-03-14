@@ -49,7 +49,10 @@ fun DownloadingView(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {
-        Text("Downloading photos: ${currentPhoto}/${totalPhotos}")
+        Text(
+            text = "Downloading photos: ${currentPhoto}/${totalPhotos}",
+            style = MaterialTheme.typography.titleMedium
+        )
 
         Spacer(Modifier.height(4.dp))
 
