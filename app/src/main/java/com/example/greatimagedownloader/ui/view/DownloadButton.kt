@@ -10,8 +10,10 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.requiredSize
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -40,14 +42,21 @@ fun DownloadButton(
             ),
         contentAlignment = Alignment.Center,
     ) {
-        Canvas(modifier = Modifier.fillMaxSize()) {
-            val center = size.width / 2
+        Surface(
+            modifier = Modifier
+                .fillMaxSize(),
+            shadowElevation = 8.dp,
+            shape = CircleShape,
+        ) {
+            Canvas(modifier = Modifier.fillMaxSize()) {
+                val center = size.width / 2
 
-            drawCircle(
-                color = bgColor,
-                center = Offset(center, center),
-                radius = center
-            )
+                drawCircle(
+                    color = bgColor,
+                    center = Offset(center, center),
+                    radius = center
+                )
+            }
         }
 
         Column(
