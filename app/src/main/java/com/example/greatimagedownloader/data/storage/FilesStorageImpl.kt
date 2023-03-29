@@ -7,53 +7,48 @@ import android.net.Uri
 import android.os.Environment
 import android.provider.MediaStore
 import android.provider.OpenableColumns
+import androidx.core.net.toFile
+import com.example.greatimagedownloader.data.model.PhotoDownloadInfo
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.flowOn
 import okhttp3.ResponseBody
 import java.io.IOException
-import java.io.InputStream
-import java.io.OutputStream
+import kotlin.math.roundToInt
 
-private const val PATH = "Pictures/Image Sync"
+private val RICOH_PHOTOS_PATH = Environment.DIRECTORY_PICTURES + "/Image Sync"
+private const val MIME_TYPE = "image/jpg"
+private const val MIN_SIZE_BYTES = 100
 
 class FilesStorageImpl(private val context: Context) : FilesStorage {
-
-    // TODO: simplify this if we don't need all queries
     override fun getSavedPhotos(): List<String> {
         val selection = "${MediaStore.Files.FileColumns.RELATIVE_PATH} like ?"
-        val selectionArgs = arrayOf("%$PATH%")
+        val selectionArgs = arrayOf("%$RICOH_PHOTOS_PATH%")
         val contentResolver = context.contentResolver
 
         val projection = arrayOf(
-            MediaStore.Files.FileColumns._ID,
-            MediaStore.Images.Media.DATE_TAKEN,
             MediaStore.MediaColumns.TITLE,
-            MediaStore.Images.Media.MIME_TYPE,
-            MediaStore.MediaColumns.RELATIVE_PATH,
             OpenableColumns.SIZE,
         )
 
         val results = mutableListOf<String>()
 
         contentResolver.query(
-            MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
-            projection,
-            selection,
-            selectionArgs,
-            MediaStore.Images.Media.DATE_TAKEN
+            /* uri = */ MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
+            /* projection = */ projection,
+            /* selection = */ selection,
+            /* selectionArgs = */ selectionArgs,
+            /* sortOrder = */ MediaStore.Images.Media.DATE_TAKEN,
         ).use { cursor ->
             if (cursor == null) return emptyList()
 
             while (cursor.moveToNext()) {
-                val id = cursor.getString(0)
-                val date = cursor.getString(1)
-                val title = cursor.getString(2)
-                val mime = cursor.getString(3)
-                val path = cursor.getString(4)
-                val size = cursor.getLong(5)
+                val title = cursor.getString(0)
+                val size = cursor.getLong(1)
 
                 // TODO: return files to delete (size 51) instead
-                if (size > 100) {
+                if (size > MIN_SIZE_BYTES) {
                     results.add(title)
                 }
             }
@@ -62,63 +57,54 @@ class FilesStorageImpl(private val context: Context) : FilesStorage {
         return results
     }
 
-    // TODO: clean up this implementation
-    override suspend fun savePhoto(photoData: ResponseBody, name: String): Uri? {
-        return photoData.parseImage(context, name)
-    }
+    override suspend fun savePhoto(
+        photoData: ResponseBody,
+        filename: String,
+    ): Flow<PhotoDownloadInfo> {
+        return flow {
+            val contentResolver = context.contentResolver
+            val imageUri = getImageUri(contentResolver, filename) ?: return@flow
+            val outputStream = contentResolver.openOutputStream(imageUri) ?: return@flow
 
-    private suspend fun ResponseBody.parseImage(context: Context, name: String): Uri? {
-        return writeResponseBody(this, context, name)
-    }
-
-    private fun getOutputStream(context: Context, name: String): Pair<OutputStream?, Uri?> {
-        val resolver: ContentResolver = context.contentResolver
-        val contentValues = ContentValues()
-        contentValues.put(MediaStore.MediaColumns.DISPLAY_NAME, name)
-        contentValues.put(MediaStore.MediaColumns.MIME_TYPE, "image/jpg")
-        contentValues.put(
-            MediaStore.MediaColumns.RELATIVE_PATH,
-            Environment.DIRECTORY_PICTURES + "/Image Sync"
-        )
-        val imageUri = resolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, contentValues)
-        return imageUri?.let { resolver.openOutputStream(it) } to imageUri
-    }
-
-    private suspend fun writeResponseBody(
-        body: ResponseBody,
-        context: Context,
-        name: String
-    ): Uri? {
-        return withContext(Dispatchers.IO) {
-            val inputStream: InputStream =
-                body.byteStream() ?: throw IllegalArgumentException("No bytes")
-            // TODO: clean this up
-            val (outputStream, fileUri) =
-                getOutputStream(context, name)
-
-            if (outputStream == null) return@withContext null
+            val inputStream = photoData.byteStream()
+            val fileSize = photoData.contentLength()
+            var downloaded = 0
 
             try {
                 val fileReader = ByteArray(4096)
-                //long fileSize = body.contentLength();
-                //long fileSizeDownloaded = 0;
 
                 while (true) {
-                    val read = inputStream.read(fileReader)
-                    if (read == -1) {
-                        break
-                    }
+                    val read = inputStream.read(fileReader).takeUnless { it == -1 } ?: break
                     outputStream.write(fileReader, 0, read)
-                    //fileSizeDownloaded += read;
+                    downloaded += read
+
+                    val progress = (downloaded.toFloat() / fileSize * 100).roundToInt()
+                    emit(PhotoDownloadInfo(uri = imageUri, downloadProgress = progress))
                 }
+
                 outputStream.flush()
-                fileUri
+                emit(PhotoDownloadInfo(uri = imageUri, downloadProgress = 100))
             } catch (e: IOException) {
-                null
+                // TODO: test this works as intended
+                imageUri.toFile().delete()
+                return@flow
             } finally {
                 inputStream.close()
                 outputStream.close()
             }
+        }.flowOn(Dispatchers.IO)
+    }
+
+    private fun getImageUri(
+        contentResolver: ContentResolver,
+        filename: String,
+    ): Uri? {
+        val contentValues = ContentValues().apply {
+            put(MediaStore.MediaColumns.DISPLAY_NAME, filename)
+            put(MediaStore.MediaColumns.MIME_TYPE, MIME_TYPE)
+            put(MediaStore.MediaColumns.RELATIVE_PATH, RICOH_PHOTOS_PATH)
         }
+
+        return contentResolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, contentValues)
     }
 }

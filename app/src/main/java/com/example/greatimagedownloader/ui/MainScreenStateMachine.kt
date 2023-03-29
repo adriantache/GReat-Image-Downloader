@@ -3,11 +3,18 @@ package com.example.greatimagedownloader.ui
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Button
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
@@ -30,6 +37,7 @@ import com.example.greatimagedownloader.ui.view.SyncView
 import com.example.greatimagedownloader.ui.view.WifiInputView
 import org.koin.androidx.compose.getViewModel
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MainScreenStateMachine(
     viewModel: MainScreenViewModel = getViewModel(),
@@ -37,60 +45,84 @@ fun MainScreenStateMachine(
     val stateValue by viewModel.downloadPhotosState.collectAsState()
     val eventValue by viewModel.downloadPhotosEvents.collectAsState()
 
-    Column(
-        modifier = Modifier.fillMaxSize(),
-        verticalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterVertically),
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        eventValue?.value?.let {
-            HandleEvent(it)
-        }
+    val snackbarHostState = remember { SnackbarHostState() }
 
-        when (val state = stateValue) {
-            is Init -> state.onInit()
-
-            is RequestPermissions -> PermissionsRequester(
-                onPermissionsGranted = state.onPermissionsGranted
-            ) { isLocationPermissionGranted, isPhotosPermissionGranted, onRequestPermissions ->
-                PermissionsView(
-                    isLocationPermissionGranted = isLocationPermissionGranted,
-                    isPhotosPermissionGranted = isPhotosPermissionGranted,
-                    onRequestPermissions = onRequestPermissions,
-                )
+    Scaffold(
+        snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
+    ) { padding ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding),
+            verticalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterVertically),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            eventValue?.value?.let {
+                HandleEvent(it, snackbarHostState)
             }
 
-            is RequestWifiCredentials -> WifiInputView(state.onWifiCredentialsInput)
-            is ConnectWifi -> StartView(
-                wifiDetails = state.wifiDetails,
-                onConnectionSuccess = state.onConnectionSuccess,
-                onConnectionLost = state.onConnectionLost,
-                onChangeWifiDetails = state.onChangeWifiDetails,
-            )
+            when (val state = stateValue) {
+                is Init -> state.onInit()
 
-            GetPhotos -> SyncView()
+                is RequestPermissions -> PermissionsRequester(
+                    onPermissionsGranted = state.onPermissionsGranted
+                ) { isLocationPermissionGranted, isPhotosPermissionGranted, onRequestPermissions ->
+                    PermissionsView(
+                        isLocationPermissionGranted = isLocationPermissionGranted,
+                        isPhotosPermissionGranted = isPhotosPermissionGranted,
+                        onRequestPermissions = onRequestPermissions,
+                    )
+                }
 
-            is DownloadPhotos -> {
-                DownloadingView(
-                    currentPhoto = state.currentPhotoNum,
-                    totalPhotos = state.totalPhotos,
-                    photoUris = state.downloadedPhotos,
+                is RequestWifiCredentials -> WifiInputView(state.onWifiCredentialsInput)
+                is ConnectWifi -> StartView(
+                    wifiDetails = state.wifiDetails,
+                    onConnectionSuccess = state.onConnectionSuccess,
+                    onConnectionLost = state.onConnectionLost,
+                    onChangeWifiDetails = state.onChangeWifiDetails,
                 )
-            }
 
-            Disconnect -> Text("Disconnecting")
+                GetPhotos -> SyncView()
 
-            // TODO: reset after delay in use case?
-            is Disconnected -> Button(onClick = state.onRestart) {
-                Text("Restart process")
+                is DownloadPhotos -> {
+                    DownloadingView(
+                        currentPhoto = state.currentPhotoNum,
+                        totalPhotos = state.totalPhotos,
+                        photoDownloadInfo = state.downloadedPhotos,
+                    )
+                }
+
+                Disconnect -> Text("Disconnecting")
+
+                // TODO: reset after delay in use case?
+                is Disconnected -> Button(onClick = state.onRestart) {
+                    Text("Restart process")
+                }
             }
         }
     }
 }
 
 @Composable
-private fun HandleEvent(event: Events) {
+private fun HandleEvent(
+    event: Events,
+    snackbarHostState: SnackbarHostState,
+) {
+    LaunchedEffect(event) {
+        when (event) {
+            is Events.DownloadSuccess -> snackbarHostState.showSnackbar(
+                message = "Successfully downloaded ${event.downloadedPhotosSize} photos."
+            )
+
+            Events.CannotDownloadPhotos,
+            Events.InvalidWifiInput,
+            -> Unit
+        }
+    }
+
     when (event) {
         Events.InvalidWifiInput -> Text(stringResource(R.string.error_invalid_wifi_input))
         Events.CannotDownloadPhotos -> Text("Cannot download photo list from camera!")
+        is Events.DownloadSuccess -> Unit
     }
 }

@@ -21,7 +21,7 @@ sealed interface States {
     object GetPhotos : States
 
     class DownloadPhotos(
-        val downloadedPhotos: List<String?>,
+        val downloadedPhotos: Map<String, Int>,
         val currentPhotoNum: Int,
         val totalPhotos: Int,
     ) : States

@@ -4,8 +4,13 @@ import com.example.greatimagedownloader.data.api.RicohApi
 import com.example.greatimagedownloader.data.storage.FilesStorage
 import com.example.greatimagedownloader.data.storage.WifiStorage
 import com.example.greatimagedownloader.domain.data.Repository
-import com.example.greatimagedownloader.domain.data.model.PhotoInfo
+import com.example.greatimagedownloader.domain.data.model.PhotoDownloadInfo
+import com.example.greatimagedownloader.domain.data.model.PhotoFile
 import com.example.greatimagedownloader.domain.data.model.WifiDetails
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.withContext
 
 class RepositoryImpl(
     private val wifiStorage: WifiStorage,
@@ -31,28 +36,24 @@ class RepositoryImpl(
         return filesStorage.getSavedPhotos()
     }
 
-    override suspend fun getCameraPhotoList(): Result<List<PhotoInfo>> {
+    override suspend fun getCameraPhotoList(): Result<List<PhotoFile>> {
         val response = ricohApi.getPhotos()
 
         return if (response.isSuccessful) {
-            val photoInfo = response.body()?.dirs?.flatMap { dir ->
-                dir.files.map { file ->
-                    PhotoInfo(
-                        directory = dir.name,
-                        name = file
-                    )
-                }
-            }.orEmpty()
+            val photoFile = response.body()?.dirs?.flatMap { it.toPhotoInfoList() }.orEmpty()
 
-            Result.success(photoInfo)
+            Result.success(photoFile)
         } else {
-            Result.failure(Throwable(response.errorBody().toString()))
+            val exception = Exception(response.errorBody().toString())
+            Result.failure(exception)
         }
     }
 
-    override suspend fun downloadPhotoToStorage(photo: PhotoInfo): String? {
-        val photoData = ricohApi.getPhoto(photo.directory, photo.name)
-        return filesStorage.savePhoto(photoData, photo.name)?.toString()
+    override suspend fun downloadPhotoToStorage(photo: PhotoFile): Flow<PhotoDownloadInfo> {
+        val photoData = withContext(Dispatchers.IO) {
+            ricohApi.getPhoto(photo.directory, photo.name)
+        }
+        return filesStorage.savePhoto(photoData, photo.name).map { it.toDomain() }
     }
 
     override suspend fun shutDownCamera() {

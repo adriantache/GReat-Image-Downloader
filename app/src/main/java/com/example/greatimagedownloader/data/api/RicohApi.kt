@@ -13,8 +13,8 @@ interface RicohApi {
     suspend fun getPhotos(): Response<PhotoInfo>
 
     // TODO: implement this to check battery level and see what else it returns
-//    @GET("v1/props")
-//    suspend fun getConfig(): String
+    @GET("v1/props")
+    suspend fun getConfig(): Response<String>
 
     @GET("v1/photos/{dir}/{file}")
     @Streaming

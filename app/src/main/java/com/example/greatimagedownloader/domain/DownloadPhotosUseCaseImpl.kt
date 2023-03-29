@@ -76,7 +76,6 @@ class DownloadPhotosUseCaseImpl(
     }
 
 
-    // TODO: figure out a way to stream individual file download progress?
     // TODO: handle directories
     private fun getPhotos() {
         CoroutineScope(dispatcher).launch {
@@ -98,24 +97,28 @@ class DownloadPhotosUseCaseImpl(
                 }
 
             state.value = DownloadPhotos(
-                downloadedPhotos = emptyList(),
+                downloadedPhotos = emptyMap(),
                 currentPhotoNum = 0,
                 totalPhotos = photosToDownload.size,
             )
 
-            var downloadedPhotoUris = mutableListOf<String?>()
+            val downloadedPhotoUris = mutableMapOf<String, Int>()
 
             photosToDownload.forEachIndexed { index, photo ->
-                val imageUri = repository.downloadPhotoToStorage(photo)
-                downloadedPhotoUris.add(imageUri)
+                repository.downloadPhotoToStorage(photo).collect {
+                    if (it.uri == null) return@collect
 
-                state.value = DownloadPhotos(
-                    currentPhotoNum = index + 1,
-                    totalPhotos = photosToDownload.size,
-                    downloadedPhotos = downloadedPhotoUris
-                )
+                    downloadedPhotoUris[it.uri] = it.downloadProgress
+
+                    state.value = DownloadPhotos(
+                        currentPhotoNum = index + 1,
+                        totalPhotos = photosToDownload.size,
+                        downloadedPhotos = downloadedPhotoUris
+                    )
+                }
             }
 
+            event.value = Event(Events.DownloadSuccess(downloadedPhotoUris.keys.size))
             state.value = Disconnect
 
             disconnect()
@@ -123,17 +126,12 @@ class DownloadPhotosUseCaseImpl(
     }
 
     private suspend fun disconnect() {
-        // TODO: enable this when I figure out the concurrency
         repository.shutDownCamera() // Also shuts down the hotspot, no need to disconnect from WiFi.
 
-        state.value = Disconnected(onRestart = {
-            state.value = Init(::onInit)
-        })
+        state.value = Disconnected(onRestart = { state.value = Init(::onInit) })
     }
 
     private fun onConnectionLost() {
-        state.value = Disconnected(onRestart = {
-            state.value = Init(::onInit)
-        })
+        state.value = Disconnected(onRestart = { state.value = Init(::onInit) })
     }
 }

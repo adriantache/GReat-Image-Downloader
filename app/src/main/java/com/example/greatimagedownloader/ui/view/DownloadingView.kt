@@ -37,7 +37,7 @@ fun DownloadingView(
     modifier: Modifier = Modifier,
     currentPhoto: Int,
     totalPhotos: Int,
-    photoUris: List<String?>,
+    photoDownloadInfo: Map<String, Int>,
 ) {
     val context = LocalContext.current
     val contentResolver = context.contentResolver
@@ -67,9 +67,11 @@ fun DownloadingView(
             verticalArrangement = Arrangement.spacedBy(4.dp),
             horizontalArrangement = Arrangement.spacedBy(4.dp),
         ) {
-            itemsIndexed(items = photoUris) { index, photoUri ->
+            itemsIndexed(items = photoDownloadInfo.toList()) { index, photoDownloadInfo ->
+                val uri = photoDownloadInfo.first
+                val downloadProgress = photoDownloadInfo.second
+
                 val bgColor = when {
-                    photoUri == null -> Color.Red
                     index < currentPhoto -> MaterialTheme.colorScheme.primary
                     else -> Color.LightGray
                 }
@@ -82,20 +84,24 @@ fun DownloadingView(
                         .background(bgColor, boxShape),
                     contentAlignment = Alignment.Center,
                 ) {
-                    val uri = Uri.parse(photoUri)
-                    val source = ImageDecoder.createSource(contentResolver, uri)
-                    val bitmap = ImageDecoder.decodeBitmap(source).asImageBitmap()
+                    if (downloadProgress != 100) {
+                        Text("$downloadProgress%")
+                    } else {
+                        val parsedUri = Uri.parse(uri)
+                        val source = ImageDecoder.createSource(contentResolver, parsedUri)
+                        val bitmap = ImageDecoder.decodeBitmap(source).asImageBitmap()
 
-                    Image(
-                        modifier = Modifier.clip(boxShape),
-                        bitmap = bitmap,
-                        contentDescription = null,
-                        contentScale = ContentScale.Crop
-                    )
+                        Image(
+                            modifier = Modifier.clip(boxShape),
+                            bitmap = bitmap,
+                            contentDescription = null,
+                            contentScale = ContentScale.Crop
+                        )
+                    }
                 }
             }
 
-            items(items = (0 until totalPhotos - photoUris.size).toList()) {
+            items(items = (0 until totalPhotos - photoDownloadInfo.size).toList()) {
                 Box(
                     modifier = Modifier
                         .aspectRatio(1f)
@@ -110,8 +116,8 @@ fun DownloadingView(
 @Composable
 private fun DownloadingViewPreview() {
     DownloadingView(
-        currentPhoto = 33,
+        currentPhoto = 3,
         totalPhotos = 100,
-        photoUris = emptyList()
+        photoDownloadInfo = emptyMap(),
     )
 }
