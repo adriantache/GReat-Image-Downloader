@@ -1,5 +1,6 @@
 package com.example.greatimagedownloader.domain
 
+import android.util.Log
 import com.example.greatimagedownloader.domain.data.Repository
 import com.example.greatimagedownloader.domain.model.Events
 import com.example.greatimagedownloader.domain.model.States
@@ -75,7 +76,6 @@ class DownloadPhotosUseCaseImpl(
         getPhotos()
     }
 
-
     // TODO: handle directories
     private fun getPhotos() {
         CoroutineScope(dispatcher).launch {
@@ -107,6 +107,8 @@ class DownloadPhotosUseCaseImpl(
             photosToDownload.forEachIndexed { index, photo ->
                 repository.downloadPhotoToStorage(photo).collect {
                     if (it.uri == null) return@collect
+
+                    Log.i("TAGXXX", "Downloading $it")
 
                     downloadedPhotoUris[it.uri] = it.downloadProgress
 

@@ -7,19 +7,24 @@ import android.net.Uri
 import android.os.Environment
 import android.provider.MediaStore
 import android.provider.OpenableColumns
+import android.util.Log
 import androidx.core.net.toFile
 import com.example.greatimagedownloader.data.model.PhotoDownloadInfo
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
+import okhttp3.MediaType
 import okhttp3.ResponseBody
+import okio.buffer
+import okio.sink
 import java.io.IOException
 import kotlin.math.roundToInt
 
 private val RICOH_PHOTOS_PATH = Environment.DIRECTORY_PICTURES + "/Image Sync"
-private const val MIME_TYPE = "image/jpg"
+private const val DEFAULT_MIME_TYPE = "image/jpg"
 private const val MIN_SIZE_BYTES = 100
+private const val OKIO_MAX_BYTES = 8092L
 
 class FilesStorageImpl(private val context: Context) : FilesStorage {
     override fun getSavedPhotos(): List<String> {
@@ -58,39 +63,56 @@ class FilesStorageImpl(private val context: Context) : FilesStorage {
     }
 
     override suspend fun savePhoto(
-        photoData: ResponseBody,
+        responseBody: ResponseBody,
         filename: String,
     ): Flow<PhotoDownloadInfo> {
+        Log.i("TAGXXX", "Saving responsebody $responseBody")
+
         return flow {
             val contentResolver = context.contentResolver
-            val imageUri = getImageUri(contentResolver, filename) ?: return@flow
+            val imageUri =
+                getImageUri(contentResolver, filename, responseBody.contentType()) ?: return@flow
             val outputStream = contentResolver.openOutputStream(imageUri) ?: return@flow
 
-            val inputStream = photoData.byteStream()
-            val fileSize = photoData.contentLength()
-            var downloaded = 0
+            Log.i("TAGXXX", "Got outputstream $outputStream")
+
+            val source = responseBody.source()
+
+            Log.i("TAGXXX", "Got source $source")
+
+            val destination = outputStream.sink().buffer()
+            val fileSize = responseBody.contentLength()
 
             try {
-                val fileReader = ByteArray(4096)
+                var totalBytesRead = 0L
 
-                while (true) {
-                    val read = inputStream.read(fileReader).takeUnless { it == -1 } ?: break
-                    outputStream.write(fileReader, 0, read)
-                    downloaded += read
+                while (!source.exhausted()) {
+                    val bytesRead = source.buffer.read(destination.buffer, OKIO_MAX_BYTES)
+                        .takeUnless { it == -1L } ?: break
+                    destination.emit()
 
-                    val progress = (downloaded.toFloat() / fileSize * 100).roundToInt()
+                    Log.i("TAGXXX", "writing $bytesRead total $totalBytesRead")
+
+                    totalBytesRead += bytesRead
+
+                    val progress = if (fileSize == -1L) {
+                        0
+                    } else {
+                        (totalBytesRead.toFloat() / fileSize * 100).roundToInt()
+                    }
                     emit(PhotoDownloadInfo(uri = imageUri, downloadProgress = progress))
                 }
 
-                outputStream.flush()
                 emit(PhotoDownloadInfo(uri = imageUri, downloadProgress = 100))
             } catch (e: IOException) {
                 // TODO: test this works as intended
                 imageUri.toFile().delete()
                 return@flow
             } finally {
-                inputStream.close()
+                source.close()
+                destination.close()
                 outputStream.close()
+                responseBody.close()
             }
         }.flowOn(Dispatchers.IO)
     }
@@ -98,10 +120,11 @@ class FilesStorageImpl(private val context: Context) : FilesStorage {
     private fun getImageUri(
         contentResolver: ContentResolver,
         filename: String,
+        contentType: MediaType?,
     ): Uri? {
         val contentValues = ContentValues().apply {
             put(MediaStore.MediaColumns.DISPLAY_NAME, filename)
-            put(MediaStore.MediaColumns.MIME_TYPE, MIME_TYPE)
+            put(MediaStore.MediaColumns.MIME_TYPE, contentType?.toString() ?: DEFAULT_MIME_TYPE)
             put(MediaStore.MediaColumns.RELATIVE_PATH, RICOH_PHOTOS_PATH)
         }
 
