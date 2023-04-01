@@ -16,6 +16,7 @@ import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
 
+// TODO: [IMPORTANT] add error handling to all network calls
 class RepositoryImpl(
     private val wifiStorage: WifiStorage,
     private val filesStorage: FilesStorage,
@@ -72,7 +73,7 @@ class RepositoryImpl(
                 responseBody = photoData,
                 filename = photo.name
             ).map {
-                it.toDomain()
+                it.toDomain(photo.name)
             })
         }
     }

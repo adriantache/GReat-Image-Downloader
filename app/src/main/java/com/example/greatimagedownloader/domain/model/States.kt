@@ -1,5 +1,6 @@
 package com.example.greatimagedownloader.domain.model
 
+import com.example.greatimagedownloader.domain.data.model.PhotoDownloadInfo
 import com.example.greatimagedownloader.domain.ui.model.WifiDetails
 
 sealed interface States {
@@ -21,7 +22,8 @@ sealed interface States {
     object GetPhotos : States
 
     class DownloadPhotos(
-        val downloadedPhotos: Map<String, Int>,
+        // TODO: build correct object for this
+        val downloadedPhotos: List<PhotoDownloadInfo>,
         val currentPhotoNum: Int,
         val totalPhotos: Int,
     ) : States

@@ -109,8 +109,7 @@ class FilesStorageImpl(private val context: Context) : FilesStorage {
 
         return flow {
             val contentResolver = context.contentResolver
-            val imageUri =
-                getImageUri(contentResolver, filename, responseBody.contentType()) ?: return@flow
+            val imageUri = getImageUri(contentResolver, filename, responseBody.contentType()) ?: return@flow
             val outputStream = contentResolver.openOutputStream(imageUri) ?: return@flow
 
             Log.i("TAGXXX", "Got outputstream $outputStream")
@@ -130,8 +129,6 @@ class FilesStorageImpl(private val context: Context) : FilesStorage {
                         .takeUnless { it == -1L } ?: break
                     destination.emit()
 
-                    Log.i("TAGXXX", "writing $bytesRead total $totalBytesRead")
-
                     totalBytesRead += bytesRead
 
                     val progress = if (fileSize == -1L) {
@@ -139,6 +136,7 @@ class FilesStorageImpl(private val context: Context) : FilesStorage {
                     } else {
                         (totalBytesRead.toFloat() / fileSize * 100).roundToInt().coerceAtMost(99)
                     }
+
                     emit(PhotoDownloadInfo(uri = imageUri, downloadProgress = progress))
                 }
 

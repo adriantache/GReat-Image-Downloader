@@ -1,7 +1,6 @@
 package com.example.greatimagedownloader.ui.view
 
-import android.graphics.ImageDecoder
-import android.net.Uri
+import android.util.Log
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -14,35 +13,49 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
-import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import com.example.greatimagedownloader.domain.data.model.PhotoDownloadInfo
+import com.example.greatimagedownloader.ui.model.ProcessedDownloadInfo
+import com.example.greatimagedownloader.ui.model.ProcessedDownloadInfo.Companion.toProcessedDownloadInfo
 import com.example.greatimagedownloader.ui.util.KeepScreenOn
-
 
 @Composable
 fun DownloadingView(
     modifier: Modifier = Modifier,
     currentPhoto: Int,
     totalPhotos: Int,
-    photoDownloadInfo: Map<String, Int>,
+    photoDownloadInfo: List<PhotoDownloadInfo>,
 ) {
     val context = LocalContext.current
     val contentResolver = context.contentResolver
 
+    val boxShape = RoundedCornerShape(8.dp)
+
+    var processedDownloadInfo by remember { mutableStateOf(emptyList<ProcessedDownloadInfo>()) }
+
     KeepScreenOn()
+
+    LaunchedEffect(photoDownloadInfo) {
+        processedDownloadInfo = photoDownloadInfo.map { it.toProcessedDownloadInfo(contentResolver, processedDownloadInfo) }
+        Log.i("TAGXXX", "Received state: $photoDownloadInfo, built $processedDownloadInfo")
+    }
 
     Column(
         modifier = modifier.padding(16.dp),
@@ -67,33 +80,22 @@ fun DownloadingView(
             verticalArrangement = Arrangement.spacedBy(4.dp),
             horizontalArrangement = Arrangement.spacedBy(4.dp),
         ) {
-            itemsIndexed(items = photoDownloadInfo.toList()) { index, photoDownloadInfo ->
-                val uri = photoDownloadInfo.first
-                val downloadProgress = photoDownloadInfo.second
-
-                val bgColor = when {
-                    index < currentPhoto -> MaterialTheme.colorScheme.primary
-                    else -> Color.LightGray
-                }
-                val boxShape = RoundedCornerShape(8.dp)
-
-
+            items(items = processedDownloadInfo) { processedDownloadInfo ->
                 Box(
                     modifier = Modifier
                         .aspectRatio(1f)
-                        .background(bgColor, boxShape),
+                        .background(MaterialTheme.colorScheme.primary, boxShape),
                     contentAlignment = Alignment.Center,
                 ) {
-                    if (downloadProgress != 100) {
-                        Text("$downloadProgress%")
-                    } else {
-                        val parsedUri = Uri.parse(uri)
-                        val source = ImageDecoder.createSource(contentResolver, parsedUri)
-                        val bitmap = ImageDecoder.decodeBitmap(source).asImageBitmap()
+                    when (processedDownloadInfo) {
+                        is ProcessedDownloadInfo.Pending -> Text(
+                            text = "${processedDownloadInfo.downloadProgress}%",
+                            color = MaterialTheme.colorScheme.onPrimary,
+                        )
 
-                        Image(
+                        is ProcessedDownloadInfo.Finished -> Image(
                             modifier = Modifier.clip(boxShape),
-                            bitmap = bitmap,
+                            bitmap = processedDownloadInfo.bitmap,
                             contentDescription = null,
                             contentScale = ContentScale.Crop
                         )
@@ -101,11 +103,11 @@ fun DownloadingView(
                 }
             }
 
-            items(items = (0 until totalPhotos - photoDownloadInfo.size).toList()) {
+            items(items = (0 until totalPhotos - processedDownloadInfo.size).toList()) {
                 Box(
                     modifier = Modifier
                         .aspectRatio(1f)
-                        .background(Color.LightGray, RoundedCornerShape(8.dp)),
+                        .background(Color.LightGray, boxShape),
                 )
             }
         }
@@ -118,6 +120,6 @@ private fun DownloadingViewPreview() {
     DownloadingView(
         currentPhoto = 3,
         totalPhotos = 100,
-        photoDownloadInfo = emptyMap(),
+        photoDownloadInfo = emptyList(),
     )
 }

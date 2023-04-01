@@ -1,7 +1,7 @@
 package com.example.greatimagedownloader.domain
 
-import android.util.Log
 import com.example.greatimagedownloader.domain.data.Repository
+import com.example.greatimagedownloader.domain.data.model.PhotoDownloadInfo
 import com.example.greatimagedownloader.domain.model.Events
 import com.example.greatimagedownloader.domain.model.States
 import com.example.greatimagedownloader.domain.model.States.ConnectWifi
@@ -17,7 +17,9 @@ import com.example.greatimagedownloader.domain.utils.model.Event
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.launch
 
 // TODO: add tests
@@ -81,6 +83,7 @@ class DownloadPhotosUseCaseImpl(
 
     // TODO: handle directories
     // TODO: [IMPORTANT] handle videos!
+    @OptIn(FlowPreview::class)
     private fun getPhotos() {
         CoroutineScope(dispatcher).launch {
             val savedPhotos = repository.getSavedPhotos().map {
@@ -106,25 +109,21 @@ class DownloadPhotosUseCaseImpl(
                 }
 
             state.value = DownloadPhotos(
-                downloadedPhotos = emptyMap(),
+                downloadedPhotos = emptyList(),
                 currentPhotoNum = 0,
                 totalPhotos = photosToDownload.size,
             )
 
-            val downloadedPhotoUris = mutableMapOf<String, Int>()
+            val downloadedPhotoUris = mutableMapOf<String, PhotoDownloadInfo>()
 
             photosToDownload.forEachIndexed { index, photo ->
-                repository.downloadPhotoToStorage(photo).collect {
-                    if (it.uri == null) return@collect
-
-                    Log.i("TAGXXX", "Downloading $it")
-
-                    downloadedPhotoUris[it.uri] = it.downloadProgress
+                repository.downloadPhotoToStorage(photo).debounce(100).collect {
+                    downloadedPhotoUris[it.name] = it
 
                     state.value = DownloadPhotos(
                         currentPhotoNum = index + 1,
                         totalPhotos = photosToDownload.size,
-                        downloadedPhotos = downloadedPhotoUris
+                        downloadedPhotos = downloadedPhotoUris.values.toList(),
                     )
                 }
             }
