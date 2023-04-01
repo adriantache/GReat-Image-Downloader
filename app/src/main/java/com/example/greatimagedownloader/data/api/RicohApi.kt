@@ -1,6 +1,7 @@
 package com.example.greatimagedownloader.data.api
 
 import com.example.greatimagedownloader.data.api.model.PhotoInfo
+import com.example.greatimagedownloader.data.api.model.RicohConfig
 import okhttp3.ResponseBody
 import retrofit2.Response
 import retrofit2.http.GET
@@ -14,7 +15,7 @@ interface RicohApi {
 
     // TODO: implement this to check battery level and see what else it returns
     @GET("v1/props")
-    suspend fun getConfig(): Response<String>
+    suspend fun getConfig(): Response<RicohConfig>
 
     @GET("v1/photos/{dir}/{file}")
     @Streaming
