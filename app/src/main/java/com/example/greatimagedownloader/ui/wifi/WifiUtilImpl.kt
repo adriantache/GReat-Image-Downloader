@@ -12,7 +12,7 @@ import android.util.Log
 import com.example.greatimagedownloader.domain.ui.model.WifiDetails
 import kotlinx.coroutines.delay
 
-private const val CONNECT_TIMEOUT_MS = 10_000
+const val CONNECT_TIMEOUT_MS = 10_000
 
 // TODO: clean this up
 class WifiUtilImpl(
