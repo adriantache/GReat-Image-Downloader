@@ -8,8 +8,11 @@ import com.example.greatimagedownloader.domain.data.Repository
 import com.example.greatimagedownloader.domain.data.model.PhotoDownloadInfo
 import com.example.greatimagedownloader.domain.data.model.PhotoFile
 import com.example.greatimagedownloader.domain.data.model.WifiDetails
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.emitAll
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
 
@@ -17,6 +20,7 @@ class RepositoryImpl(
     private val wifiStorage: WifiStorage,
     private val filesStorage: FilesStorage,
     private val ricohApi: RicohApi,
+    private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
 ) : Repository {
     override fun getWifiDetails(): WifiDetails {
         val ssid = wifiStorage.getWifiSsid()
@@ -38,7 +42,7 @@ class RepositoryImpl(
     }
 
     override suspend fun getCameraPhotoList(): Result<List<PhotoFile>> {
-        return withContext(Dispatchers.IO) {
+        return withContext(ioDispatcher) {
             val response = ricohApi.getPhotos()
 
             if (response.isSuccessful) {
@@ -52,22 +56,24 @@ class RepositoryImpl(
         }
     }
 
-    override suspend fun downloadPhotoToStorage(photo: PhotoFile): Flow<PhotoDownloadInfo> {
+    override fun downloadPhotoToStorage(photo: PhotoFile): Flow<PhotoDownloadInfo> {
         Log.i("TAGXXX", "Getting photo $photo")
 
-        val photoData = withContext(Dispatchers.IO) {
-            ricohApi.getPhoto(
-                directory = photo.directory,
-                file = photo.name
-            )
-        }
-        Log.i("TAGXXX", "Got responsebody $photoData")
+        return flow {
+            val photoData = withContext(ioDispatcher) {
+                ricohApi.getPhoto(
+                    directory = photo.directory,
+                    file = photo.name
+                )
+            }
+            Log.i("TAGXXX", "Got responsebody $photoData")
 
-        return filesStorage.savePhoto(
-            responseBody = photoData,
-            filename = photo.name
-        ).map {
-            it.toDomain()
+            emitAll(filesStorage.savePhoto(
+                responseBody = photoData,
+                filename = photo.name
+            ).map {
+                it.toDomain()
+            })
         }
     }
 

@@ -8,7 +8,7 @@ interface FilesStorage {
     fun getSavedPhotos(): List<String>
     fun getSavedMovies(): List<String>
 
-    suspend fun savePhoto(
+    fun savePhoto(
         responseBody: ResponseBody,
         filename: String,
     ): Flow<PhotoDownloadInfo>

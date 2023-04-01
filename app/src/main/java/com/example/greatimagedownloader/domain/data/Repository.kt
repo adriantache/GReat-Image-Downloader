@@ -15,6 +15,6 @@ interface Repository {
 
     // Camera operations
     suspend fun getCameraPhotoList(): Result<List<PhotoFile>>
-    suspend fun downloadPhotoToStorage(photo: PhotoFile): Flow<PhotoDownloadInfo>
+    fun downloadPhotoToStorage(photo: PhotoFile): Flow<PhotoDownloadInfo>
     suspend fun shutDownCamera()
 }

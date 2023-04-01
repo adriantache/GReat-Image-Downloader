@@ -25,7 +25,10 @@ class DownloadPhotosUseCaseImpl(
     private val repository: Repository,
     private val dispatcher: CoroutineDispatcher = Dispatchers.IO,
 ) : DownloadPhotosUseCase {
+    @Suppress("kotlin:S6305")
     override val state: MutableStateFlow<States> = MutableStateFlow(Init(onInit = ::onInit))
+
+    @Suppress("kotlin:S6305")
     override val event: MutableStateFlow<Event<Events>?> = MutableStateFlow(null)
 
     private fun onInit() {
