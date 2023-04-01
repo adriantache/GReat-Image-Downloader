@@ -10,9 +10,6 @@ import com.example.greatimagedownloader.domain.data.model.PhotoFile
 import com.example.greatimagedownloader.domain.data.model.WifiDetails
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.emitAll
-import kotlinx.coroutines.flow.flow
-import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
 
@@ -56,24 +53,22 @@ class RepositoryImpl(
     }
 
     override suspend fun downloadPhotoToStorage(photo: PhotoFile): Flow<PhotoDownloadInfo> {
-        return flow {
-            Log.i("TAGXXX", "Getting photo $photo")
+        Log.i("TAGXXX", "Getting photo $photo")
 
-            val photoData = ricohApi.getPhoto(
+        val photoData = withContext(Dispatchers.IO) {
+            ricohApi.getPhoto(
                 directory = photo.directory,
                 file = photo.name
             )
-            Log.i("TAGXXX", "Got responsebody $photoData")
+        }
+        Log.i("TAGXXX", "Got responsebody $photoData")
 
-            val progressFlow = filesStorage.savePhoto(
-                responseBody = photoData,
-                filename = photo.name
-            ).map {
-                it.toDomain()
-            }
-
-            emitAll(progressFlow)
-        }.flowOn(Dispatchers.IO)
+        return filesStorage.savePhoto(
+            responseBody = photoData,
+            filename = photo.name
+        ).map {
+            it.toDomain()
+        }
     }
 
     override suspend fun shutDownCamera() {

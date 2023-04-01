@@ -77,6 +77,7 @@ class DownloadPhotosUseCaseImpl(
     }
 
     // TODO: handle directories
+    // TODO: [IMPORTANT] handle videos!
     private fun getPhotos() {
         CoroutineScope(dispatcher).launch {
             val savedPhotos = repository.getSavedPhotos().map {
@@ -94,6 +95,11 @@ class DownloadPhotosUseCaseImpl(
                 .filter {
                     val nameWithoutExtension = it.name.split(".")[0]
                     !savedPhotos.contains(nameWithoutExtension)
+                }
+                // TODO: remove this filter when I fix OOM issues for videos and add workflow for them
+                .filter {
+                    val extension = it.name.split(".").lastOrNull()?.lowercase()
+                    extension == "jpg"
                 }
 
             state.value = DownloadPhotos(

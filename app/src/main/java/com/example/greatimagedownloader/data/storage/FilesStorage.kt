@@ -6,6 +6,8 @@ import okhttp3.ResponseBody
 
 interface FilesStorage {
     fun getSavedPhotos(): List<String>
+    fun getSavedMovies(): List<String>
+
     suspend fun savePhoto(
         responseBody: ResponseBody,
         filename: String,

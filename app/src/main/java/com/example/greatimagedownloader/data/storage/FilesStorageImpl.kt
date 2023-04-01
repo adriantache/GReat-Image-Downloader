@@ -22,6 +22,7 @@ import java.io.IOException
 import kotlin.math.roundToInt
 
 private val RICOH_PHOTOS_PATH = Environment.DIRECTORY_PICTURES + "/Image Sync"
+private val RICOH_MOVIES_PATH = Environment.DIRECTORY_MOVIES + "/Image Sync"
 private const val DEFAULT_MIME_TYPE = "image/jpg"
 private const val MIN_SIZE_BYTES = 100
 private const val OKIO_MAX_BYTES = 8092L
@@ -30,6 +31,41 @@ class FilesStorageImpl(private val context: Context) : FilesStorage {
     override fun getSavedPhotos(): List<String> {
         val selection = "${MediaStore.Files.FileColumns.RELATIVE_PATH} like ?"
         val selectionArgs = arrayOf("%$RICOH_PHOTOS_PATH%")
+        val contentResolver = context.contentResolver
+
+        val projection = arrayOf(
+            MediaStore.MediaColumns.TITLE,
+            OpenableColumns.SIZE,
+        )
+
+        val results = mutableListOf<String>()
+
+        contentResolver.query(
+            /* uri = */ MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
+            /* projection = */ projection,
+            /* selection = */ selection,
+            /* selectionArgs = */ selectionArgs,
+            /* sortOrder = */ MediaStore.Images.Media.DATE_TAKEN,
+        ).use { cursor ->
+            if (cursor == null) return emptyList()
+
+            while (cursor.moveToNext()) {
+                val title = cursor.getString(0)
+                val size = cursor.getLong(1)
+
+                // TODO: return files to delete (size 51) instead
+                if (size > MIN_SIZE_BYTES) {
+                    results.add(title)
+                }
+            }
+        }
+
+        return results
+    }
+
+    override fun getSavedMovies(): List<String> {
+        val selection = "${MediaStore.Files.FileColumns.RELATIVE_PATH} like ?"
+        val selectionArgs = arrayOf("%$RICOH_MOVIES_PATH%")
         val contentResolver = context.contentResolver
 
         val projection = arrayOf(
