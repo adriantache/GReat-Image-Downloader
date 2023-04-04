@@ -3,6 +3,7 @@ package com.example.greatimagedownloader.data.api
 import com.example.greatimagedownloader.data.api.model.PhotoInfo
 import com.example.greatimagedownloader.data.api.model.RicohConfig
 import okhttp3.ResponseBody
+import retrofit2.Call
 import retrofit2.Response
 import retrofit2.http.GET
 import retrofit2.http.POST
@@ -19,10 +20,10 @@ interface RicohApi {
 
     @Streaming
     @GET("v1/photos/{dir}/{file}")
-    suspend fun getPhoto(
+    fun getPhoto(
         @Path("dir") directory: String,
         @Path("file") file: String,
-    ): ResponseBody
+    ): Call<ResponseBody>
 
     @POST("/v1/device/finish")
     suspend fun finish()

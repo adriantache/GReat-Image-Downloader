@@ -1,6 +1,5 @@
 package com.example.greatimagedownloader.ui.view
 
-import android.util.Log
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -54,7 +53,6 @@ fun DownloadingView(
 
     LaunchedEffect(photoDownloadInfo) {
         processedDownloadInfo = photoDownloadInfo.map { it.toProcessedDownloadInfo(contentResolver, processedDownloadInfo) }
-        Log.i("TAGXXX", "Received state: $photoDownloadInfo, built $processedDownloadInfo")
     }
 
     Column(

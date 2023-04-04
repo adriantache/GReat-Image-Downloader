@@ -7,7 +7,6 @@ import android.net.Uri
 import android.os.Environment
 import android.provider.MediaStore
 import android.provider.OpenableColumns
-import android.util.Log
 import androidx.core.net.toFile
 import com.example.greatimagedownloader.data.model.PhotoDownloadInfo
 import kotlinx.coroutines.Dispatchers
@@ -102,21 +101,15 @@ class FilesStorageImpl(private val context: Context) : FilesStorage {
         responseBody: ResponseBody,
         filename: String,
     ): Flow<PhotoDownloadInfo> {
-        Log.i("TAGXXX", "Saving responsebody $responseBody")
-
         return flow {
+            val fileSize = responseBody.contentLength()
+
             val contentResolver = context.contentResolver
             val imageUri = getImageUri(contentResolver, filename, responseBody.contentType()) ?: return@flow
             val outputStream = contentResolver.openOutputStream(imageUri) ?: return@flow
 
-            Log.i("TAGXXX", "Got outputstream $outputStream")
-
             val source = responseBody.source()
-
-            Log.i("TAGXXX", "Got source $source")
-
             val destination = outputStream.sink().buffer()
-            val fileSize = responseBody.contentLength()
 
             try {
                 var totalBytesRead = 0L

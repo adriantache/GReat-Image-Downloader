@@ -1,6 +1,5 @@
 package com.example.greatimagedownloader.data
 
-import android.util.Log
 import com.example.greatimagedownloader.data.api.RicohApi
 import com.example.greatimagedownloader.data.storage.FilesStorage
 import com.example.greatimagedownloader.data.storage.WifiStorage
@@ -58,8 +57,6 @@ class RepositoryImpl(
     }
 
     override fun downloadPhotoToStorage(photo: PhotoFile): Flow<PhotoDownloadInfo> {
-        Log.i("TAGXXX", "Getting photo $photo")
-
         return flow {
             val photoData = withContext(ioDispatcher) {
                 ricohApi.getPhoto(
@@ -67,10 +64,10 @@ class RepositoryImpl(
                     file = photo.name
                 )
             }
-            Log.i("TAGXXX", "Got responsebody $photoData")
 
+            // TODO: handle unsuccessful response
             emitAll(filesStorage.savePhoto(
-                responseBody = photoData,
+                responseBody = photoData.execute().body() ?: return@flow,
                 filename = photo.name
             ).map {
                 it.toDomain()
