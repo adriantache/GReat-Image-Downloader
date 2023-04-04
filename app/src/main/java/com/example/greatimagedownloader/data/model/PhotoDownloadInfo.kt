@@ -4,11 +4,11 @@ import android.net.Uri
 import com.example.greatimagedownloader.domain.data.model.PhotoDownloadInfo
 
 data class PhotoDownloadInfo(
+    val name: String,
     val uri: Uri,
     val downloadProgress: Int,
 ) {
-    // TODO: consider if we need this name
-    fun toDomain(name: String): PhotoDownloadInfo {
+    fun toDomain(): PhotoDownloadInfo {
         return PhotoDownloadInfo(
             name = name,
             uri = uri.toString(),

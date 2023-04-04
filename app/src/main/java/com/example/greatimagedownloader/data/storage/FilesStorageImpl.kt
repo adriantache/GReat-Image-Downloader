@@ -11,9 +11,7 @@ import android.util.Log
 import androidx.core.net.toFile
 import com.example.greatimagedownloader.data.model.PhotoDownloadInfo
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
 import okhttp3.MediaType
@@ -100,7 +98,6 @@ class FilesStorageImpl(private val context: Context) : FilesStorage {
         return results
     }
 
-    @OptIn(FlowPreview::class)
     override fun savePhoto(
         responseBody: ResponseBody,
         filename: String,
@@ -123,6 +120,7 @@ class FilesStorageImpl(private val context: Context) : FilesStorage {
 
             try {
                 var totalBytesRead = 0L
+                var currentProgress = -1
 
                 while (!source.exhausted()) {
                     val bytesRead = source.buffer.read(destination.buffer, OKIO_MAX_BYTES)
@@ -137,10 +135,13 @@ class FilesStorageImpl(private val context: Context) : FilesStorage {
                         (totalBytesRead.toFloat() / fileSize * 100).roundToInt().coerceAtMost(99)
                     }
 
-                    emit(PhotoDownloadInfo(uri = imageUri, downloadProgress = progress))
+                    if (progress != currentProgress) {
+                        currentProgress = progress
+                        emit(PhotoDownloadInfo(uri = imageUri, downloadProgress = progress, name = filename))
+                    }
                 }
 
-                emit(PhotoDownloadInfo(uri = imageUri, downloadProgress = 100))
+                emit(PhotoDownloadInfo(uri = imageUri, downloadProgress = 100, name = filename))
             } catch (e: IOException) {
                 // TODO: test this works as intended
                 imageUri.toFile().delete()
@@ -151,7 +152,7 @@ class FilesStorageImpl(private val context: Context) : FilesStorage {
                 outputStream.close()
                 responseBody.close()
             }
-        }.flowOn(Dispatchers.IO).debounce(100)
+        }.flowOn(Dispatchers.IO)
     }
 
     private fun getImageUri(

@@ -4,15 +4,15 @@ import com.example.greatimagedownloader.domain.data.model.PhotoDownloadInfo
 import com.example.greatimagedownloader.domain.ui.model.WifiDetails
 
 sealed interface States {
-    class Init(val onInit: () -> Unit) : States
+    data class Init(val onInit: () -> Unit) : States
 
-    class RequestPermissions(val onPermissionsGranted: () -> Unit) : States
+    data class RequestPermissions(val onPermissionsGranted: () -> Unit) : States
 
-    class RequestWifiCredentials(
+    data class RequestWifiCredentials(
         val onWifiCredentialsInput: (WifiDetails) -> Unit,
     ) : States
 
-    class ConnectWifi(
+    data class ConnectWifi(
         val wifiDetails: WifiDetails,
         val onChangeWifiDetails: () -> Unit,
         val onConnectionSuccess: () -> Unit,
@@ -21,7 +21,7 @@ sealed interface States {
 
     object GetPhotos : States
 
-    class DownloadPhotos(
+    data class DownloadPhotos(
         // TODO: build correct object for this
         val downloadedPhotos: List<PhotoDownloadInfo>,
         val currentPhotoNum: Int,
@@ -30,7 +30,7 @@ sealed interface States {
 
     object Disconnect : States
 
-    class Disconnected(
+    data class Disconnected(
         val onRestart: () -> Unit,
     ) : States
 }

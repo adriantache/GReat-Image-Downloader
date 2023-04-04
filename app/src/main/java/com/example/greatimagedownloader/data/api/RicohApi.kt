@@ -17,8 +17,8 @@ interface RicohApi {
     @GET("v1/props")
     suspend fun getConfig(): Response<RicohConfig>
 
-    @GET("v1/photos/{dir}/{file}")
     @Streaming
+    @GET("v1/photos/{dir}/{file}")
     suspend fun getPhoto(
         @Path("dir") directory: String,
         @Path("file") file: String,

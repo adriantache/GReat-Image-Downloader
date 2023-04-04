@@ -73,7 +73,7 @@ class RepositoryImpl(
                 responseBody = photoData,
                 filename = photo.name
             ).map {
-                it.toDomain(photo.name)
+                it.toDomain()
             })
         }
     }

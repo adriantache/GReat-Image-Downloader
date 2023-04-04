@@ -17,9 +17,7 @@ import com.example.greatimagedownloader.domain.utils.model.Event
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.launch
 
 // TODO: add tests
@@ -83,7 +81,6 @@ class DownloadPhotosUseCaseImpl(
 
     // TODO: handle directories
     // TODO: [IMPORTANT] handle videos!
-    @OptIn(FlowPreview::class)
     private fun getPhotos() {
         CoroutineScope(dispatcher).launch {
             val savedPhotos = repository.getSavedPhotos().map {
@@ -117,7 +114,7 @@ class DownloadPhotosUseCaseImpl(
             val downloadedPhotoUris = mutableMapOf<String, PhotoDownloadInfo>()
 
             photosToDownload.forEachIndexed { index, photo ->
-                repository.downloadPhotoToStorage(photo).debounce(100).collect {
+                repository.downloadPhotoToStorage(photo).collect {
                     downloadedPhotoUris[it.name] = it
 
                     state.value = DownloadPhotos(
