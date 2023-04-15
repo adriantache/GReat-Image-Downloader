@@ -23,6 +23,7 @@ import kotlin.math.roundToInt
 private val RICOH_PHOTOS_PATH = Environment.DIRECTORY_PICTURES + "/Image Sync"
 private val RICOH_MOVIES_PATH = Environment.DIRECTORY_MOVIES + "/Image Sync"
 private const val DEFAULT_MIME_TYPE = "image/jpg"
+private const val MIME_TYPE_VIDEO = "video"
 private const val MIN_SIZE_BYTES = 100
 private const val OKIO_MAX_BYTES = 8092L
 
@@ -105,7 +106,7 @@ class FilesStorageImpl(private val context: Context) : FilesStorage {
             val fileSize = responseBody.contentLength()
 
             val contentResolver = context.contentResolver
-            val imageUri = getImageUri(contentResolver, filename, responseBody.contentType()) ?: return@flow
+            val imageUri = getFileUri(contentResolver, filename, responseBody.contentType()) ?: return@flow
             val outputStream = contentResolver.openOutputStream(imageUri) ?: return@flow
 
             val source = responseBody.source()
@@ -148,15 +149,18 @@ class FilesStorageImpl(private val context: Context) : FilesStorage {
         }.flowOn(Dispatchers.IO)
     }
 
-    private fun getImageUri(
+    private fun getFileUri(
         contentResolver: ContentResolver,
         filename: String,
         contentType: MediaType?,
     ): Uri? {
+        val mediaTypeString = contentType?.toString() ?: DEFAULT_MIME_TYPE
+        val folder = if (contentType?.type == MIME_TYPE_VIDEO) RICOH_MOVIES_PATH else RICOH_PHOTOS_PATH
+
         val contentValues = ContentValues().apply {
             put(MediaStore.MediaColumns.DISPLAY_NAME, filename)
-            put(MediaStore.MediaColumns.MIME_TYPE, contentType?.toString() ?: DEFAULT_MIME_TYPE)
-            put(MediaStore.MediaColumns.RELATIVE_PATH, RICOH_PHOTOS_PATH)
+            put(MediaStore.MediaColumns.MIME_TYPE, mediaTypeString)
+            put(MediaStore.MediaColumns.RELATIVE_PATH, folder)
         }
 
         return contentResolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, contentValues)

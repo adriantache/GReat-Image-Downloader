@@ -76,18 +76,16 @@ class DownloadPhotosUseCaseImpl(
     private fun onConnectionSuccess() {
         state.value = GetPhotos
 
-        getPhotos()
+        getMedia()
     }
 
     // TODO: handle directories
     // TODO: [IMPORTANT] handle videos!
-    private fun getPhotos() {
+    private fun getMedia() {
         CoroutineScope(dispatcher).launch {
-            val savedPhotos = repository.getSavedPhotos().map {
-                // TODO: check this is still necessary after we fix the bug
-                // We might need to remove the extension for files that get saved .JPG.jpg
-                it.split(".")[0]
-            }.distinct()
+            val savedPhotos = repository.getSavedPhotos()
+            val savedMovies = repository.getSavedMovies()
+            val savedMedia = (savedPhotos + savedMovies).distinct()
             val availablePhotos = repository.getCameraPhotoList()
 
             if (availablePhotos.isFailure) {
@@ -97,7 +95,7 @@ class DownloadPhotosUseCaseImpl(
             val photosToDownload = availablePhotos.getOrNull().orEmpty()
                 .filter {
                     val nameWithoutExtension = it.name.split(".")[0]
-                    !savedPhotos.contains(nameWithoutExtension)
+                    !savedMedia.contains(nameWithoutExtension)
                 }
                 // TODO: remove this filter when I fix OOM issues for videos and add workflow for them
                 .filter {
@@ -114,7 +112,7 @@ class DownloadPhotosUseCaseImpl(
             val downloadedPhotoUris = mutableMapOf<String, PhotoDownloadInfo>()
 
             photosToDownload.forEachIndexed { index, photo ->
-                repository.downloadPhotoToStorage(photo).collect {
+                repository.downloadMediaToStorage(photo).collect {
                     downloadedPhotoUris[it.name] = it
 
                     state.value = DownloadPhotos(

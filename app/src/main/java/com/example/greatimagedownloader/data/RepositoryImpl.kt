@@ -41,6 +41,10 @@ class RepositoryImpl(
         return filesStorage.getSavedPhotos()
     }
 
+    override fun getSavedMovies(): List<String> {
+        return filesStorage.getSavedMovies()
+    }
+
     override suspend fun getCameraPhotoList(): Result<List<PhotoFile>> {
         return withContext(ioDispatcher) {
             val response = ricohApi.getPhotos()
@@ -56,7 +60,7 @@ class RepositoryImpl(
         }
     }
 
-    override fun downloadPhotoToStorage(photo: PhotoFile): Flow<PhotoDownloadInfo> {
+    override fun downloadMediaToStorage(photo: PhotoFile): Flow<PhotoDownloadInfo> {
         return flow {
             val photoData = withContext(ioDispatcher) {
                 ricohApi.getPhoto(
@@ -66,7 +70,8 @@ class RepositoryImpl(
             }
 
             // TODO: handle unsuccessful response
-            emitAll(filesStorage.savePhoto(
+            emitAll(
+                filesStorage.savePhoto(
                 responseBody = photoData.execute().body() ?: return@flow,
                 filename = photo.name
             ).map {

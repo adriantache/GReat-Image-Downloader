@@ -12,9 +12,10 @@ interface Repository {
 
     // Data storage
     fun getSavedPhotos(): List<String>
+    fun getSavedMovies(): List<String>
 
     // Camera operations
     suspend fun getCameraPhotoList(): Result<List<PhotoFile>>
-    fun downloadPhotoToStorage(photo: PhotoFile): Flow<PhotoDownloadInfo>
+    fun downloadMediaToStorage(photo: PhotoFile): Flow<PhotoDownloadInfo>
     suspend fun shutDownCamera()
 }
