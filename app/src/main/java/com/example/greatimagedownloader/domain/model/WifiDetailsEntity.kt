@@ -14,6 +14,8 @@ data class WifiDetailsEntity(
             password.length >= WIFI_PASS_MIN_LENGTH
 
     fun toUi(): WifiDetails {
+        require(isValid)
+
         return WifiDetails(
             ssid = requireNotNull(ssid),
             password = requireNotNull(password),
