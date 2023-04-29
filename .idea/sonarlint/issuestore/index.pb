@@ -11,5 +11,3 @@ Tapp/src/main/java/com/example/greatimagedownloader/domain/model/WifiDetailsEnti
 Xapp/src/test/java/com/example/greatimagedownloader/domain/model/WifiDetailsEntityTest.kt,a\8\a847d8bdec15996704a88c8ee816a3a483fea98b
 w
 Gapp/src/main/java/com/example/greatimagedownloader/ui/view/StartView.kt,d\e\ded07853a65f2c4755f7e7b57eed08cf68f4ce0f
-|
-Lapp/src/main/java/com/example/greatimagedownloader/domain/data/Repository.kt,3\e\3e5de4b484214a3f6b32eb7bafb33bfaa82f9226

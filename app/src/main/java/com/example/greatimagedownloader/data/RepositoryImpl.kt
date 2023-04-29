@@ -12,6 +12,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
 
@@ -62,22 +63,22 @@ class RepositoryImpl(
 
     override fun downloadMediaToStorage(photo: PhotoFile): Flow<PhotoDownloadInfo> {
         return flow {
-            val photoData = withContext(ioDispatcher) {
-                ricohApi.getPhoto(
-                    directory = photo.directory,
-                    file = photo.name
-                )
-            }
+            // TODO: try catch this call in case of connection issues and maybe delete current pending file afterwards
+            val imageResponse = ricohApi.getPhoto(
+                directory = photo.directory,
+                file = photo.name
+            )
 
             // TODO: handle unsuccessful response
-            emitAll(
-                filesStorage.savePhoto(
-                responseBody = photoData.execute().body() ?: return@flow,
+            val result = filesStorage.savePhoto(
+                responseBody = imageResponse,
                 filename = photo.name
             ).map {
                 it.toDomain()
-            })
-        }
+            }
+
+            emitAll(result)
+        }.flowOn(ioDispatcher)
     }
 
     override suspend fun shutDownCamera() {

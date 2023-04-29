@@ -97,11 +97,6 @@ class DownloadPhotosUseCaseImpl(
                     val nameWithoutExtension = it.name.split(".")[0]
                     !savedMedia.contains(nameWithoutExtension)
                 }
-                // TODO: remove this filter when I fix OOM issues for videos and add workflow for them
-                .filter {
-                    val extension = it.name.split(".").lastOrNull()?.lowercase()
-                    extension == "jpg"
-                }
 
             state.value = DownloadPhotos(
                 downloadedPhotos = emptyList(),
@@ -121,12 +116,12 @@ class DownloadPhotosUseCaseImpl(
                         downloadedPhotos = downloadedPhotoUris.values.toList(),
                     )
                 }
+
+                event.value = Event(Events.DownloadSuccess(downloadedPhotoUris.keys.size))
+                state.value = Disconnect
+
+                disconnect()
             }
-
-            event.value = Event(Events.DownloadSuccess(downloadedPhotoUris.keys.size))
-            state.value = Disconnect
-
-            disconnect()
         }
     }
 

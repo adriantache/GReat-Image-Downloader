@@ -4,11 +4,13 @@ import android.content.ContentResolver
 import android.content.ContentValues
 import android.content.Context
 import android.net.Uri
+import android.os.Build
 import android.os.Environment
 import android.provider.MediaStore
 import android.provider.OpenableColumns
-import androidx.core.net.toFile
+import androidx.core.app.ActivityCompat.startIntentSenderForResult
 import com.example.greatimagedownloader.data.model.PhotoDownloadInfo
+import com.example.greatimagedownloader.ui.util.findActivity
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
@@ -76,7 +78,7 @@ class FilesStorageImpl(private val context: Context) : FilesStorage {
         val results = mutableListOf<String>()
 
         contentResolver.query(
-            /* uri = */ MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
+            /* uri = */ MediaStore.Video.Media.EXTERNAL_CONTENT_URI,
             /* projection = */ projection,
             /* selection = */ selection,
             /* selectionArgs = */ selectionArgs,
@@ -109,43 +111,41 @@ class FilesStorageImpl(private val context: Context) : FilesStorage {
             val imageUri = getFileUri(contentResolver, filename, responseBody.contentType()) ?: return@flow
             val outputStream = contentResolver.openOutputStream(imageUri) ?: return@flow
 
-            val source = responseBody.source()
-            val destination = outputStream.sink().buffer()
+            responseBody.source().use { source ->
+                outputStream.sink().buffer().use { destination ->
+                    try {
+                        var totalBytesRead = 0L
+                        var currentProgress = -1
 
-            try {
-                var totalBytesRead = 0L
-                var currentProgress = -1
+                        while (!source.exhausted()) {
+                            val bytesRead = source.buffer.read(destination.buffer, OKIO_MAX_BYTES).takeUnless { it == -1L } ?: break
+                            destination.emit()
 
-                while (!source.exhausted()) {
-                    val bytesRead = source.buffer.read(destination.buffer, OKIO_MAX_BYTES)
-                        .takeUnless { it == -1L } ?: break
-                    destination.emit()
+                            totalBytesRead += bytesRead
 
-                    totalBytesRead += bytesRead
+                            val progress = if (fileSize == -1L) {
+                                0
+                            } else {
+                                (totalBytesRead.toFloat() / fileSize * 100).roundToInt().coerceAtMost(99)
+                            }
 
-                    val progress = if (fileSize == -1L) {
-                        0
-                    } else {
-                        (totalBytesRead.toFloat() / fileSize * 100).roundToInt().coerceAtMost(99)
-                    }
+                            if (progress != currentProgress) {
+                                currentProgress = progress
+                                emit(PhotoDownloadInfo(uri = imageUri, downloadProgress = progress, name = filename))
+                            }
+                        }
 
-                    if (progress != currentProgress) {
-                        currentProgress = progress
-                        emit(PhotoDownloadInfo(uri = imageUri, downloadProgress = progress, name = filename))
+                        emit(PhotoDownloadInfo(uri = imageUri, downloadProgress = 100, name = filename))
+                    } catch (e: IOException) {
+                        // TODO: fix this not working
+                        deleteInvalidFile(contentResolver, imageUri)
+                        return@flow
                     }
                 }
-
-                emit(PhotoDownloadInfo(uri = imageUri, downloadProgress = 100, name = filename))
-            } catch (e: IOException) {
-                // TODO: test this works as intended
-                imageUri.toFile().delete()
-                return@flow
-            } finally {
-                source.close()
-                destination.close()
-                outputStream.close()
-                responseBody.close()
             }
+
+            outputStream.close()
+            responseBody.close()
         }.flowOn(Dispatchers.IO)
     }
 
@@ -155,7 +155,8 @@ class FilesStorageImpl(private val context: Context) : FilesStorage {
         contentType: MediaType?,
     ): Uri? {
         val mediaTypeString = contentType?.toString() ?: DEFAULT_MIME_TYPE
-        val folder = if (contentType?.type == MIME_TYPE_VIDEO) RICOH_MOVIES_PATH else RICOH_PHOTOS_PATH
+        val isVideo = contentType?.type == MIME_TYPE_VIDEO
+        val folder = if (isVideo) RICOH_MOVIES_PATH else RICOH_PHOTOS_PATH
 
         val contentValues = ContentValues().apply {
             put(MediaStore.MediaColumns.DISPLAY_NAME, filename)
@@ -163,6 +164,22 @@ class FilesStorageImpl(private val context: Context) : FilesStorage {
             put(MediaStore.MediaColumns.RELATIVE_PATH, folder)
         }
 
-        return contentResolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, contentValues)
+        val contentUri = if (isVideo) MediaStore.Video.Media.EXTERNAL_CONTENT_URI else MediaStore.Images.Media.EXTERNAL_CONTENT_URI
+
+        return contentResolver.insert(contentUri, contentValues)
+    }
+
+    private fun deleteInvalidFile(
+        contentResolver: ContentResolver,
+        uri: Uri,
+    ) {
+        val activity = context.findActivity() ?: return
+
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
+            return
+        }
+
+        val pendingIntent = MediaStore.createDeleteRequest(contentResolver, listOf(uri))
+        startIntentSenderForResult(activity, pendingIntent.intentSender, 1, null, 0, 0, 0, null)
     }
 }
