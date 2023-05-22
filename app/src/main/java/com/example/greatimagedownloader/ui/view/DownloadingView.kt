@@ -102,7 +102,7 @@ fun DownloadingView(
                             Box(
                                 modifier = Modifier
                                     .aspectRatio(1f)
-                                    .background(Color.Green)
+                                    .background(Color.Green, boxShape)
                             )
                         }
                     }

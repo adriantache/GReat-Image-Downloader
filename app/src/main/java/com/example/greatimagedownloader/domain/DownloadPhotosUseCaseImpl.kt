@@ -116,12 +116,12 @@ class DownloadPhotosUseCaseImpl(
                         downloadedPhotos = downloadedPhotoUris.values.toList(),
                     )
                 }
-
-                event.value = Event(Events.DownloadSuccess(downloadedPhotoUris.keys.size))
-                state.value = Disconnect
-
-                disconnect()
             }
+
+            event.value = Event(Events.DownloadSuccess(downloadedPhotoUris.keys.size))
+            state.value = Disconnect
+
+            disconnect()
         }
     }
 
