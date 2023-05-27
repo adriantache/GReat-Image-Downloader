@@ -1,5 +1,6 @@
 package com.example.greatimagedownloader.ui.wifi
 
+import android.annotation.SuppressLint
 import android.content.Context
 import android.net.ConnectivityManager
 import android.net.LinkProperties
@@ -8,6 +9,7 @@ import android.net.NetworkCapabilities
 import android.net.NetworkRequest
 import android.net.wifi.WifiManager
 import android.net.wifi.WifiNetworkSpecifier
+import android.os.Build
 import android.util.Log
 import com.example.greatimagedownloader.domain.ui.model.WifiDetails
 import kotlinx.coroutines.delay
@@ -15,13 +17,14 @@ import kotlinx.coroutines.delay
 const val CONNECT_TIMEOUT_MS = 10_000
 
 // TODO: clean this up
-class WifiUtilImpl(
-    private val context: Context,
-) : WifiUtil {
+class WifiUtilImpl(context: Context) : WifiUtil {
+    private val wifiManager = context.applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
+    private val connectivityManager = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+
     override suspend fun connectToWifi(
         wifiDetails: WifiDetails,
         onConnectionSuccess: () -> Unit,
-        onConnectionLost: () -> Unit
+        onConnectionLost: () -> Unit,
     ) {
         scanForWifi()
 
@@ -29,9 +32,6 @@ class WifiUtilImpl(
             .setSsid(wifiDetails.ssid)
             .setWpa2Passphrase(wifiDetails.password)
             .build()
-
-        val connectivityManager =
-            context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
 
         val networkRequest = NetworkRequest.Builder()
             .addTransportType(NetworkCapabilities.TRANSPORT_WIFI)
@@ -64,7 +64,7 @@ class WifiUtilImpl(
 
             override fun onCapabilitiesChanged(
                 network: Network,
-                networkCapabilities: NetworkCapabilities
+                networkCapabilities: NetworkCapabilities,
             ) {
                 Log.i("WifiConnection", "onCapabilitiesChanged: $network -> $networkCapabilities")
 
@@ -99,14 +99,29 @@ class WifiUtilImpl(
         connectivityManager.requestNetwork(networkRequest, networkCallback, CONNECT_TIMEOUT_MS)
     }
 
+    @SuppressLint("MissingPermission")
+    override suspend fun suggestNetwork(): String {
+        if (!wifiManager.isWifiEnabled || wifiManager.wifiState != WifiManager.WIFI_STATE_ENABLED) {
+            return "Wifi is off!"
+        }
+
+        scanForWifi()
+
+        // Ensure that Wi-Fi is enabled
+        val scanResults = wifiManager.scanResults.map {
+            @Suppress("DEPRECATION")
+            val ssid = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) it.wifiSsid.toString() else it.SSID
+            ssid.replace("\"", "")
+        }
+
+        return scanResults.find { it.startsWith("GR_") }.orEmpty()
+    }
+
     // TODO: fix this scan code
     private suspend fun scanForWifi() {
-        val wifiManager =
-            context.applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
-
         wifiManager.startScan()
+        delay(2000) // Wait for the scan to be performed
 
-        delay(3000)
 
 //            val wifiScanReceiver = object : BroadcastReceiver() {
 //                override fun onReceive(context: Context, intent: Intent) {

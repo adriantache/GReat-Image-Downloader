@@ -74,7 +74,7 @@ fun MainScreenStateMachine(
                     )
                 }
 
-                is RequestWifiCredentials -> WifiInputView(state.onWifiCredentialsInput)
+                is RequestWifiCredentials -> WifiInputView(onWifiCredentialsInput = state.onWifiCredentialsInput)
                 is ConnectWifi -> StartView(
                     wifiDetails = state.wifiDetails,
                     onConnectionSuccess = state.onConnectionSuccess,

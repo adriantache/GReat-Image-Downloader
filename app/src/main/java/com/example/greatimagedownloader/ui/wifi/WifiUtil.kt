@@ -8,4 +8,6 @@ interface WifiUtil {
         onConnectionSuccess: () -> Unit,
         onConnectionLost: () -> Unit,
     )
+
+    suspend fun suggestNetwork(): String
 }
