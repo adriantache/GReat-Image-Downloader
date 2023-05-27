@@ -28,5 +28,3 @@ Rapp/src/main/java/com/example/greatimagedownloader/domain/DownloadPhotosUseCase
 :
 
 LICENSE.md,4\a\4a8486805915245bbbe2e3c8c1a9d680c6843a82
-}
-Mapp/src/main/java/com/example/greatimagedownloader/ui/view/DownloadingView.kt,9\a\9afa3bbd68fceeefc5b7662d517c4cf9a3806db8
