@@ -19,6 +19,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
+import java.util.concurrent.atomic.AtomicBoolean
 
 // TODO: add tests
 class DownloadPhotosUseCaseImpl(
@@ -30,6 +31,8 @@ class DownloadPhotosUseCaseImpl(
 
     @Suppress("kotlin:S6305")
     override val event: MutableStateFlow<Event<Events>?> = MutableStateFlow(null)
+
+    private var isProcessing = AtomicBoolean(false)
 
     private fun onInit() {
         state.value = RequestPermissions(::onPermissionsGranted)
@@ -76,11 +79,13 @@ class DownloadPhotosUseCaseImpl(
     private fun onConnectionSuccess() {
         state.value = GetPhotos
 
-        getMedia()
+        if (!isProcessing.get()) {
+            isProcessing.set(true)
+            getMedia()
+        }
     }
 
     // TODO: handle directories
-    // TODO: [IMPORTANT] handle videos!
     private fun getMedia() {
         CoroutineScope(dispatcher).launch {
             val savedPhotos = repository.getSavedPhotos()
@@ -120,6 +125,8 @@ class DownloadPhotosUseCaseImpl(
 
             event.value = Event(Events.DownloadSuccess(downloadedPhotoUris.keys.size))
             state.value = Disconnect
+
+            isProcessing.set(false)
 
             disconnect()
         }
