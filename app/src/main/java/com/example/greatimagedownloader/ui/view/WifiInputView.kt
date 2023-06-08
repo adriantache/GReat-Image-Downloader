@@ -118,6 +118,7 @@ fun WifiInputView(
 @Composable
 private fun WifiInputViewPreview() {
     val wifiUtil = object : WifiUtil {
+        override val isWifiDisabled: Boolean = false
         override suspend fun connectToWifi(wifiDetails: WifiDetails, onConnectionSuccess: () -> Unit, onConnectionLost: () -> Unit) = Unit
         override suspend fun suggestNetwork(): String = ""
     }

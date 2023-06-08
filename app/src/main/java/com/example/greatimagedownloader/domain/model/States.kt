@@ -27,9 +27,8 @@ sealed interface States {
         val totalPhotos: Int,
     ) : States
 
-    object Disconnect : States
-
     data class Disconnected(
+        val numDownloadedPhotos: Int? = null,
         val onRestart: () -> Unit,
     ) : States
 }

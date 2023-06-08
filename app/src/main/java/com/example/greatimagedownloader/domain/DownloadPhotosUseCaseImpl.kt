@@ -5,7 +5,6 @@ import com.example.greatimagedownloader.domain.data.model.PhotoDownloadInfo
 import com.example.greatimagedownloader.domain.model.Events
 import com.example.greatimagedownloader.domain.model.States
 import com.example.greatimagedownloader.domain.model.States.ConnectWifi
-import com.example.greatimagedownloader.domain.model.States.Disconnect
 import com.example.greatimagedownloader.domain.model.States.Disconnected
 import com.example.greatimagedownloader.domain.model.States.DownloadPhotos
 import com.example.greatimagedownloader.domain.model.States.GetPhotos
@@ -115,18 +114,17 @@ class DownloadPhotosUseCaseImpl(
                 }
             }
 
-            // TODO: join disconnect and disconnected cases and remove this useless event
-            event.value = Event(Events.DownloadSuccess(downloadedPhotoUris.keys.size))
-            state.value = Disconnect
-
-            disconnect()
+            disconnect(downloadedPhotoUris.count { it.value.downloadProgress == 100 })
         }
     }
 
-    private suspend fun disconnect() {
+    private suspend fun disconnect(numDownloadedPhotos: Int) {
         repository.shutDownCamera() // Also shuts down the hotspot, no need to disconnect from WiFi.
 
-        state.value = Disconnected(onRestart = { state.value = Init(::onInit) })
+        state.value = Disconnected(
+            numDownloadedPhotos = numDownloadedPhotos,
+            onRestart = { state.value = Init(::onInit) },
+        )
     }
 
     private fun onConnectionLost() {
