@@ -19,7 +19,6 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
-import java.util.concurrent.atomic.AtomicBoolean
 
 // TODO: add tests
 class DownloadPhotosUseCaseImpl(
@@ -31,8 +30,6 @@ class DownloadPhotosUseCaseImpl(
 
     @Suppress("kotlin:S6305")
     override val event: MutableStateFlow<Event<Events>?> = MutableStateFlow(null)
-
-    private var isProcessing = AtomicBoolean(false)
 
     private fun onInit() {
         state.value = RequestPermissions(::onPermissionsGranted)
@@ -79,41 +76,36 @@ class DownloadPhotosUseCaseImpl(
     private fun onConnectionSuccess() {
         state.value = GetPhotos
 
-        if (!isProcessing.get()) {
-            isProcessing.set(true)
-            getMedia()
-        }
+        getMedia()
     }
 
     // TODO: handle directories
+    // TODO: add logic for when we delete already downloaded images and opt-out mechanism
     private fun getMedia() {
         CoroutineScope(dispatcher).launch {
-            val savedPhotos = repository.getSavedPhotos()
-            val savedMovies = repository.getSavedMovies()
-            val savedMedia = (savedPhotos + savedMovies).distinct()
+            val savedMedia = (repository.getSavedPhotos() + repository.getSavedMovies()).distinct()
             val availablePhotos = repository.getCameraPhotoList()
 
             if (availablePhotos.isFailure) {
                 event.value = Event(Events.CannotDownloadPhotos)
+                state.value = Init(::onInit)
+                return@launch
             }
 
-            val photosToDownload = availablePhotos.getOrNull().orEmpty()
+            val photosToDownload = availablePhotos.getOrNull()
+                .orEmpty()
                 .filter {
                     val nameWithoutExtension = it.name.split(".")[0]
                     !savedMedia.contains(nameWithoutExtension)
                 }
 
-            state.value = DownloadPhotos(
-                downloadedPhotos = emptyList(),
-                currentPhotoNum = 0,
-                totalPhotos = photosToDownload.size,
-            )
+            state.value = DownloadPhotos(totalPhotos = photosToDownload.size)
 
             val downloadedPhotoUris = mutableMapOf<String, PhotoDownloadInfo>()
 
             photosToDownload.forEachIndexed { index, photo ->
-                repository.downloadMediaToStorage(photo).collect {
-                    downloadedPhotoUris[it.name] = it
+                repository.downloadMediaToStorage(photo).collect { photoDownloadInfo ->
+                    downloadedPhotoUris[photoDownloadInfo.name] = photoDownloadInfo
 
                     state.value = DownloadPhotos(
                         currentPhotoNum = index + 1,
@@ -123,10 +115,9 @@ class DownloadPhotosUseCaseImpl(
                 }
             }
 
+            // TODO: join disconnect and disconnected cases and remove this useless event
             event.value = Event(Events.DownloadSuccess(downloadedPhotoUris.keys.size))
             state.value = Disconnect
-
-            isProcessing.set(false)
 
             disconnect()
         }
@@ -139,6 +130,8 @@ class DownloadPhotosUseCaseImpl(
     }
 
     private fun onConnectionLost() {
+        // TODO: check current file progress and delete it if not 100%
+
         state.value = Disconnected(onRestart = { state.value = Init(::onInit) })
     }
 }

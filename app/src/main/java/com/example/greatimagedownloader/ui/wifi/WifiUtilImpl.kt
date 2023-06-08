@@ -16,10 +16,18 @@ import kotlinx.coroutines.delay
 
 const val CONNECT_TIMEOUT_MS = 10_000
 
-// TODO: clean this up
+// TODO: refactor this class
+// TODO: handle situation where wifi is not turned on using isWifiDisabled
 class WifiUtilImpl(context: Context) : WifiUtil {
     private val wifiManager = context.applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
     private val connectivityManager = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+
+    override val isWifiDisabled: Boolean
+        get() = !wifiManager.isWifiEnabled || wifiManager.wifiState != WifiManager.WIFI_STATE_ENABLED
+
+    @get:Synchronized
+    @set:Synchronized
+    private var state: WifiState = WifiState.IDLE
 
     override suspend fun connectToWifi(
         wifiDetails: WifiDetails,
@@ -38,16 +46,21 @@ class WifiUtilImpl(context: Context) : WifiUtil {
             .setNetworkSpecifier(wifiNetworkSpecifier)
             .build()
 
-        // TODO: only keep the callbacks we actually need
+        // TODO: only keep the callbacks we actually need and remove the logs
         val networkCallback = object : ConnectivityManager.NetworkCallback() {
             override fun onAvailable(network: Network) {
                 Log.i("WifiConnection", "onAvailable: $network")
 
                 super.onAvailable(network)
 
-                // To make sure that requests don't go over mobile data
+                // To make sure that requests don't go over mobile data.
                 connectivityManager.bindProcessToNetwork(network)
-                onConnectionSuccess()
+
+                // Avoid triggering connection success multiple times.
+                if (state == WifiState.SCANNING) {
+                    state = WifiState.FOUND
+                    onConnectionSuccess()
+                }
             }
 
             override fun onLosing(network: Network, maxMsToLive: Int) {
@@ -58,6 +71,8 @@ class WifiUtilImpl(context: Context) : WifiUtil {
 
             override fun onUnavailable() {
                 Log.i("WifiConnection", "onUnavailable")
+
+                // TODO: implement for when we can't find the network we're searching for
 
                 super.onUnavailable()
             }
@@ -87,9 +102,10 @@ class WifiUtilImpl(context: Context) : WifiUtil {
                 Log.i("WifiConnection", "onLost: $network")
 
                 super.onLost(network)
-                // This is to stop the looping request for OnePlus & Xiaomi models
+                // This is to stop the looping request for OnePlus & Xiaomi models.
                 connectivityManager.bindProcessToNetwork(null)
 
+                state = WifiState.LOST
                 onConnectionLost()
 
                 // Here you can have a fallback option to show a 'Please connect manually' page with an Intent to the Wifi settings
@@ -101,7 +117,7 @@ class WifiUtilImpl(context: Context) : WifiUtil {
 
     @SuppressLint("MissingPermission")
     override suspend fun suggestNetwork(): String {
-        if (!wifiManager.isWifiEnabled || wifiManager.wifiState != WifiManager.WIFI_STATE_ENABLED) {
+        if (isWifiDisabled) {
             return "Wifi is off!"
         }
 
@@ -114,11 +130,15 @@ class WifiUtilImpl(context: Context) : WifiUtil {
             ssid.replace("\"", "")
         }
 
+        state = WifiState.IDLE
+
         return scanResults.find { it.startsWith("GR_") }.orEmpty()
     }
 
     // TODO: fix this scan code
     private suspend fun scanForWifi() {
+        state = WifiState.SCANNING
+
         wifiManager.startScan()
         delay(2000) // Wait for the scan to be performed
 
@@ -143,4 +163,8 @@ class WifiUtilImpl(context: Context) : WifiUtil {
 //                continuation.resume(Unit)
 //            }
     }
+}
+
+private enum class WifiState {
+    IDLE, SCANNING, FOUND, LOST
 }

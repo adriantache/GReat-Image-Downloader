@@ -1,8 +1,6 @@
 
 y
 Iapp/src/main/java/com/example/greatimagedownloader/domain/model/Events.kt,c\9\c9acd3672a5f630f9896039f3dbf808f7e93d152
-y
-Iapp/src/main/java/com/example/greatimagedownloader/domain/model/States.kt,1\e\1ee2cb6c3065aebea0e2d35da79dca8afc213b89
 ˆ
 Xapp/src/test/java/com/example/greatimagedownloader/domain/model/WifiDetailsEntityTest.kt,a\8\a847d8bdec15996704a88c8ee816a3a483fea98b
 „
@@ -28,12 +26,8 @@ Rapp/src/main/java/com/example/greatimagedownloader/domain/DownloadPhotosUseCase
 :
 
 LICENSE.md,4\a\4a8486805915245bbbe2e3c8c1a9d680c6843a82
-w
-Gapp/src/main/java/com/example/greatimagedownloader/ui/view/StartView.kt,d\e\ded07853a65f2c4755f7e7b57eed08cf68f4ce0f
 r
 Bapp/src/main/java/com/example/greatimagedownloader/MainActivity.kt,7\9\79ee01de6b939e3092302257a84d8d6596c442e9
-u
-Eapp/src/main/java/com/example/greatimagedownloader/MainApplication.kt,3\2\32e01def30d5fa64e708b6b8c6e68782e6d887cd
 }
 Mapp/src/main/java/com/example/greatimagedownloader/ui/view/PermissionsView.kt,6\7\671b79747fed5e4864b0ebeb6feb5a8961ff6f16
 €
@@ -42,13 +36,8 @@ Papp/src/main/java/com/example/greatimagedownloader/ui/view/PermissionsRowView.k
 Yapp/src/main/java/com/example/greatimagedownloader/domain/data/model/PhotoDownloadInfo.kt,9\b\9b558e9fc0d61fe8c924ad83816cef1926ab545e
 P
  app/src/main/AndroidManifest.xml,8\c\8c55c3ccc257e5907959013f99656e4c8ec3903e
-
-Oapp/src/main/java/com/example/greatimagedownloader/ui/MainScreenStateMachine.kt,c\1\c19b6f6aafa57413bfc8e17ad267f2cd7f771890
 {
 Kapp/src/main/java/com/example/greatimagedownloader/ui/view/WifiInputView.kt,b\d\bd966ea473691752bc9dd9e3c5eef6a949af0652
-t
-Dapp/src/main/java/com/example/greatimagedownloader/ui/di/UiModule.kt,5\8\58691c354ab5aa27ef69288b1a3f9bf338606b72
-v
-Fapp/src/main/java/com/example/greatimagedownloader/ui/wifi/WifiUtil.kt,1\c\1cfe97a5e2400d708a05356228728af7e7c6a28d
-z
-Japp/src/main/java/com/example/greatimagedownloader/ui/wifi/WifiUtilImpl.kt,1\b\1b7d7273d4ed9fd4dfe9c58cf8b49739a3babe28
+:
+
+.gitignore,a\5\a5cc2925ca8258af241be7e5b0381edf30266302

@@ -39,7 +39,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
@@ -49,9 +48,9 @@ import com.example.greatimagedownloader.R
 import com.example.greatimagedownloader.domain.ui.model.WifiDetails
 import com.example.greatimagedownloader.ui.wifi.CONNECT_TIMEOUT_MS
 import com.example.greatimagedownloader.ui.wifi.WifiUtil
-import com.example.greatimagedownloader.ui.wifi.WifiUtilImpl
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import org.koin.androidx.compose.get
 
 // TODO: rename this file and split it into a loading view and a start view
 // TODO: make some nice animations between the two states
@@ -60,15 +59,14 @@ import kotlinx.coroutines.launch
 @Composable
 fun StartView(
     wifiDetails: WifiDetails,
+    // TODO: move interactions with this class to the UseCase
+    wifiUtil: WifiUtil = get(),
     onConnectionSuccess: () -> Unit,
     onConnectionLost: () -> Unit,
     onChangeWifiDetails: () -> Unit,
 ) {
-    val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
-
-    val wifiUtil: WifiUtil by remember { mutableStateOf(WifiUtilImpl(context)) }
 
     var isLoading by remember { mutableStateOf(false) }
 
