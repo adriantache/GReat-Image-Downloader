@@ -35,3 +35,9 @@ P
 :
 
 .gitignore,a\5\a5cc2925ca8258af241be7e5b0381edf30266302
+}
+Mapp/src/main/java/com/example/greatimagedownloader/ui/view/DownloadingView.kt,9\a\9afa3bbd68fceeefc5b7662d517c4cf9a3806db8
+w
+Gapp/src/main/java/com/example/greatimagedownloader/ui/view/StartView.kt,d\e\ded07853a65f2c4755f7e7b57eed08cf68f4ce0f
+v
+Fapp/src/main/java/com/example/greatimagedownloader/ui/wifi/WifiUtil.kt,1\c\1cfe97a5e2400d708a05356228728af7e7c6a28d
