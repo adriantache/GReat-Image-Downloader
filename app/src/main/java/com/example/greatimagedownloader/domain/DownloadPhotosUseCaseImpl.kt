@@ -13,15 +13,20 @@ import com.example.greatimagedownloader.domain.model.States.RequestPermissions
 import com.example.greatimagedownloader.domain.model.States.RequestWifiCredentials
 import com.example.greatimagedownloader.domain.model.WifiDetailsEntity
 import com.example.greatimagedownloader.domain.utils.model.Event
+import com.example.greatimagedownloader.domain.utils.model.delay
+import com.example.greatimagedownloader.domain.wifi.WifiUtil
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 
+private const val CONNECT_TIMEOUT_MS = 30_000
+
 // TODO: add tests
 class DownloadPhotosUseCaseImpl(
     private val repository: Repository,
+    private val wifiUtil: WifiUtil,
     private val dispatcher: CoroutineDispatcher = Dispatchers.IO,
 ) : DownloadPhotosUseCase {
     @Suppress("kotlin:S6305")
@@ -38,14 +43,29 @@ class DownloadPhotosUseCaseImpl(
         connectToWifi()
     }
 
+    // TODO: check if wifi is enabled first and show error message which redirects to wifi settings
     private fun connectToWifi() {
         val wifiDetails = repository.getWifiDetails().toEntity()
 
         state.value = if (wifiDetails.isValid) {
             ConnectWifi(
-                wifiDetails = wifiDetails.toUi(),
-                onConnectionSuccess = ::onConnectionSuccess,
-                onConnectionLost = ::onConnectionLost,
+                onConnect = {
+                    CoroutineScope(dispatcher).launch {
+                        delay(CONNECT_TIMEOUT_MS)
+
+                        if (state.value is ConnectWifi) {
+                            wifiUtil.disconnectFromWifi()
+                            state.value = Init(::onInit)
+                        }
+                    }
+
+                    wifiUtil.connectToWifi(
+                        wifiDetails = wifiDetails,
+                        connectTimeoutMs = CONNECT_TIMEOUT_MS,
+                        onWifiConnected = ::onConnectionSuccess,
+                        onWifiDisconnected = ::onConnectionLost
+                    )
+                },
                 onChangeWifiDetails = {
                     state.value = RequestWifiCredentials(onWifiCredentialsInput = {
                         onWifiCredentialsInput(it.toEntity())

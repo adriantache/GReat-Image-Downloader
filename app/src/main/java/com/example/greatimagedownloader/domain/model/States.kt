@@ -13,10 +13,8 @@ sealed interface States {
     ) : States
 
     data class ConnectWifi(
-        val wifiDetails: WifiDetails,
+        val onConnect: () -> Unit,
         val onChangeWifiDetails: () -> Unit,
-        val onConnectionSuccess: () -> Unit,
-        val onConnectionLost: () -> Unit,
     ) : States
 
     object GetPhotos : States

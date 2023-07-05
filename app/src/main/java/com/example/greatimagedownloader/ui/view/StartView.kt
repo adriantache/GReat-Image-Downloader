@@ -20,7 +20,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
@@ -29,11 +28,9 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -45,27 +42,15 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.example.greatimagedownloader.R
-import com.example.greatimagedownloader.domain.ui.model.WifiDetails
-import com.example.greatimagedownloader.ui.wifi.CONNECT_TIMEOUT_MS
-import com.example.greatimagedownloader.ui.wifi.WifiUtil
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
-import org.koin.androidx.compose.get
 
 // TODO: rename this file and split it into a loading view and a start view
 // TODO: make some nice animations between the two states
 // TODO: add preview
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun StartView(
-    wifiDetails: WifiDetails,
-    // TODO: move interactions with this class to the UseCase
-    wifiUtil: WifiUtil = get(),
-    onConnectionSuccess: () -> Unit,
-    onConnectionLost: () -> Unit,
+    onConnect: () -> Unit,
     onChangeWifiDetails: () -> Unit,
 ) {
-    val coroutineScope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
 
     var isLoading by remember { mutableStateOf(false) }
@@ -80,25 +65,16 @@ fun StartView(
         ) {
             Spacer(modifier = Modifier.height(200.dp))
 
-            // TODO: move this logic to the use case and add a new WifiConnectionPending state for it
-            //  and send an event if we time out to show a snackbar or something
             if (isLoading) {
-                LaunchedEffect(Unit) {
-                    // TODO: find a cleaner way to get this constant
-                    delay(CONNECT_TIMEOUT_MS.toLong())
-
-                    snackbarHostState.showSnackbar("Could not connect to the network.")
-                    isLoading = false
-                }
-
-                val infiniteTransition = rememberInfiniteTransition()
+                val infiniteTransition = rememberInfiniteTransition(label = "")
                 val bgColor by infiniteTransition.animateColor(
                     initialValue = MaterialTheme.colorScheme.primary,
                     targetValue = Color.Black,
                     animationSpec = infiniteRepeatable(
                         animation = tween(800, easing = LinearEasing),
                         repeatMode = RepeatMode.Reverse
-                    )
+                    ),
+                    label = "Background Animation"
                 )
 
                 Box(
@@ -153,22 +129,9 @@ fun StartView(
                     horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
                     DownloadButton(onClick = {
-                        coroutineScope.launch {
-                            isLoading = true
+                        isLoading = true
 
-                            connectToWifi(
-                                wifiUtil = wifiUtil,
-                                wifiDetails = wifiDetails,
-                                onConnectionSuccess = {
-                                    isLoading = false
-                                    onConnectionSuccess()
-                                },
-                                onConnectionLost = {
-                                    isLoading = false
-                                    onConnectionLost()
-                                }
-                            )
-                        }
+                        onConnect()
                     })
 
 
@@ -195,27 +158,11 @@ fun StartView(
     }
 }
 
-// TODO: implement timeout, retry mechanism
-private suspend fun connectToWifi(
-    wifiUtil: WifiUtil,
-    wifiDetails: WifiDetails,
-    onConnectionSuccess: () -> Unit,
-    onConnectionLost: () -> Unit,
-) {
-    wifiUtil.connectToWifi(
-        wifiDetails = wifiDetails,
-        onConnectionSuccess = onConnectionSuccess,
-        onConnectionLost = onConnectionLost
-    )
-}
-
 @Preview(showBackground = true)
 @Composable
 private fun StartViewPreview() {
     StartView(
-        wifiDetails = WifiDetails("", ""),
-        onConnectionSuccess = {},
-        onConnectionLost = {},
+        onConnect = {},
         onChangeWifiDetails = {}
     )
 }

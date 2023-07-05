@@ -1,8 +1,6 @@
 
 à
 Xapp/src/test/java/com/example/greatimagedownloader/domain/model/WifiDetailsEntityTest.kt,a\8\a847d8bdec15996704a88c8ee816a3a483fea98b
-Ñ
-Tapp/src/main/java/com/example/greatimagedownloader/domain/model/WifiDetailsEntity.kt,6\8\680a682c278d4000456dd90425c182546e684a66
 x
 Happ/src/main/java/com/example/greatimagedownloader/data/di/DataModule.kt,1\9\19c77f01ef64ea6bb9e682629fc3567bf013ce6c
 
@@ -33,7 +31,21 @@ P
 .gitignore,a\5\a5cc2925ca8258af241be7e5b0381edf30266302
 }
 Mapp/src/main/java/com/example/greatimagedownloader/ui/view/DownloadingView.kt,9\a\9afa3bbd68fceeefc5b7662d517c4cf9a3806db8
-w
-Gapp/src/main/java/com/example/greatimagedownloader/ui/view/StartView.kt,d\e\ded07853a65f2c4755f7e7b57eed08cf68f4ce0f
+Å
+Qapp/src/main/java/com/example/greatimagedownloader/domain/data/model/PhotoFile.kt,8\6\86e11733211070c287d77807ed71a503753b9352
+y
+Iapp/src/main/java/com/example/greatimagedownloader/data/RepositoryImpl.kt,9\c\9cec3ba64036b2bb5c76386ab90a80ab0ca8c49c
+~
+Napp/src/main/java/com/example/greatimagedownloader/data/api/model/PhotoInfo.kt,d\5\d5de656aa46cc032ce18c84ef188d29376f6ea17
+É
+Sapp/src/main/java/com/example/greatimagedownloader/data/storage/FilesStorageImpl.kt,7\f\7f4ee837606cbedde0e3bc56b27c018e88f63007
+Ñ
+Tapp/src/main/java/com/example/greatimagedownloader/ui/model/ProcessedDownloadInfo.kt,c\5\c5e06e83471455d8c6cd12a8e91560d47e2df54b
+F
+app/proguard-rules.pro,9\e\9e08934d811afe28fbc77aaa3c0d747b94348db9
+â
+Yapp/src/main/java/com/example/greatimagedownloader/ui/permissions/PermissionsRequester.kt,2\8\28a3bcb1bcb6db0b978b07afe23b66c69dc29f1e
+@
+app/build.gradle,f\4\f4a01d6a4fcb971362ec00a83903fd3902f52164
 v
 Fapp/src/main/java/com/example/greatimagedownloader/ui/wifi/WifiUtil.kt,1\c\1cfe97a5e2400d708a05356228728af7e7c6a28d
