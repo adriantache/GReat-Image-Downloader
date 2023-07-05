@@ -13,10 +13,6 @@ X
 (gradle/wrapper/gradle-wrapper.properties,f\b\fbe448ebfc3eb2d4e308f6b8b043666f5b57235e
 w
 Gapp/src/main/java/com/example/greatimagedownloader/data/api/RicohApi.kt,0\1\0104de9298744fdeae0f5b3aa0f26085fad34b28
-ƒ
-Sapp/src/main/java/com/example/greatimagedownloader/data/storage/FilesStorageImpl.kt,7\f\7f4ee837606cbedde0e3bc56b27c018e88f63007
-y
-Iapp/src/main/java/com/example/greatimagedownloader/data/RepositoryImpl.kt,9\c\9cec3ba64036b2bb5c76386ab90a80ab0ca8c49c
 v
 Fapp/src/main/java/com/example/greatimagedownloader/data/api/Service.kt,6\d\6d235c587f736268d008224b662f0575006fb725
 ‚
