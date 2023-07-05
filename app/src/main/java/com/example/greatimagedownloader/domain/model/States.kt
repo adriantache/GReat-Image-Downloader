@@ -13,6 +13,7 @@ sealed interface States {
     ) : States
 
     data class ConnectWifi(
+        val onCheckWifiDisabled: () -> Boolean,
         val onConnect: () -> Unit,
         val onChangeWifiDetails: () -> Unit,
     ) : States

@@ -49,6 +49,7 @@ class DownloadPhotosUseCaseImpl(
 
         state.value = if (wifiDetails.isValid) {
             ConnectWifi(
+                onCheckWifiDisabled = { wifiUtil.isWifiDisabled },
                 onConnect = {
                     CoroutineScope(dispatcher).launch {
                         delay(CONNECT_TIMEOUT_MS)
