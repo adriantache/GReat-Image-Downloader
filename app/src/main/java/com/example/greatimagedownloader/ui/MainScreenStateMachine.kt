@@ -22,6 +22,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.example.greatimagedownloader.R
 import com.example.greatimagedownloader.domain.model.Events
+import com.example.greatimagedownloader.domain.model.States.ChangeSettings
 import com.example.greatimagedownloader.domain.model.States.ConnectWifi
 import com.example.greatimagedownloader.domain.model.States.Disconnected
 import com.example.greatimagedownloader.domain.model.States.DownloadPhotos
@@ -79,6 +80,7 @@ fun MainScreenStateMachine(
                     onCheckWifiDisabled = state.onCheckWifiDisabled,
                     onConnect = state.onConnect,
                     onChangeWifiDetails = state.onChangeWifiDetails,
+                    onAdjustSettings = state.onAdjustSettings,
                 )
 
                 GetPhotos -> SyncView()
@@ -103,6 +105,8 @@ fun MainScreenStateMachine(
                             Text("Restart process")
                         }
                     }
+
+                ChangeSettings -> Text("Settings not implemented...")
             }
         }
     }

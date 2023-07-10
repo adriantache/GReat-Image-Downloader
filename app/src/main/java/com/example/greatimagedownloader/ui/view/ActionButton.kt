@@ -38,13 +38,12 @@ fun ActionButton(
     Box(
         modifier = Modifier
             .requiredSize(200.dp)
-            .conditional(
-                onClick != null,
-                Modifier.clickable(
+            .conditional(onClick != null) {
+                clickable(
                     enabled = true,
                     onClick = requireNotNull(onClick),
                 )
-            ),
+            },
         contentAlignment = Alignment.Center,
     ) {
         Surface(
@@ -92,5 +91,7 @@ fun ActionButton(
 @Preview(showBackground = true)
 @Composable
 private fun DownloadButtonPreview() {
-    ActionButton(iconPainter = painterResource(id = R.drawable.wifi_off), text = "Test") {}
+    Box(Modifier.padding(16.dp)) {
+        ActionButton(iconPainter = painterResource(id = R.drawable.wifi_off), text = "Test")
+    }
 }

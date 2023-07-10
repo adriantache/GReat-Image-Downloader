@@ -4,6 +4,7 @@ import com.example.greatimagedownloader.domain.data.Repository
 import com.example.greatimagedownloader.domain.data.model.PhotoDownloadInfo
 import com.example.greatimagedownloader.domain.model.Events
 import com.example.greatimagedownloader.domain.model.States
+import com.example.greatimagedownloader.domain.model.States.ChangeSettings
 import com.example.greatimagedownloader.domain.model.States.ConnectWifi
 import com.example.greatimagedownloader.domain.model.States.Disconnected
 import com.example.greatimagedownloader.domain.model.States.DownloadPhotos
@@ -71,6 +72,15 @@ class DownloadPhotosUseCaseImpl(
                     state.value = RequestWifiCredentials(onWifiCredentialsInput = {
                         onWifiCredentialsInput(it.toEntity())
                     })
+                },
+                onAdjustSettings = {
+                    // TODO: add functionalities and data to this use case
+                    // TODO: add change wifi
+                    // TODO: add remember last download
+                    // TODO: add delete all photos
+                    // TODO: add option to skip videos
+                    // TODO: add option to download all folders with warning for timelapses
+                    state.value = ChangeSettings
                 }
             )
         } else {
@@ -112,11 +122,20 @@ class DownloadPhotosUseCaseImpl(
                 return@launch
             }
 
+            // Assuming first directory is the default one, even if it's not 101RICOH.
+            val defaultDirectory = availablePhotos.getOrNull()
+                ?.distinctBy { it.directory }
+                ?.minOfOrNull { it.directory }
+
             val photosToDownload = availablePhotos.getOrNull()
                 .orEmpty()
                 .filter {
                     val nameWithoutExtension = it.name.split(".")[0]
                     !savedMedia.contains(nameWithoutExtension)
+                }
+                // TODO: add user option to disable this filter used to exclude timelapses etc.
+                .filter {
+                    it.directory == defaultDirectory
                 }
 
             state.value = DownloadPhotos(totalPhotos = photosToDownload.size)

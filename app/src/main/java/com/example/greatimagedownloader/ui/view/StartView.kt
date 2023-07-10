@@ -9,9 +9,12 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.requiredSize
@@ -52,6 +55,7 @@ fun StartView(
     onCheckWifiDisabled: () -> Boolean,
     onConnect: () -> Unit,
     onChangeWifiDetails: () -> Unit,
+    onAdjustSettings: () -> Unit,
 ) {
     val snackbarHostState = remember { SnackbarHostState() }
     val context = LocalContext.current
@@ -86,15 +90,38 @@ fun StartView(
                 .fillMaxSize()
                 .padding(padding)
         ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(8.dp),
+                horizontalArrangement = Arrangement.End
+            ) {
+                Button(
+                    onClick = onAdjustSettings,
+                    colors = ButtonDefaults.filledTonalButtonColors(),
+                ) {
+                    Icon(
+                        painterResource(id = R.drawable.baseline_settings_24),
+                        contentDescription = null,
+                        modifier = Modifier.requiredSize(24.dp)
+                    )
+                }
+            }
+
             Spacer(modifier = Modifier.height(200.dp))
 
             if (isWifiDisabled) {
-                ActionButton(
-                    bgColor = Color.Red,
-                    iconPainter = painterResource(id = R.drawable.wifi_off),
-                    text = stringResource(R.string.wifi_is_not_enabled),
-                    onClick = { context.startActivity(Intent(ACTION_WIFI_SETTINGS)) }
-                )
+                Box(
+                    modifier = Modifier.fillMaxWidth(),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    ActionButton(
+                        bgColor = Color.Red,
+                        iconPainter = painterResource(id = R.drawable.wifi_off),
+                        text = stringResource(R.string.wifi_is_not_enabled),
+                        onClick = { context.startActivity(Intent(ACTION_WIFI_SETTINGS)) }
+                    )
+                }
             } else if (isLoading) {
                 val infiniteTransition = rememberInfiniteTransition(label = "")
                 val bgColor by infiniteTransition.animateColor(
@@ -107,11 +134,16 @@ fun StartView(
                     label = "Background Animation"
                 )
 
-                ActionButton(
-                    bgColor = bgColor,
-                    iconPainter = painterResource(id = R.drawable.wifi_pending),
-                    text = stringResource(R.string.connecting_to_camera),
-                )
+                Box(
+                    modifier = Modifier.fillMaxWidth(),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    ActionButton(
+                        bgColor = bgColor,
+                        iconPainter = painterResource(id = R.drawable.wifi_pending),
+                        text = stringResource(R.string.connecting_to_camera),
+                    )
+                }
             } else {
                 Column(
                     modifier = Modifier.fillMaxSize(),
@@ -156,8 +188,9 @@ fun StartView(
 @Composable
 private fun StartViewPreview() {
     StartView(
+        onCheckWifiDisabled = { true },
         onConnect = {},
         onChangeWifiDetails = {},
-        onCheckWifiDisabled = { true }
+        onAdjustSettings = {},
     )
 }

@@ -13,8 +13,6 @@ w
 Gapp/src/main/java/com/example/greatimagedownloader/data/api/RicohApi.kt,0\1\0104de9298744fdeae0f5b3aa0f26085fad34b28
 v
 Fapp/src/main/java/com/example/greatimagedownloader/data/api/Service.kt,6\d\6d235c587f736268d008224b662f0575006fb725
-‚
-Rapp/src/main/java/com/example/greatimagedownloader/domain/DownloadPhotosUseCase.kt,1\a\1a226246ec9ecc7255d028a39d6fcd20472db71f
 :
 
 LICENSE.md,4\a\4a8486805915245bbbe2e3c8c1a9d680c6843a82

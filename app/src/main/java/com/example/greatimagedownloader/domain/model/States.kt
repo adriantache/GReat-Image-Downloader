@@ -16,6 +16,7 @@ sealed interface States {
         val onCheckWifiDisabled: () -> Boolean,
         val onConnect: () -> Unit,
         val onChangeWifiDetails: () -> Unit,
+        val onAdjustSettings: () -> Unit,
     ) : States
 
     object GetPhotos : States
@@ -30,4 +31,6 @@ sealed interface States {
         val numDownloadedPhotos: Int? = null,
         val onRestart: () -> Unit,
     ) : States
+
+    object ChangeSettings : States
 }
