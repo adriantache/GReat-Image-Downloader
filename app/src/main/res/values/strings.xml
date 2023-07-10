@@ -6,4 +6,6 @@
     <string name="connect_and_start_download">Connect and start download</string>
     <string name="change_wifi_details">Change wifi details</string>
     <string name="save">Save</string>
+    <string name="wifi_is_not_enabled">WiFi is not enabled!</string>
+    <string name="connecting_to_camera">Connecting to camera...</string>
 </resources>

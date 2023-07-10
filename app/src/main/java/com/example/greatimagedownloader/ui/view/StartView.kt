@@ -8,19 +8,14 @@ import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
@@ -28,7 +23,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -39,13 +33,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
@@ -97,54 +89,12 @@ fun StartView(
             Spacer(modifier = Modifier.height(200.dp))
 
             if (isWifiDisabled) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .requiredSize(200.dp)
-                        .clickable {
-                            context.startActivity(Intent(ACTION_WIFI_SETTINGS))
-                        },
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Surface(
-                        modifier = Modifier.fillMaxSize(),
-                        shadowElevation = 8.dp,
-                        shape = CircleShape,
-                    ) {
-                        Canvas(modifier = Modifier.fillMaxSize()) {
-                            val center = size.width / 2
-
-                            drawCircle(
-                                color = Color.Red,
-                                center = Offset(center, center),
-                                radius = center
-                            )
-                        }
-                    }
-
-                    Column(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(16.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.Center,
-                    ) {
-                        Icon(
-                            painter = painterResource(id = R.drawable.wifi_off),
-                            contentDescription = null,
-                            tint = Color.White
-                        )
-
-                        Spacer(modifier = Modifier.height(6.dp))
-
-                        Text(
-                            text = "WiFi is not enabled!",
-                            color = Color.White,
-                            style = MaterialTheme.typography.labelSmall,
-                            textAlign = TextAlign.Center
-                        )
-                    }
-                }
+                ActionButton(
+                    bgColor = Color.Red,
+                    iconPainter = painterResource(id = R.drawable.wifi_off),
+                    text = stringResource(R.string.wifi_is_not_enabled),
+                    onClick = { context.startActivity(Intent(ACTION_WIFI_SETTINGS)) }
+                )
             } else if (isLoading) {
                 val infiniteTransition = rememberInfiniteTransition(label = "")
                 val bgColor by infiniteTransition.animateColor(
@@ -157,64 +107,28 @@ fun StartView(
                     label = "Background Animation"
                 )
 
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .requiredSize(200.dp),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Surface(
-                        modifier = Modifier.fillMaxSize(),
-                        shadowElevation = 8.dp,
-                        shape = CircleShape,
-                    ) {
-                        Canvas(modifier = Modifier.fillMaxSize()) {
-                            val center = size.width / 2
-
-                            drawCircle(
-                                color = bgColor,
-                                center = Offset(center, center),
-                                radius = center
-                            )
-                        }
-                    }
-
-                    Column(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(16.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.Center,
-                    ) {
-                        Icon(
-                            painterResource(id = R.drawable.wifi_pending),
-                            contentDescription = null,
-                            tint = Color.White
-                        )
-
-                        Spacer(modifier = Modifier.height(6.dp))
-
-                        Text(
-                            text = "Connecting to camera...",
-                            color = Color.White,
-                            style = MaterialTheme.typography.labelSmall,
-                            textAlign = TextAlign.Center
-                        )
-                    }
-                }
+                ActionButton(
+                    bgColor = bgColor,
+                    iconPainter = painterResource(id = R.drawable.wifi_pending),
+                    text = stringResource(R.string.connecting_to_camera),
+                )
             } else {
                 Column(
                     modifier = Modifier.fillMaxSize(),
                     verticalArrangement = Arrangement.spacedBy(18.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
-                    DownloadButton(onClick = {
-                        isLoading = true
+                    ActionButton(
+                        iconPainter = painterResource(id = R.drawable.tap_and_play),
+                        text = stringResource(R.string.connect_and_start_download),
+                        onClick = {
+                            isLoading = true
 
-                        onConnect()
-                    })
+                            onConnect()
+                        }
+                    )
 
-
+                    // TODO: move to settings
                     Button(
                         onClick = onChangeWifiDetails,
                         colors = ButtonDefaults.filledTonalButtonColors(),

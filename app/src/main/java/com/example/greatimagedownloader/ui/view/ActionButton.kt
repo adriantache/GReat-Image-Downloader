@@ -20,25 +20,30 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.example.greatimagedownloader.R
+import com.example.greatimagedownloader.ui.util.conditional
 
 @Composable
-fun DownloadButton(
-    onClick: () -> Unit,
+fun ActionButton(
+    bgColor: Color = MaterialTheme.colorScheme.primary,
+    iconPainter: Painter,
+    text: String,
+    onClick: (() -> Unit)? = null,
 ) {
-    val bgColor = MaterialTheme.colorScheme.primary
-
     Box(
         modifier = Modifier
             .requiredSize(200.dp)
-            .clickable(
-                enabled = true,
-                onClick = onClick
+            .conditional(
+                onClick != null,
+                Modifier.clickable(
+                    enabled = true,
+                    onClick = requireNotNull(onClick),
+                )
             ),
         contentAlignment = Alignment.Center,
     ) {
@@ -67,7 +72,7 @@ fun DownloadButton(
             verticalArrangement = Arrangement.Center,
         ) {
             Icon(
-                painterResource(id = R.drawable.tap_and_play),
+                iconPainter,
                 contentDescription = null,
                 tint = Color.White
             )
@@ -75,7 +80,7 @@ fun DownloadButton(
             Spacer(modifier = Modifier.height(6.dp))
 
             Text(
-                text = stringResource(R.string.connect_and_start_download),
+                text = text,
                 color = Color.White,
                 style = MaterialTheme.typography.labelSmall,
                 textAlign = TextAlign.Center
@@ -87,5 +92,5 @@ fun DownloadButton(
 @Preview(showBackground = true)
 @Composable
 private fun DownloadButtonPreview() {
-    DownloadButton {}
+    ActionButton(iconPainter = painterResource(id = R.drawable.wifi_off), text = "Test") {}
 }

@@ -18,8 +18,6 @@ Rapp/src/main/java/com/example/greatimagedownloader/domain/DownloadPhotosUseCase
 :
 
 LICENSE.md,4\a\4a8486805915245bbbe2e3c8c1a9d680c6843a82
-r
-Bapp/src/main/java/com/example/greatimagedownloader/MainActivity.kt,7\9\79ee01de6b939e3092302257a84d8d6596c442e9
 }
 Mapp/src/main/java/com/example/greatimagedownloader/ui/view/PermissionsView.kt,6\7\671b79747fed5e4864b0ebeb6feb5a8961ff6f16
 Ä
@@ -29,8 +27,6 @@ P
 :
 
 .gitignore,a\5\a5cc2925ca8258af241be7e5b0381edf30266302
-}
-Mapp/src/main/java/com/example/greatimagedownloader/ui/view/DownloadingView.kt,9\a\9afa3bbd68fceeefc5b7662d517c4cf9a3806db8
 Å
 Qapp/src/main/java/com/example/greatimagedownloader/domain/data/model/PhotoFile.kt,8\6\86e11733211070c287d77807ed71a503753b9352
 y
@@ -49,3 +45,21 @@ Yapp/src/main/java/com/example/greatimagedownloader/ui/permissions/PermissionsRe
 app/build.gradle,f\4\f4a01d6a4fcb971362ec00a83903fd3902f52164
 v
 Fapp/src/main/java/com/example/greatimagedownloader/ui/wifi/WifiUtil.kt,1\c\1cfe97a5e2400d708a05356228728af7e7c6a28d
+Å
+Qapp/src/main/java/com/example/greatimagedownloader/domain/ui/model/WifiDetails.kt,4\d\4d493e36dee5e97e0e4e86594ce1e0e5d9ecf4c3
+t
+Dapp/src/main/java/com/example/greatimagedownloader/ui/di/UiModule.kt,5\8\58691c354ab5aa27ef69288b1a3f9bf338606b72
+<
+build.gradle,f\0\f07866736216be0ee2aba49e392191aeae700a35
+Ä
+Papp/src/main/java/com/example/greatimagedownloader/platform/di/PlatformModule.kt,7\4\74db579ad19ecdfed4027f16d9629a74b4103c8e
+|
+Lapp/src/main/java/com/example/greatimagedownloader/domain/di/DomainModule.kt,9\6\968aa9341660fda61e443f3c22e190cc49352e91
+á
+Wapp/src/main/java/com/example/greatimagedownloader/domain/utils/model/CoroutineUtils.kt,6\1\61bd48a7e02242cb317d2e5d2101e3d9ec5a1bc2
+Ä
+Papp/src/main/java/com/example/greatimagedownloader/platform/wifi/WifiUtilImpl.kt,1\1\11096896e5428f4e2e11eb07a63429e2cebce06a
+Ñ
+Tapp/src/main/java/com/example/greatimagedownloader/domain/model/WifiDetailsEntity.kt,6\8\680a682c278d4000456dd90425c182546e684a66
+z
+Japp/src/main/java/com/example/greatimagedownloader/domain/wifi/WifiUtil.kt,5\2\52d95df95552c394e625f9f2d18d2f1f3602c33e
