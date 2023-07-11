@@ -37,6 +37,7 @@ import com.example.greatimagedownloader.domain.data.model.PhotoDownloadInfo
 import com.example.greatimagedownloader.ui.model.ProcessedDownloadInfo
 import com.example.greatimagedownloader.ui.model.ProcessedDownloadInfo.Companion.toProcessedDownloadInfo
 import com.example.greatimagedownloader.ui.util.KeepScreenOn
+import java.text.DecimalFormat
 
 @Composable
 fun DownloadingView(
@@ -44,6 +45,7 @@ fun DownloadingView(
     currentPhoto: Int,
     totalPhotos: Int,
     photoDownloadInfo: List<PhotoDownloadInfo>,
+    downloadSpeed: Double,
 ) {
     val context = LocalContext.current
     val contentResolver = context.contentResolver
@@ -51,6 +53,8 @@ fun DownloadingView(
     val boxShape = RoundedCornerShape(8.dp)
 
     var processedDownloadInfo by remember { mutableStateOf(emptyList<ProcessedDownloadInfo>()) }
+
+    val downloadSpeedKb = formatDownloadSpeed(downloadSpeed)
 
     KeepScreenOn()
 
@@ -64,7 +68,7 @@ fun DownloadingView(
         verticalArrangement = Arrangement.Center,
     ) {
         Text(
-            text = "Downloading photos: ${currentPhoto}/${totalPhotos}",
+            text = "Downloading photos: ${currentPhoto}/${totalPhotos} ($downloadSpeedKb KB/s)",
             style = MaterialTheme.typography.titleMedium
         )
 
@@ -131,6 +135,16 @@ fun DownloadingView(
     }
 }
 
+private fun formatDownloadSpeed(downloadSpeed: Double): String {
+    val downloadSpeedKb = downloadSpeed / 1024
+    val decimalFormat = DecimalFormat().apply {
+        maximumFractionDigits = 2
+        minimumFractionDigits = 2
+    }
+
+    return decimalFormat.format(downloadSpeedKb)
+}
+
 @Preview(showBackground = true)
 @Composable
 private fun DownloadingViewPreview() {
@@ -138,5 +152,6 @@ private fun DownloadingViewPreview() {
         currentPhoto = 3,
         totalPhotos = 100,
         photoDownloadInfo = emptyList(),
+        downloadSpeed = 21.22,
     )
 }

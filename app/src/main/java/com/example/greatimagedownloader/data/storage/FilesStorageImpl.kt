@@ -10,6 +10,7 @@ import android.provider.MediaStore
 import android.provider.OpenableColumns
 import androidx.core.app.ActivityCompat.startIntentSenderForResult
 import com.example.greatimagedownloader.data.model.PhotoDownloadInfo
+import com.example.greatimagedownloader.data.utils.SpeedCalculator
 import com.example.greatimagedownloader.ui.util.findActivity
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
@@ -29,7 +30,10 @@ private const val MIME_TYPE_VIDEO = "video"
 private const val MIN_SIZE_BYTES = 100
 private const val OKIO_MAX_BYTES = 8092L
 
-class FilesStorageImpl(private val context: Context) : FilesStorage {
+class FilesStorageImpl(
+    private val context: Context,
+    private val speedCalculator: SpeedCalculator = SpeedCalculator(),
+) : FilesStorage {
     override fun getSavedPhotos(): List<String> {
         val selection = "${MediaStore.Files.FileColumns.RELATIVE_PATH} like ?"
         val selectionArgs = arrayOf("%$RICOH_PHOTOS_PATH%")
@@ -122,6 +126,7 @@ class FilesStorageImpl(private val context: Context) : FilesStorage {
                             destination.emit()
 
                             totalBytesRead += bytesRead
+                            speedCalculator.registerData(bytesRead)
 
                             val progress = if (fileSize == -1L) {
                                 0
@@ -129,13 +134,28 @@ class FilesStorageImpl(private val context: Context) : FilesStorage {
                                 (totalBytesRead.toFloat() / fileSize * 100).roundToInt().coerceAtMost(99)
                             }
 
+                            // TODO: reconsider this condition, maybe emit every second anyway
                             if (progress != currentProgress) {
                                 currentProgress = progress
-                                emit(PhotoDownloadInfo(uri = imageUri, downloadProgress = progress, name = filename))
+                                emit(
+                                    PhotoDownloadInfo(
+                                        uri = imageUri,
+                                        downloadProgress = progress,
+                                        name = filename,
+                                        downloadSpeed = speedCalculator.getAverageSpeed(),
+                                    )
+                                )
                             }
                         }
 
-                        emit(PhotoDownloadInfo(uri = imageUri, downloadProgress = 100, name = filename))
+                        emit(
+                            PhotoDownloadInfo(
+                                uri = imageUri,
+                                downloadProgress = 100,
+                                name = filename,
+                                downloadSpeed = speedCalculator.getAverageSpeed(),
+                            )
+                        )
                     } catch (e: IOException) {
                         // TODO: fix this not working
                         deleteInvalidFile(contentResolver, imageUri)

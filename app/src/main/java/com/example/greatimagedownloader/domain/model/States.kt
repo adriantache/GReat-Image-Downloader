@@ -19,12 +19,13 @@ sealed interface States {
         val onAdjustSettings: () -> Unit,
     ) : States
 
-    object GetPhotos : States
+    data object GetPhotos : States
 
     data class DownloadPhotos(
         val downloadedPhotos: List<PhotoDownloadInfo> = emptyList(),
         val currentPhotoNum: Int = 0,
         val totalPhotos: Int,
+        val downloadSpeed: Double = 0.0,
     ) : States
 
     data class Disconnected(
@@ -32,5 +33,5 @@ sealed interface States {
         val onRestart: () -> Unit,
     ) : States
 
-    object ChangeSettings : States
+    data object ChangeSettings : States
 }

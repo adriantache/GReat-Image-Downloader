@@ -90,6 +90,7 @@ fun MainScreenStateMachine(
                         currentPhoto = state.currentPhotoNum,
                         totalPhotos = state.totalPhotos,
                         photoDownloadInfo = state.downloadedPhotos,
+                        downloadSpeed = state.downloadSpeed,
                     )
                 }
 

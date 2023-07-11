@@ -150,6 +150,7 @@ class DownloadPhotosUseCaseImpl(
                         currentPhotoNum = index + 1,
                         totalPhotos = photosToDownload.size,
                         downloadedPhotos = downloadedPhotoUris.values.toList(),
+                        downloadSpeed = photoDownloadInfo.downloadSpeed,
                     )
                 }
             }
