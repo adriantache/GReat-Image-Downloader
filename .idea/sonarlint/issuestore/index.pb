@@ -18,8 +18,6 @@ LICENSE.md,4\a\4a8486805915245bbbe2e3c8c1a9d680c6843a82
 Mapp/src/main/java/com/example/greatimagedownloader/ui/view/PermissionsView.kt,6\7\671b79747fed5e4864b0ebeb6feb5a8961ff6f16
 €
 Papp/src/main/java/com/example/greatimagedownloader/ui/view/PermissionsRowView.kt,0\c\0c9c4ad38c54cadb455b75921f6f1072abcf7896
-P
- app/src/main/AndroidManifest.xml,8\c\8c55c3ccc257e5907959013f99656e4c8ec3903e
 :
 
 .gitignore,a\5\a5cc2925ca8258af241be7e5b0381edf30266302

@@ -1,5 +1,6 @@
 package com.example.greatimagedownloader.data.utils
 
+// TODO: tweak these values until things look good
 private const val EXPIRATION_MS = 10 * 1000L
 private const val MAX_SAMPLES = 100
 
