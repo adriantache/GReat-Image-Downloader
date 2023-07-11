@@ -122,20 +122,11 @@ class DownloadPhotosUseCaseImpl(
                 return@launch
             }
 
-            // Assuming first directory is the default one, even if it's not 101RICOH.
-            val defaultDirectory = availablePhotos.getOrNull()
-                ?.distinctBy { it.directory }
-                ?.minOfOrNull { it.directory }
-
             val photosToDownload = availablePhotos.getOrNull()
                 .orEmpty()
                 .filter {
                     val nameWithoutExtension = it.name.split(".")[0]
                     !savedMedia.contains(nameWithoutExtension)
-                }
-                // TODO: add user option to disable this filter used to exclude timelapses etc.
-                .filter {
-                    it.directory == defaultDirectory
                 }
 
             state.value = DownloadPhotos(totalPhotos = photosToDownload.size)
