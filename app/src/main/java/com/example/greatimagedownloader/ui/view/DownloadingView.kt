@@ -30,10 +30,12 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.example.greatimagedownloader.R
 import com.example.greatimagedownloader.domain.data.model.PhotoDownloadInfo
+import com.example.greatimagedownloader.domain.utils.model.Kbps
 import com.example.greatimagedownloader.ui.model.ProcessedDownloadInfo
 import com.example.greatimagedownloader.ui.model.ProcessedDownloadInfo.Companion.toProcessedDownloadInfo
 import com.example.greatimagedownloader.ui.util.KeepScreenOn
@@ -45,7 +47,7 @@ fun DownloadingView(
     currentPhoto: Int,
     totalPhotos: Int,
     photoDownloadInfo: List<PhotoDownloadInfo>,
-    downloadSpeed: Double,
+    downloadSpeed: Kbps,
 ) {
     val context = LocalContext.current
     val contentResolver = context.contentResolver
@@ -53,8 +55,6 @@ fun DownloadingView(
     val boxShape = RoundedCornerShape(8.dp)
 
     var processedDownloadInfo by remember { mutableStateOf(emptyList<ProcessedDownloadInfo>()) }
-
-    val downloadSpeedKb = formatDownloadSpeed(downloadSpeed)
 
     KeepScreenOn()
 
@@ -68,8 +68,11 @@ fun DownloadingView(
         verticalArrangement = Arrangement.Center,
     ) {
         Text(
-            text = "Downloading photos: ${currentPhoto}/${totalPhotos} ($downloadSpeedKb KB/s)",
-            style = MaterialTheme.typography.titleMedium
+            text = "Downloading photos: ${currentPhoto}/${totalPhotos}" +
+                    "\n" +
+                    getDownloadSpeed(downloadSpeed.value),
+            style = MaterialTheme.typography.titleMedium,
+            textAlign = TextAlign.Center,
         )
 
         Spacer(Modifier.height(4.dp))
@@ -135,14 +138,15 @@ fun DownloadingView(
     }
 }
 
-private fun formatDownloadSpeed(downloadSpeed: Double): String {
-    val downloadSpeedKb = downloadSpeed / 1024
+private fun getDownloadSpeed(downloadSpeedKb: Double): String {
+    val downloadSpeedMb = downloadSpeedKb / 1024
     val decimalFormat = DecimalFormat().apply {
         maximumFractionDigits = 2
         minimumFractionDigits = 2
     }
+    val formattedSpeed = decimalFormat.format(downloadSpeedMb)
 
-    return decimalFormat.format(downloadSpeedKb)
+    return "($formattedSpeed MB/s)"
 }
 
 @Preview(showBackground = true)
@@ -152,6 +156,6 @@ private fun DownloadingViewPreview() {
         currentPhoto = 3,
         totalPhotos = 100,
         photoDownloadInfo = emptyList(),
-        downloadSpeed = 21.22,
+        downloadSpeed = Kbps(21.22),
     )
 }

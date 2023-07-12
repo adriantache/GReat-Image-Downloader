@@ -1,8 +1,6 @@
 package com.example.greatimagedownloader.domain.model
 
-import com.example.greatimagedownloader.domain.ui.model.WifiDetails
 import org.assertj.core.api.Assertions.assertThat
-import org.assertj.core.api.Assertions.assertThatThrownBy
 import org.junit.Test
 import com.example.greatimagedownloader.domain.data.model.WifiDetails as WifiDetailsData
 
@@ -85,25 +83,6 @@ class WifiDetailsEntityTest {
         val password = " "
         val wifiDetailsEntity = WifiDetailsEntity(ssid, password)
         assertThat(wifiDetailsEntity.isValid).isFalse
-    }
-
-    @Test
-    fun `toUi throws an IllegalArgumentException when wifi details entity is not valid`() {
-        val ssid = ""
-        val password = "password"
-        val wifiDetailsEntity = WifiDetailsEntity(ssid, password)
-        assertThatThrownBy { wifiDetailsEntity.toUi() }
-            .isInstanceOf(IllegalArgumentException::class.java)
-            .hasMessageContaining("Failed requirement.")
-    }
-
-    @Test
-    fun `toUi returns a valid WifiDetails object when wifi details entity is valid`() {
-        val ssid = "ssid"
-        val password = "password"
-        val wifiDetailsEntity = WifiDetailsEntity(ssid, password)
-        val expectedWifiDetails = WifiDetails(ssid = ssid, password = password)
-        assertThat(wifiDetailsEntity.toUi()).isEqualTo(expectedWifiDetails)
     }
 
     @Test

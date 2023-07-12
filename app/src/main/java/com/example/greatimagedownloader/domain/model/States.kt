@@ -2,6 +2,7 @@ package com.example.greatimagedownloader.domain.model
 
 import com.example.greatimagedownloader.domain.data.model.PhotoDownloadInfo
 import com.example.greatimagedownloader.domain.ui.model.WifiDetails
+import com.example.greatimagedownloader.domain.utils.model.Kbps
 
 sealed interface States {
     data class Init(val onInit: () -> Unit) : States
@@ -25,7 +26,7 @@ sealed interface States {
         val downloadedPhotos: List<PhotoDownloadInfo> = emptyList(),
         val currentPhotoNum: Int = 0,
         val totalPhotos: Int,
-        val downloadSpeed: Double = 0.0,
+        val downloadSpeed: Kbps = Kbps(0.0),
     ) : States
 
     data class Disconnected(

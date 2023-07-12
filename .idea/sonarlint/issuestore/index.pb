@@ -1,6 +1,4 @@
 
-ˆ
-Xapp/src/test/java/com/example/greatimagedownloader/domain/model/WifiDetailsEntityTest.kt,a\8\a847d8bdec15996704a88c8ee816a3a483fea98b
 x
 Happ/src/main/java/com/example/greatimagedownloader/data/di/DataModule.kt,1\9\19c77f01ef64ea6bb9e682629fc3567bf013ce6c
 |
@@ -45,11 +43,25 @@ Wapp/src/main/java/com/example/greatimagedownloader/domain/utils/model/Coroutine
 Papp/src/main/java/com/example/greatimagedownloader/platform/di/PlatformModule.kt,7\4\74db579ad19ecdfed4027f16d9629a74b4103c8e
 t
 Dapp/src/main/java/com/example/greatimagedownloader/ui/di/UiModule.kt,5\8\58691c354ab5aa27ef69288b1a3f9bf338606b72
-z
-Japp/src/main/java/com/example/greatimagedownloader/domain/wifi/WifiUtil.kt,5\2\52d95df95552c394e625f9f2d18d2f1f3602c33e
-€
-Papp/src/main/java/com/example/greatimagedownloader/platform/wifi/WifiUtilImpl.kt,1\1\11096896e5428f4e2e11eb07a63429e2cebce06a
 u
 Eapp/src/main/java/com/example/greatimagedownloader/MainApplication.kt,3\2\32e01def30d5fa64e708b6b8c6e68782e6d887cd
 r
 Bapp/src/main/java/com/example/greatimagedownloader/MainActivity.kt,7\9\79ee01de6b939e3092302257a84d8d6596c442e9
+€
+Papp/src/main/java/com/example/greatimagedownloader/ui/util/ModifierExtensions.kt,9\5\95a2a23225b4127426c16353ef9fed6bd695ae6d
+w
+Gapp/src/main/java/com/example/greatimagedownloader/ui/view/StartView.kt,d\e\ded07853a65f2c4755f7e7b57eed08cf68f4ce0f
+‚
+Rapp/src/main/java/com/example/greatimagedownloader/domain/DownloadPhotosUseCase.kt,1\a\1a226246ec9ecc7255d028a39d6fcd20472db71f
+z
+Japp/src/main/java/com/example/greatimagedownloader/ui/view/ActionButton.kt,0\a\0adf2cbde20bb97ec95cce9431ab5ce60fd9a06f
+|
+Lapp/src/main/java/com/example/greatimagedownloader/ui/MainScreenViewModel.kt,a\3\a32c287e1b41c49bed929dc335ba313c3e15b641
+
+Oapp/src/main/java/com/example/greatimagedownloader/data/storage/FilesStorage.kt,8\1\812af01bb19643fd8d138c68cb6c28c3b2b39925
+<
+build.gradle,f\0\f07866736216be0ee2aba49e392191aeae700a35
+?
+settings.gradle,0\5\05efc8b1657769a27696d478ded1e95f38737233
+@
+app/build.gradle,f\4\f4a01d6a4fcb971362ec00a83903fd3902f52164

@@ -10,7 +10,9 @@ import android.provider.MediaStore
 import android.provider.OpenableColumns
 import androidx.core.app.ActivityCompat.startIntentSenderForResult
 import com.example.greatimagedownloader.data.model.PhotoDownloadInfo
-import com.example.greatimagedownloader.data.utils.SpeedCalculator
+import com.example.greatimagedownloader.data.utils.speedCalculator.SpeedCalculator
+import com.example.greatimagedownloader.data.utils.speedCalculator.SpeedCalculatorImpl
+import com.example.greatimagedownloader.domain.utils.model.Kbps
 import com.example.greatimagedownloader.ui.util.findActivity
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
@@ -32,7 +34,7 @@ private const val OKIO_MAX_BYTES = 8092L
 
 class FilesStorageImpl(
     private val context: Context,
-    private val speedCalculator: SpeedCalculator = SpeedCalculator(),
+    private val speedCalculator: SpeedCalculator = SpeedCalculatorImpl(),
 ) : FilesStorage {
     override fun getSavedPhotos(): List<String> {
         val selection = "${MediaStore.Files.FileColumns.RELATIVE_PATH} like ?"
@@ -137,12 +139,13 @@ class FilesStorageImpl(
                             // TODO: reconsider this condition, maybe emit every second anyway
                             if (progress != currentProgress) {
                                 currentProgress = progress
+
                                 emit(
                                     PhotoDownloadInfo(
                                         uri = imageUri,
                                         downloadProgress = progress,
                                         name = filename,
-                                        downloadSpeed = speedCalculator.getAverageSpeed(),
+                                        downloadSpeed = Kbps(speedCalculator.getAverageSpeedKbps()),
                                     )
                                 )
                             }
@@ -153,7 +156,7 @@ class FilesStorageImpl(
                                 uri = imageUri,
                                 downloadProgress = 100,
                                 name = filename,
-                                downloadSpeed = speedCalculator.getAverageSpeed(),
+                                downloadSpeed = Kbps(speedCalculator.getAverageSpeedKbps()),
                             )
                         )
                     } catch (e: IOException) {

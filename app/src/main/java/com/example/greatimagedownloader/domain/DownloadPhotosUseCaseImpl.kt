@@ -111,6 +111,7 @@ class DownloadPhotosUseCaseImpl(
 
     // TODO: handle directories
     // TODO: add logic for when we delete already downloaded images and opt-out mechanism
+    // TODO: add option to interrupt process, deleting current file in progress
     private fun getMedia() {
         CoroutineScope(dispatcher).launch {
             val savedMedia = (repository.getSavedPhotos() + repository.getSavedMovies()).distinct()
