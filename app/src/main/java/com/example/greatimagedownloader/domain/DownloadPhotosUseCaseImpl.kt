@@ -2,7 +2,9 @@ package com.example.greatimagedownloader.domain
 
 import com.example.greatimagedownloader.domain.data.Repository
 import com.example.greatimagedownloader.domain.data.model.PhotoDownloadInfo
+import com.example.greatimagedownloader.domain.data.model.PhotoFile
 import com.example.greatimagedownloader.domain.model.Events
+import com.example.greatimagedownloader.domain.model.FolderInfo
 import com.example.greatimagedownloader.domain.model.States
 import com.example.greatimagedownloader.domain.model.States.ChangeSettings
 import com.example.greatimagedownloader.domain.model.States.ConnectWifi
@@ -114,26 +116,30 @@ class DownloadPhotosUseCaseImpl(
     // TODO: add option to interrupt process, deleting current file in progress
     private fun getMedia() {
         CoroutineScope(dispatcher).launch {
-            val savedMedia = (repository.getSavedPhotos() + repository.getSavedMovies()).distinct()
-            val availablePhotos = repository.getCameraPhotoList()
+            val mediaToDownload = getPhotosToDownload() ?: return@launch
 
-            if (availablePhotos.isFailure) {
-                event.value = Event(Events.CannotDownloadPhotos)
-                state.value = Init(::onInit)
-                return@launch
+            val folderInfo = FolderInfo(mediaToDownload)
+
+            if (folderInfo.hasMultipleFolders) {
+                state.value = States.SelectFolders(
+                    folderInfo = folderInfo,
+                    onFoldersSelect = { selectedFolders ->
+                        val selectedMediaToDownload = mediaToDownload.filter { it.directory in selectedFolders }
+                        downloadMedia(selectedMediaToDownload)
+                    }
+                )
+            } else {
+                downloadMedia(mediaToDownload)
             }
+        }
+    }
 
-            val photosToDownload = availablePhotos.getOrNull()
-                .orEmpty()
-                .filter {
-                    val nameWithoutExtension = it.name.split(".")[0]
-                    !savedMedia.contains(nameWithoutExtension)
-                }
+    private fun downloadMedia(photosToDownload: List<PhotoFile>) {
+        state.value = DownloadPhotos(totalPhotos = photosToDownload.size)
 
-            state.value = DownloadPhotos(totalPhotos = photosToDownload.size)
+        val downloadedPhotoUris = mutableMapOf<String, PhotoDownloadInfo>()
 
-            val downloadedPhotoUris = mutableMapOf<String, PhotoDownloadInfo>()
-
+        CoroutineScope(dispatcher).launch {
             photosToDownload.forEachIndexed { index, photo ->
                 repository.downloadMediaToStorage(photo).collect { photoDownloadInfo ->
                     downloadedPhotoUris[photoDownloadInfo.name] = photoDownloadInfo
@@ -149,6 +155,24 @@ class DownloadPhotosUseCaseImpl(
 
             disconnect(downloadedPhotoUris.count { it.value.downloadProgress == 100 })
         }
+    }
+
+    private suspend fun getPhotosToDownload(): List<PhotoFile>? {
+        val savedMedia = (repository.getSavedPhotos() + repository.getSavedMovies()).distinct()
+        val availablePhotos = repository.getCameraPhotoList()
+
+        if (availablePhotos.isFailure) {
+            event.value = Event(Events.CannotDownloadPhotos)
+            state.value = Init(::onInit)
+            return null
+        }
+
+        return availablePhotos.getOrNull()
+            .orEmpty()
+            .filter {
+                val nameWithoutExtension = it.name.split(".")[0]
+                !savedMedia.contains(nameWithoutExtension)
+            }
     }
 
     private suspend fun disconnect(numDownloadedPhotos: Int) {

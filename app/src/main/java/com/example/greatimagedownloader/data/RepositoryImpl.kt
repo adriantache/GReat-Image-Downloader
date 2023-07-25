@@ -72,7 +72,7 @@ class RepositoryImpl(
             // TODO: handle unsuccessful response
             val result = filesStorage.savePhoto(
                 responseBody = imageResponse,
-                filename = photo.name
+                file = photo,
             ).map {
                 it.toDomain()
             }

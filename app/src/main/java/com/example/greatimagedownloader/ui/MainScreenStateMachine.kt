@@ -22,6 +22,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.example.greatimagedownloader.R
 import com.example.greatimagedownloader.domain.model.Events
+import com.example.greatimagedownloader.domain.model.States
 import com.example.greatimagedownloader.domain.model.States.ChangeSettings
 import com.example.greatimagedownloader.domain.model.States.ConnectWifi
 import com.example.greatimagedownloader.domain.model.States.Disconnected
@@ -33,6 +34,7 @@ import com.example.greatimagedownloader.domain.model.States.RequestWifiCredentia
 import com.example.greatimagedownloader.ui.permissions.PermissionsRequester
 import com.example.greatimagedownloader.ui.view.DownloadingView
 import com.example.greatimagedownloader.ui.view.PermissionsView
+import com.example.greatimagedownloader.ui.view.SelectFoldersView
 import com.example.greatimagedownloader.ui.view.StartView
 import com.example.greatimagedownloader.ui.view.SyncView
 import com.example.greatimagedownloader.ui.view.WifiInputView
@@ -85,14 +87,17 @@ fun MainScreenStateMachine(
 
                 GetPhotos -> SyncView()
 
-                is DownloadPhotos -> {
-                    DownloadingView(
-                        currentPhoto = state.currentPhotoNum,
-                        totalPhotos = state.totalPhotos,
-                        photoDownloadInfo = state.downloadedPhotos,
-                        downloadSpeed = state.downloadSpeed,
-                    )
-                }
+                is States.SelectFolders -> SelectFoldersView(
+                    folderInfo = state.folderInfo,
+                    onFoldersSelect = state.onFoldersSelect,
+                )
+
+                is DownloadPhotos -> DownloadingView(
+                    currentPhoto = state.currentPhotoNum,
+                    totalPhotos = state.totalPhotos,
+                    photoDownloadInfo = state.downloadedPhotos,
+                    downloadSpeed = state.downloadSpeed,
+                )
 
                 // TODO: reset after delay in use case?
                 is Disconnected ->

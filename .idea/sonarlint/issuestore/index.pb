@@ -31,12 +31,8 @@ F
 Yapp/src/main/java/com/example/greatimagedownloader/ui/permissions/PermissionsRequester.kt,2\8\28a3bcb1bcb6db0b978b07afe23b66c69dc29f1e
 v
 Fapp/src/main/java/com/example/greatimagedownloader/ui/wifi/WifiUtil.kt,1\c\1cfe97a5e2400d708a05356228728af7e7c6a28d
-Å
-Qapp/src/main/java/com/example/greatimagedownloader/domain/ui/model/WifiDetails.kt,4\d\4d493e36dee5e97e0e4e86594ce1e0e5d9ecf4c3
 |
 Lapp/src/main/java/com/example/greatimagedownloader/domain/di/DomainModule.kt,9\6\968aa9341660fda61e443f3c22e190cc49352e91
-Ñ
-Tapp/src/main/java/com/example/greatimagedownloader/domain/model/WifiDetailsEntity.kt,6\8\680a682c278d4000456dd90425c182546e684a66
 á
 Wapp/src/main/java/com/example/greatimagedownloader/domain/utils/model/CoroutineUtils.kt,6\1\61bd48a7e02242cb317d2e5d2101e3d9ec5a1bc2
 Ä
@@ -57,11 +53,21 @@ z
 Japp/src/main/java/com/example/greatimagedownloader/ui/view/ActionButton.kt,0\a\0adf2cbde20bb97ec95cce9431ab5ce60fd9a06f
 |
 Lapp/src/main/java/com/example/greatimagedownloader/ui/MainScreenViewModel.kt,a\3\a32c287e1b41c49bed929dc335ba313c3e15b641
-
-Oapp/src/main/java/com/example/greatimagedownloader/data/storage/FilesStorage.kt,8\1\812af01bb19643fd8d138c68cb6c28c3b2b39925
 <
 build.gradle,f\0\f07866736216be0ee2aba49e392191aeae700a35
 ?
 settings.gradle,0\5\05efc8b1657769a27696d478ded1e95f38737233
 @
 app/build.gradle,f\4\f4a01d6a4fcb971362ec00a83903fd3902f52164
+P
+ app/src/main/AndroidManifest.xml,8\c\8c55c3ccc257e5907959013f99656e4c8ec3903e
+z
+Japp/src/main/java/com/example/greatimagedownloader/domain/wifi/WifiUtil.kt,5\2\52d95df95552c394e625f9f2d18d2f1f3602c33e
+Ç
+Rapp/src/main/java/com/example/greatimagedownloader/data/model/PhotoDownloadInfo.kt,c\4\c438aa7ab977ae2d837ce20bb8cbcf742a2a4d96
+â
+Yapp/src/main/java/com/example/greatimagedownloader/domain/data/model/PhotoDownloadInfo.kt,9\b\9b558e9fc0d61fe8c924ad83816cef1926ab545e
+}
+Mapp/src/main/java/com/example/greatimagedownloader/domain/utils/model/Kbps.kt,2\5\258b807b297e38677255b4f6b0e28c843ed17dbd
+à
+Xapp/src/test/java/com/example/greatimagedownloader/domain/model/WifiDetailsEntityTest.kt,a\8\a847d8bdec15996704a88c8ee816a3a483fea98b

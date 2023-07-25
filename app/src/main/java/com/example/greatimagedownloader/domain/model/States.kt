@@ -22,6 +22,11 @@ sealed interface States {
 
     data object GetPhotos : States
 
+    data class SelectFolders(
+        val folderInfo: FolderInfo,
+        val onFoldersSelect: (List<String>) -> Unit,
+    ) : States
+
     data class DownloadPhotos(
         val downloadedPhotos: List<PhotoDownloadInfo> = emptyList(),
         val currentPhotoNum: Int = 0,

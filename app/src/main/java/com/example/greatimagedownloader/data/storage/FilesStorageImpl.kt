@@ -12,6 +12,7 @@ import androidx.core.app.ActivityCompat.startIntentSenderForResult
 import com.example.greatimagedownloader.data.model.PhotoDownloadInfo
 import com.example.greatimagedownloader.data.utils.speedCalculator.SpeedCalculator
 import com.example.greatimagedownloader.data.utils.speedCalculator.SpeedCalculatorImpl
+import com.example.greatimagedownloader.domain.data.model.PhotoFile
 import com.example.greatimagedownloader.domain.utils.model.Kbps
 import com.example.greatimagedownloader.ui.util.findActivity
 import kotlinx.coroutines.Dispatchers
@@ -108,13 +109,13 @@ class FilesStorageImpl(
 
     override fun savePhoto(
         responseBody: ResponseBody,
-        filename: String,
+        file: PhotoFile,
     ): Flow<PhotoDownloadInfo> {
         return flow {
             val fileSize = responseBody.contentLength()
 
             val contentResolver = context.contentResolver
-            val imageUri = getFileUri(contentResolver, filename, responseBody.contentType()) ?: return@flow
+            val imageUri = getFileUri(contentResolver, file, responseBody.contentType()) ?: return@flow
             val outputStream = contentResolver.openOutputStream(imageUri) ?: return@flow
 
             responseBody.source().use { source ->
@@ -144,7 +145,7 @@ class FilesStorageImpl(
                                     PhotoDownloadInfo(
                                         uri = imageUri,
                                         downloadProgress = progress,
-                                        name = filename,
+                                        name = file.name,
                                         downloadSpeed = Kbps(speedCalculator.getAverageSpeedKbps()),
                                     )
                                 )
@@ -155,7 +156,7 @@ class FilesStorageImpl(
                             PhotoDownloadInfo(
                                 uri = imageUri,
                                 downloadProgress = 100,
-                                name = filename,
+                                name = file.name,
                                 downloadSpeed = Kbps(speedCalculator.getAverageSpeedKbps()),
                             )
                         )
@@ -174,15 +175,16 @@ class FilesStorageImpl(
 
     private fun getFileUri(
         contentResolver: ContentResolver,
-        filename: String,
+        file: PhotoFile,
         contentType: MediaType?,
     ): Uri? {
         val mediaTypeString = contentType?.toString() ?: DEFAULT_MIME_TYPE
         val isVideo = contentType?.type == MIME_TYPE_VIDEO
-        val folder = if (isVideo) RICOH_MOVIES_PATH else RICOH_PHOTOS_PATH
+        val rootFolder = if (isVideo) RICOH_MOVIES_PATH else RICOH_PHOTOS_PATH
+        val folder = rootFolder + file.directory
 
         val contentValues = ContentValues().apply {
-            put(MediaStore.MediaColumns.DISPLAY_NAME, filename)
+            put(MediaStore.MediaColumns.DISPLAY_NAME, file.name)
             put(MediaStore.MediaColumns.MIME_TYPE, mediaTypeString)
             put(MediaStore.MediaColumns.RELATIVE_PATH, folder)
         }
