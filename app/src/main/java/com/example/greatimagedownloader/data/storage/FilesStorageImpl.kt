@@ -181,17 +181,18 @@ class FilesStorageImpl(
         val mediaTypeString = contentType?.toString() ?: DEFAULT_MIME_TYPE
         val isVideo = contentType?.type == MIME_TYPE_VIDEO
         val rootFolder = if (isVideo) RICOH_MOVIES_PATH else RICOH_PHOTOS_PATH
-        val folder = rootFolder + file.directory
 
         val contentValues = ContentValues().apply {
             put(MediaStore.MediaColumns.DISPLAY_NAME, file.name)
             put(MediaStore.MediaColumns.MIME_TYPE, mediaTypeString)
-            put(MediaStore.MediaColumns.RELATIVE_PATH, folder)
+            put(MediaStore.MediaColumns.RELATIVE_PATH, rootFolder)
         }
 
         val contentUri = if (isVideo) MediaStore.Video.Media.EXTERNAL_CONTENT_URI else MediaStore.Images.Media.EXTERNAL_CONTENT_URI
 
-        return contentResolver.insert(contentUri, contentValues)
+        val finalContentUri = contentUri.buildUpon().appendPath(file.directory).build()
+
+        return contentResolver.insert(finalContentUri, contentValues)
     }
 
     private fun deleteInvalidFile(
