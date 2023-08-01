@@ -27,8 +27,6 @@ Napp/src/main/java/com/example/greatimagedownloader/data/api/model/PhotoInfo.kt
 Tapp/src/main/java/com/example/greatimagedownloader/ui/model/ProcessedDownloadInfo.kt,c\5\c5e06e83471455d8c6cd12a8e91560d47e2df54b
 F
 app/proguard-rules.pro,9\e\9e08934d811afe28fbc77aaa3c0d747b94348db9
-‰
-Yapp/src/main/java/com/example/greatimagedownloader/ui/permissions/PermissionsRequester.kt,2\8\28a3bcb1bcb6db0b978b07afe23b66c69dc29f1e
 v
 Fapp/src/main/java/com/example/greatimagedownloader/ui/wifi/WifiUtil.kt,1\c\1cfe97a5e2400d708a05356228728af7e7c6a28d
 t
@@ -85,3 +83,7 @@ Papp/src/main/java/com/example/greatimagedownloader/platform/wifi/WifiUtilImpl.k
 Oapp/src/main/java/com/example/greatimagedownloader/data/storage/FilesStorage.kt,8\1\812af01bb19643fd8d138c68cb6c28c3b2b39925
 y
 Iapp/src/main/java/com/example/greatimagedownloader/data/RepositoryImpl.kt,9\c\9cec3ba64036b2bb5c76386ab90a80ab0ca8c49c
+
+Oapp/src/main/java/com/example/greatimagedownloader/ui/view/SelectFoldersView.kt,6\d\6dbd954955e4fac91333fa472b9cc93c0a825679
+}
+Mapp/src/main/java/com/example/greatimagedownloader/ui/view/DownloadingView.kt,9\a\9afa3bbd68fceeefc5b7662d517c4cf9a3806db8

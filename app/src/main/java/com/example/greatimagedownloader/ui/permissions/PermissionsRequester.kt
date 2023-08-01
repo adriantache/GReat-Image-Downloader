@@ -42,16 +42,15 @@ fun PermissionsRequester(
 
     if (!photosPermissionState.status.isGranted || !locationPermissionState.status.isGranted) {
         content(
-            isLocationPermissionGranted = locationPermissionState.status.isGranted,
-            isPhotosPermissionGranted = photosPermissionState.status.isGranted,
-            onRequestPermissions = {
-                onRequestPermissions(
-                    photosPermissionState,
-                    locationPermissionState,
-                    onPermissionsGranted
-                )
-            }
-        )
+            /* isLocationPermissionGranted */ locationPermissionState.status.isGranted,
+            /* isPhotosPermissionGranted */ photosPermissionState.status.isGranted
+        ) /* onRequestPermissions */ {
+            onRequestPermissions(
+                photosPermissionState,
+                locationPermissionState,
+                onPermissionsGranted
+            )
+        }
     }
 }
 
@@ -59,7 +58,7 @@ fun PermissionsRequester(
 private fun onRequestPermissions(
     photosPermissionState: PermissionState,
     locationPermissionState: PermissionState,
-    onPermissionsGranted: () -> Unit
+    onPermissionsGranted: () -> Unit,
 ) {
     when {
         !locationPermissionState.status.isGranted -> locationPermissionState.launchPermissionRequest()
