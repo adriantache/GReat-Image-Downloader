@@ -2,17 +2,15 @@ package com.example.greatimagedownloader.ui
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -22,10 +20,10 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.example.greatimagedownloader.R
 import com.example.greatimagedownloader.domain.model.Events
+import com.example.greatimagedownloader.domain.model.Events.*
 import com.example.greatimagedownloader.domain.model.States
 import com.example.greatimagedownloader.domain.model.States.ChangeSettings
 import com.example.greatimagedownloader.domain.model.States.ConnectWifi
-import com.example.greatimagedownloader.domain.model.States.Disconnected
 import com.example.greatimagedownloader.domain.model.States.DownloadPhotos
 import com.example.greatimagedownloader.domain.model.States.GetPhotos
 import com.example.greatimagedownloader.domain.model.States.Init
@@ -61,7 +59,7 @@ fun MainScreenStateMachine(
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             eventValue?.value?.let {
-                HandleEvent(it)
+                HandleEvent(it, snackbarHostState)
             }
 
             when (val state = stateValue) {
@@ -99,19 +97,6 @@ fun MainScreenStateMachine(
                     downloadSpeed = state.downloadSpeed,
                 )
 
-                // TODO: reset after delay in use case?
-                is Disconnected ->
-                    // TODO: make proper UI
-                    Column {
-                        Text("Downloaded ${state.numDownloadedPhotos} photos.")
-
-                        Spacer(Modifier.height(8.dp))
-
-                        Button(onClick = state.onRestart) {
-                            Text("Restart process")
-                        }
-                    }
-
                 ChangeSettings -> Text("Settings not implemented...")
             }
         }
@@ -119,9 +104,21 @@ fun MainScreenStateMachine(
 }
 
 @Composable
-private fun HandleEvent(event: Events) {
+private fun HandleEvent(
+    event: Events,
+    snackbarHostState: SnackbarHostState,
+) {
+    LaunchedEffect(event) {
+        when (event) {
+            CannotDownloadPhotos -> Unit
+            InvalidWifiInput -> Unit
+            is SuccessfulDownload -> snackbarHostState.showSnackbar("Downloaded ${event.numDownloadedPhotos} photos.")
+        }
+    }
+
     when (event) {
-        Events.InvalidWifiInput -> Text(stringResource(R.string.error_invalid_wifi_input))
-        Events.CannotDownloadPhotos -> Text(stringResource(R.string.error_cannot_get_photos))
+        InvalidWifiInput -> Text(stringResource(R.string.error_invalid_wifi_input))
+        CannotDownloadPhotos -> Text(stringResource(R.string.error_cannot_get_photos))
+        is SuccessfulDownload -> Unit
     }
 }

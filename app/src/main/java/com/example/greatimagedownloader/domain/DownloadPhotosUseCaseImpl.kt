@@ -4,11 +4,11 @@ import com.example.greatimagedownloader.domain.data.Repository
 import com.example.greatimagedownloader.domain.data.model.PhotoDownloadInfo
 import com.example.greatimagedownloader.domain.data.model.PhotoFile
 import com.example.greatimagedownloader.domain.model.Events
+import com.example.greatimagedownloader.domain.model.Events.SuccessfulDownload
 import com.example.greatimagedownloader.domain.model.FolderInfo
 import com.example.greatimagedownloader.domain.model.States
 import com.example.greatimagedownloader.domain.model.States.ChangeSettings
 import com.example.greatimagedownloader.domain.model.States.ConnectWifi
-import com.example.greatimagedownloader.domain.model.States.Disconnected
 import com.example.greatimagedownloader.domain.model.States.DownloadPhotos
 import com.example.greatimagedownloader.domain.model.States.GetPhotos
 import com.example.greatimagedownloader.domain.model.States.Init
@@ -176,17 +176,19 @@ class DownloadPhotosUseCaseImpl(
     }
 
     private suspend fun disconnect(numDownloadedPhotos: Int) {
-        repository.shutDownCamera() // Also shuts down the hotspot, no need to disconnect from WiFi.
+        wifiUtil.disconnectFromWifi()
+        repository.shutDownCamera()
 
-        state.value = Disconnected(
-            numDownloadedPhotos = numDownloadedPhotos,
-            onRestart = { state.value = Init(::onInit) },
+        state.value = Init(::onInit)
+
+        event.value = Event(
+            SuccessfulDownload(numDownloadedPhotos = numDownloadedPhotos)
         )
     }
 
     private fun onConnectionLost() {
         // TODO: check current file progress and delete it if not 100%
 
-        state.value = Disconnected(onRestart = { state.value = Init(::onInit) })
+        state.value = Init(::onInit)
     }
 }

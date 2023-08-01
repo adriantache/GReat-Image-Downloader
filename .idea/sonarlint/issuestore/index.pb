@@ -51,8 +51,6 @@ Gapp/src/main/java/com/example/greatimagedownloader/ui/view/StartView.kt,d\e\de
 Rapp/src/main/java/com/example/greatimagedownloader/domain/DownloadPhotosUseCase.kt,1\a\1a226246ec9ecc7255d028a39d6fcd20472db71f
 z
 Japp/src/main/java/com/example/greatimagedownloader/ui/view/ActionButton.kt,0\a\0adf2cbde20bb97ec95cce9431ab5ce60fd9a06f
-|
-Lapp/src/main/java/com/example/greatimagedownloader/ui/MainScreenViewModel.kt,a\3\a32c287e1b41c49bed929dc335ba313c3e15b641
 <
 build.gradle,f\0\f07866736216be0ee2aba49e392191aeae700a35
 ?

@@ -190,6 +190,7 @@ class FilesStorageImpl(
 
         val contentUri = if (isVideo) MediaStore.Video.Media.EXTERNAL_CONTENT_URI else MediaStore.Images.Media.EXTERNAL_CONTENT_URI
 
+        // Add subfolder to avoid collisions.
         val finalContentUri = contentUri.buildUpon().appendPath(file.directory).build()
 
         return contentResolver.insert(finalContentUri, contentValues)

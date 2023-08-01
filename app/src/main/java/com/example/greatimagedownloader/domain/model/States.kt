@@ -34,10 +34,5 @@ sealed interface States {
         val downloadSpeed: Kbps = Kbps(0.0),
     ) : States
 
-    data class Disconnected(
-        val numDownloadedPhotos: Int? = null,
-        val onRestart: () -> Unit,
-    ) : States
-
     data object ChangeSettings : States
 }
