@@ -46,6 +46,10 @@ class RepositoryImpl(
         return filesStorage.getSavedMovies()
     }
 
+    override fun deleteMedia(uri: String) {
+        filesStorage.deleteMedia(uri)
+    }
+
     override suspend fun getCameraPhotoList(): Result<List<PhotoFile>> {
         return withContext(ioDispatcher) {
             val response = ricohApi.getPhotos()

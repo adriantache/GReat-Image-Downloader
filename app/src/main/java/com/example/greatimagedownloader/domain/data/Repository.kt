@@ -13,6 +13,7 @@ interface Repository {
     // Data storage
     fun getSavedPhotos(): List<String>
     fun getSavedMovies(): List<String>
+    fun deleteMedia(uri: String)
 
     // Camera operations
     suspend fun getCameraPhotoList(): Result<List<PhotoFile>>

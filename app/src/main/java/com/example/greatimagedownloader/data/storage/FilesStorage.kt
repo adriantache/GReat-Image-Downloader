@@ -13,4 +13,6 @@ interface FilesStorage {
         responseBody: ResponseBody,
         file: PhotoFile,
     ): Flow<PhotoDownloadInfo>
+
+    fun deleteMedia(uri: String)
 }

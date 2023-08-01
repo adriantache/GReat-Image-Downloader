@@ -16,6 +16,7 @@ import com.example.greatimagedownloader.domain.data.model.PhotoFile
 import com.example.greatimagedownloader.domain.utils.model.Kbps
 import com.example.greatimagedownloader.ui.util.findActivity
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
@@ -25,6 +26,7 @@ import okio.buffer
 import okio.sink
 import java.io.IOException
 import kotlin.math.roundToInt
+import kotlin.time.Duration.Companion.seconds
 
 private val RICOH_PHOTOS_PATH = Environment.DIRECTORY_PICTURES + "/Image Sync"
 private val RICOH_MOVIES_PATH = Environment.DIRECTORY_MOVIES + "/Image Sync"
@@ -122,7 +124,6 @@ class FilesStorageImpl(
                 outputStream.sink().buffer().use { destination ->
                     try {
                         var totalBytesRead = 0L
-                        var currentProgress = -1
 
                         while (!source.exhausted()) {
                             val bytesRead = source.buffer.read(destination.buffer, OKIO_MAX_BYTES).takeUnless { it == -1L } ?: break
@@ -137,10 +138,7 @@ class FilesStorageImpl(
                                 (totalBytesRead.toFloat() / fileSize * 100).roundToInt().coerceAtMost(99)
                             }
 
-                            // TODO: reconsider this condition, maybe emit every second anyway
-                            if (progress != currentProgress) {
-                                currentProgress = progress
-
+                            while (progress < 99) {
                                 emit(
                                     PhotoDownloadInfo(
                                         uri = imageUri,
@@ -149,6 +147,8 @@ class FilesStorageImpl(
                                         downloadSpeed = Kbps(speedCalculator.getAverageSpeedKbps()),
                                     )
                                 )
+
+                                delay(1.seconds)
                             }
                         }
 
@@ -171,6 +171,15 @@ class FilesStorageImpl(
             outputStream.close()
             responseBody.close()
         }.flowOn(Dispatchers.IO)
+    }
+
+    override fun deleteMedia(uri: String) {
+        val contentResolver = context.contentResolver
+
+        deleteInvalidFile(
+            contentResolver = contentResolver,
+            uri = Uri.parse(uri),
+        )
     }
 
     private fun getFileUri(

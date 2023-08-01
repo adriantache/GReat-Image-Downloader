@@ -187,7 +187,26 @@ class DownloadPhotosUseCaseImpl(
     }
 
     private fun onConnectionLost() {
-        // TODO: check current file progress and delete it if not 100%
+        when (val state = state.value) {
+            is DownloadPhotos -> {
+                val currentMedia = state.downloadedPhotos[state.currentPhotoNum]
+                val currentProgress = currentMedia.downloadProgress
+
+                // Delete the current file if it's incomplete.
+                if (currentProgress != 100) {
+                    repository.deleteMedia(currentMedia.uri)
+                }
+            }
+
+            ChangeSettings,
+            is ConnectWifi,
+            GetPhotos,
+            is Init,
+            is RequestPermissions,
+            is RequestWifiCredentials,
+            is States.SelectFolders,
+            -> Unit
+        }
 
         state.value = Init(::onInit)
     }

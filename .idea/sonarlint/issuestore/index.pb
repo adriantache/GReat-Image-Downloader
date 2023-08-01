@@ -1,8 +1,6 @@
 
 x
 Happ/src/main/java/com/example/greatimagedownloader/data/di/DataModule.kt,1\9\19c77f01ef64ea6bb9e682629fc3567bf013ce6c
-|
-Lapp/src/main/java/com/example/greatimagedownloader/domain/data/Repository.kt,3\e\3e5de4b484214a3f6b32eb7bafb33bfaa82f9226
 X
 (gradle/wrapper/gradle-wrapper.properties,f\b\fbe448ebfc3eb2d4e308f6b8b043666f5b57235e
 w
@@ -79,10 +77,6 @@ Uapp/src/test/java/com/example/greatimagedownloader/data/utils/ModeCalculatorKtT
 Papp/src/main/java/com/example/greatimagedownloader/platform/wifi/WifiUtilImpl.kt,1\1\11096896e5428f4e2e11eb07a63429e2cebce06a
 ˆ
 Xapp/src/test/java/com/example/greatimagedownloader/data/utils/SpeedCalculatorImplTest.kt,1\6\1625969454249623a8ef510a145921228e627608
-
-Oapp/src/main/java/com/example/greatimagedownloader/data/storage/FilesStorage.kt,8\1\812af01bb19643fd8d138c68cb6c28c3b2b39925
-y
-Iapp/src/main/java/com/example/greatimagedownloader/data/RepositoryImpl.kt,9\c\9cec3ba64036b2bb5c76386ab90a80ab0ca8c49c
 
 Oapp/src/main/java/com/example/greatimagedownloader/ui/view/SelectFoldersView.kt,6\d\6dbd954955e4fac91333fa472b9cc93c0a825679
 }
