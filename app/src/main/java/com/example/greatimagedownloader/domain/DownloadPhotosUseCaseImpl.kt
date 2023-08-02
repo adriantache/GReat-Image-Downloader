@@ -176,7 +176,6 @@ class DownloadPhotosUseCaseImpl(
     }
 
     private suspend fun disconnect(numDownloadedPhotos: Int) {
-        wifiUtil.disconnectFromWifi()
         repository.shutDownCamera()
 
         state.value = Init(::onInit)
@@ -189,7 +188,7 @@ class DownloadPhotosUseCaseImpl(
     private fun onConnectionLost() {
         when (val state = state.value) {
             is DownloadPhotos -> {
-                val currentMedia = state.downloadedPhotos[state.currentPhotoNum]
+                val currentMedia = state.downloadedPhotos[state.currentPhotoNum - 1]
                 val currentProgress = currentMedia.downloadProgress
 
                 // Delete the current file if it's incomplete.
