@@ -122,7 +122,7 @@ class FilesStorageImpl(
                 outputStream.sink().buffer().use { destination ->
                     try {
                         var totalBytesRead = 0L
-                        val lastProgressReportTime = 0L
+                        var lastProgressReportTime = 0L
 
                         while (!source.exhausted()) {
                             val bytesRead = source.buffer.read(destination.buffer, OKIO_MAX_BYTES).takeUnless { it == -1L } ?: break
@@ -146,6 +146,8 @@ class FilesStorageImpl(
                                         downloadSpeed = Kbps(speedCalculator.getAverageSpeedKbps()),
                                     )
                                 )
+
+                                lastProgressReportTime = System.currentTimeMillis()
                             }
                         }
 

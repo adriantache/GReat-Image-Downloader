@@ -41,8 +41,6 @@ r
 Bapp/src/main/java/com/example/greatimagedownloader/MainActivity.kt,7\9\79ee01de6b939e3092302257a84d8d6596c442e9
 €
 Papp/src/main/java/com/example/greatimagedownloader/ui/util/ModifierExtensions.kt,9\5\95a2a23225b4127426c16353ef9fed6bd695ae6d
-w
-Gapp/src/main/java/com/example/greatimagedownloader/ui/view/StartView.kt,d\e\ded07853a65f2c4755f7e7b57eed08cf68f4ce0f
 ‚
 Rapp/src/main/java/com/example/greatimagedownloader/domain/DownloadPhotosUseCase.kt,1\a\1a226246ec9ecc7255d028a39d6fcd20472db71f
 z
