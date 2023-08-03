@@ -81,7 +81,5 @@ Qapp/src/main/java/com/example/greatimagedownloader/domain/ui/model/WifiDetails.
 Tapp/src/main/java/com/example/greatimagedownloader/domain/model/WifiDetailsEntity.kt,6\8\680a682c278d4000456dd90425c182546e684a66
 y
 Iapp/src/main/java/com/example/greatimagedownloader/domain/model/Events.kt,c\9\c9acd3672a5f630f9896039f3dbf808f7e93d152
-y
-Iapp/src/main/java/com/example/greatimagedownloader/domain/model/States.kt,1\e\1ee2cb6c3065aebea0e2d35da79dca8afc213b89
 |
 Lapp/src/main/java/com/example/greatimagedownloader/ui/MainScreenViewModel.kt,a\3\a32c287e1b41c49bed929dc335ba313c3e15b641

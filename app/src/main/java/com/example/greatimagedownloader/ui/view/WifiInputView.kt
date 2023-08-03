@@ -11,7 +11,6 @@ import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -33,14 +32,11 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.example.greatimagedownloader.R
 import com.example.greatimagedownloader.domain.ui.model.WifiDetails
-import com.example.greatimagedownloader.ui.wifi.WifiUtil
-import org.koin.androidx.compose.get
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun WifiInputView(
-    wifiUtil: WifiUtil = get(),
     onWifiCredentialsInput: (WifiDetails) -> Unit,
+    onSuggestWifiName: suspend () -> String,
 ) {
     val focusManager = LocalFocusManager.current
 
@@ -52,7 +48,7 @@ fun WifiInputView(
     LaunchedEffect(triggerWifiSuggestion) {
         if (!triggerWifiSuggestion) return@LaunchedEffect
 
-        wifiName = wifiUtil.suggestNetwork()
+        wifiName = onSuggestWifiName()
         triggerWifiSuggestion = false
     }
 
@@ -117,11 +113,5 @@ fun WifiInputView(
 @Preview(showBackground = true)
 @Composable
 private fun WifiInputViewPreview() {
-    val wifiUtil = object : WifiUtil {
-        override val isWifiDisabled: Boolean = false
-        override suspend fun connectToWifi(wifiDetails: WifiDetails, onConnectionSuccess: () -> Unit, onConnectionLost: () -> Unit) = Unit
-        override suspend fun suggestNetwork(): String = ""
-    }
-
-    WifiInputView(wifiUtil = wifiUtil) {}
+    WifiInputView({}, { "" })
 }

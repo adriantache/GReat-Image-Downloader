@@ -71,9 +71,11 @@ class DownloadPhotosUseCaseImpl(
                     )
                 },
                 onChangeWifiDetails = {
-                    state.value = RequestWifiCredentials(onWifiCredentialsInput = {
-                        onWifiCredentialsInput(it.toEntity())
-                    })
+                    state.value = RequestWifiCredentials(
+                        onWifiCredentialsInput = { onWifiCredentialsInput(it.toEntity()) },
+                        onSuggestWifiName = { wifiUtil.suggestNetwork() }
+                    )
+
                 },
                 onAdjustSettings = {
                     // TODO: add functionalities and data to this use case
@@ -87,9 +89,8 @@ class DownloadPhotosUseCaseImpl(
             )
         } else {
             RequestWifiCredentials(
-                onWifiCredentialsInput = {
-                    onWifiCredentialsInput(it.toEntity())
-                }
+                onWifiCredentialsInput = { onWifiCredentialsInput(it.toEntity()) },
+                onSuggestWifiName = { wifiUtil.suggestNetwork() }
             )
         }
     }
