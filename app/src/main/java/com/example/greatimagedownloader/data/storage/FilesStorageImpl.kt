@@ -16,7 +16,6 @@ import com.example.greatimagedownloader.domain.data.model.PhotoFile
 import com.example.greatimagedownloader.domain.utils.model.Kbps
 import com.example.greatimagedownloader.ui.util.findActivity
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
@@ -26,7 +25,6 @@ import okio.buffer
 import okio.sink
 import java.io.IOException
 import kotlin.math.roundToInt
-import kotlin.time.Duration.Companion.seconds
 
 private val RICOH_PHOTOS_PATH = Environment.DIRECTORY_PICTURES + "/Image Sync"
 private val RICOH_MOVIES_PATH = Environment.DIRECTORY_MOVIES + "/Image Sync"
@@ -138,18 +136,19 @@ class FilesStorageImpl(
                                 (totalBytesRead.toFloat() / fileSize * 100).roundToInt().coerceAtMost(99)
                             }
 
-                            while (progress < 99) {
-                                emit(
-                                    PhotoDownloadInfo(
-                                        uri = imageUri,
-                                        downloadProgress = progress,
-                                        name = file.name,
-                                        downloadSpeed = Kbps(speedCalculator.getAverageSpeedKbps()),
-                                    )
+                            // TODO: do a proper fix
+//                            while (progress < 99) {
+                            emit(
+                                PhotoDownloadInfo(
+                                    uri = imageUri,
+                                    downloadProgress = progress,
+                                    name = file.name,
+                                    downloadSpeed = Kbps(speedCalculator.getAverageSpeedKbps()),
                                 )
+                            )
 
-                                delay(1.seconds)
-                            }
+//                                delay(1.seconds)
+//                            }
                         }
 
                         emit(
