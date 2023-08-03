@@ -122,6 +122,7 @@ class FilesStorageImpl(
                 outputStream.sink().buffer().use { destination ->
                     try {
                         var totalBytesRead = 0L
+                        val lastProgressReportTime = 0L
 
                         while (!source.exhausted()) {
                             val bytesRead = source.buffer.read(destination.buffer, OKIO_MAX_BYTES).takeUnless { it == -1L } ?: break
@@ -136,19 +137,16 @@ class FilesStorageImpl(
                                 (totalBytesRead.toFloat() / fileSize * 100).roundToInt().coerceAtMost(99)
                             }
 
-                            // TODO: do a proper fix
-//                            while (progress < 99) {
-                            emit(
-                                PhotoDownloadInfo(
-                                    uri = imageUri,
-                                    downloadProgress = progress,
-                                    name = file.name,
-                                    downloadSpeed = Kbps(speedCalculator.getAverageSpeedKbps()),
+                            if (System.currentTimeMillis() - lastProgressReportTime > 1000L) {
+                                emit(
+                                    PhotoDownloadInfo(
+                                        uri = imageUri,
+                                        downloadProgress = progress,
+                                        name = file.name,
+                                        downloadSpeed = Kbps(speedCalculator.getAverageSpeedKbps()),
+                                    )
                                 )
-                            )
-
-//                                delay(1.seconds)
-//                            }
+                            }
                         }
 
                         emit(
