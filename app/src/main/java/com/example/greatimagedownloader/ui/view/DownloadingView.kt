@@ -1,6 +1,5 @@
 package com.example.greatimagedownloader.ui.view
 
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -19,26 +18,20 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import coil.compose.AsyncImage
 import com.example.greatimagedownloader.R
 import com.example.greatimagedownloader.domain.data.model.PhotoDownloadInfo
 import com.example.greatimagedownloader.domain.utils.model.Kbps
-import com.example.greatimagedownloader.ui.model.ProcessedDownloadInfo
-import com.example.greatimagedownloader.ui.model.ProcessedDownloadInfo.Companion.toProcessedDownloadInfo
 import com.example.greatimagedownloader.ui.util.KeepScreenOn
 import java.text.DecimalFormat
 
@@ -50,19 +43,10 @@ fun DownloadingView(
     photoDownloadInfo: List<PhotoDownloadInfo>,
     downloadSpeed: Kbps,
 ) {
-    val context = LocalContext.current
-    val contentResolver = context.contentResolver
-
     val boxShape = RoundedCornerShape(8.dp)
     val shimmerBrush = ShimmerBrush()
 
-    var processedDownloadInfo by remember { mutableStateOf(emptyList<ProcessedDownloadInfo>()) }
-
     KeepScreenOn()
-
-    LaunchedEffect(photoDownloadInfo) {
-        processedDownloadInfo = photoDownloadInfo.toProcessedDownloadInfo(contentResolver, processedDownloadInfo)
-    }
 
     Column(
         modifier = modifier.padding(16.dp),
@@ -99,46 +83,45 @@ fun DownloadingView(
             verticalArrangement = Arrangement.spacedBy(4.dp),
             horizontalArrangement = Arrangement.spacedBy(4.dp),
         ) {
-            items(items = processedDownloadInfo) { processedDownloadInfo ->
+            items(items = photoDownloadInfo) { mediaInfo ->
                 Box(
                     modifier = Modifier
                         .aspectRatio(1f)
                         .background(MaterialTheme.colorScheme.primary, boxShape),
                     contentAlignment = Alignment.Center,
                 ) {
-                    when (processedDownloadInfo) {
-                        is ProcessedDownloadInfo.Pending -> Text(
-                            text = "${processedDownloadInfo.downloadProgress}%",
+                    when {
+                        !mediaInfo.isFinished -> Text(
+                            text = "${mediaInfo.downloadProgress}%",
                             color = MaterialTheme.colorScheme.onPrimary,
                         )
 
-                        is ProcessedDownloadInfo.Finished -> if (processedDownloadInfo.bitmap != null) {
-                            Image(
-                                modifier = Modifier.clip(boxShape),
-                                bitmap = processedDownloadInfo.bitmap,
+                        mediaInfo.isImage -> AsyncImage(
+                            model = mediaInfo.uri,
+                            modifier = Modifier.clip(boxShape),
+                            contentDescription = null,
+                            contentScale = ContentScale.Crop,
+                            placeholder = painterResource(R.drawable.baseline_landscape_24),
+                        )
+
+                        else -> Box(
+                            modifier = Modifier
+                                .aspectRatio(1f)
+                                .background(MaterialTheme.colorScheme.primary, boxShape),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Icon(
+                                painter = painterResource(id = R.drawable.movie),
                                 contentDescription = null,
-                                contentScale = ContentScale.Crop
+                                modifier = Modifier.requiredSize(28.dp),
+                                tint = MaterialTheme.colorScheme.onPrimary,
                             )
-                        } else {
-                            Box(
-                                modifier = Modifier
-                                    .aspectRatio(1f)
-                                    .background(MaterialTheme.colorScheme.primary, boxShape),
-                                contentAlignment = Alignment.Center,
-                            ) {
-                                Icon(
-                                    painter = painterResource(id = R.drawable.movie),
-                                    contentDescription = null,
-                                    modifier = Modifier.requiredSize(28.dp),
-                                    tint = MaterialTheme.colorScheme.onPrimary,
-                                )
-                            }
                         }
                     }
                 }
             }
 
-            items(items = (0 until totalPhotos - processedDownloadInfo.size).toList()) {
+            items(items = (0 until totalPhotos - photoDownloadInfo.size).toList()) {
                 ProgressShimmer(shimmerBrush, boxShape)
             }
         }
@@ -171,7 +154,7 @@ private fun getDownloadSpeedDisplay(downloadSpeedKb: Double): String {
 
     return "|".repeat(roundedSpeedMb.coerceAtMost(5)) +
             ".".repeat((5 - roundedSpeedMb).coerceIn(0..5)) +
-            if (downloadSpeedMb > 6) "+" else ""
+            if (downloadSpeedMb > 6) "+" else " "
 }
 
 @Preview(showBackground = true)

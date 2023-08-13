@@ -9,4 +9,6 @@ data class PhotoDownloadInfo(
     val downloadSpeed: Kbps,
 ) {
     val isImage: Boolean = name.split(".").last().lowercase() == "jpg"
+
+    val isFinished = downloadProgress == 100
 }
