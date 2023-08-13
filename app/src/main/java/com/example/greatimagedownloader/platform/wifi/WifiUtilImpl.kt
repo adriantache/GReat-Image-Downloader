@@ -123,8 +123,6 @@ class WifiUtilImpl(
 
         scope.launch {
             while (status == SCANNING) {
-                val now = System.currentTimeMillis()
-
                 // We currently cannot scan more often than 4 times per 2 minutes.
                 if (wifiScanRateLimiter.canScan) {
                     @Suppress("DEPRECATION")
