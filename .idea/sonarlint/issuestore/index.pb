@@ -37,8 +37,6 @@ t
 Dapp/src/main/java/com/example/greatimagedownloader/ui/di/UiModule.kt,5\8\58691c354ab5aa27ef69288b1a3f9bf338606b72
 u
 Eapp/src/main/java/com/example/greatimagedownloader/MainApplication.kt,3\2\32e01def30d5fa64e708b6b8c6e68782e6d887cd
-r
-Bapp/src/main/java/com/example/greatimagedownloader/MainActivity.kt,7\9\79ee01de6b939e3092302257a84d8d6596c442e9
 Ä
 Papp/src/main/java/com/example/greatimagedownloader/ui/util/ModifierExtensions.kt,9\5\95a2a23225b4127426c16353ef9fed6bd695ae6d
 Ç
@@ -59,12 +57,8 @@ Yapp/src/main/java/com/example/greatimagedownloader/domain/data/model/PhotoDownl
 Mapp/src/main/java/com/example/greatimagedownloader/domain/utils/model/Kbps.kt,2\5\258b807b297e38677255b4f6b0e28c843ed17dbd
 à
 Xapp/src/test/java/com/example/greatimagedownloader/domain/model/WifiDetailsEntityTest.kt,a\8\a847d8bdec15996704a88c8ee816a3a483fea98b
-î
-dapp/src/main/java/com/example/greatimagedownloader/data/utils/speedCalculator/SpeedCalculatorImpl.kt,7\8\78798ffed737a63979e08213614eb21c00433b45
 ê
 `app/src/main/java/com/example/greatimagedownloader/data/utils/speedCalculator/SpeedCalculator.kt,5\3\53c9360e1d94bc6028ada2654f2de22a343ebd29
-
-Oapp/src/main/java/com/example/greatimagedownloader/data/utils/ModeCalculator.kt,d\e\de1c8b001642292a6eb3e8b7781ce77b96643668
 Ö
 Uapp/src/test/java/com/example/greatimagedownloader/data/utils/ModeCalculatorKtTest.kt,4\0\40b8c4dde8b6476fa8f07596d7d86ef9dae2935c
 à

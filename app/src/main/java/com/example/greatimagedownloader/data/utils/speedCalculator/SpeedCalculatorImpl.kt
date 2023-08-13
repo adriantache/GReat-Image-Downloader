@@ -1,7 +1,6 @@
 package com.example.greatimagedownloader.data.utils.speedCalculator
 
 import androidx.annotation.VisibleForTesting
-import com.example.greatimagedownloader.data.utils.mode
 
 private const val EXPIRATION_MS = 5 * 1000L
 private const val MAX_SAMPLES = 10000
@@ -35,19 +34,11 @@ class SpeedCalculatorImpl : SpeedCalculator {
         if (samples.size < 2) return 0.0
 
         val initialTimestamp = samples[0].timestamp
+        val durationSeconds = (currentTime - initialTimestamp) / 1000
 
-        val groupedSamples = samples.groupBy {
-            (it.timestamp - initialTimestamp) / 1000
-        }
+        if (durationSeconds < 1) return 0.0
 
-        val summedSamples = groupedSamples.mapValues { entry ->
-            entry.value.sumOf { it.downloadedKb }
-        }
-
-        val average = summedSamples.values.average()
-        val mode = summedSamples.values.toList().mode()
-
-        return (average + mode) / 2
+        return samples.sumOf { it.downloadedKb } / durationSeconds
     }
 
     @VisibleForTesting
