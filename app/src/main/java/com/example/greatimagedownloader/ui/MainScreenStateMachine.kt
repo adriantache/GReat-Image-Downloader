@@ -4,11 +4,13 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -20,7 +22,9 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.example.greatimagedownloader.R
 import com.example.greatimagedownloader.domain.model.Events
-import com.example.greatimagedownloader.domain.model.Events.*
+import com.example.greatimagedownloader.domain.model.Events.CannotDownloadPhotos
+import com.example.greatimagedownloader.domain.model.Events.InvalidWifiInput
+import com.example.greatimagedownloader.domain.model.Events.SuccessfulDownload
 import com.example.greatimagedownloader.domain.model.States
 import com.example.greatimagedownloader.domain.model.States.ChangeSettings
 import com.example.greatimagedownloader.domain.model.States.ConnectWifi
@@ -30,6 +34,7 @@ import com.example.greatimagedownloader.domain.model.States.Init
 import com.example.greatimagedownloader.domain.model.States.RequestPermissions
 import com.example.greatimagedownloader.domain.model.States.RequestWifiCredentials
 import com.example.greatimagedownloader.ui.permissions.PermissionsRequester
+import com.example.greatimagedownloader.ui.view.ChangeSettingsScreen
 import com.example.greatimagedownloader.ui.view.DownloadingView
 import com.example.greatimagedownloader.ui.view.PermissionsView
 import com.example.greatimagedownloader.ui.view.SelectFoldersView
@@ -38,7 +43,6 @@ import com.example.greatimagedownloader.ui.view.SyncView
 import com.example.greatimagedownloader.ui.view.WifiInputView
 import org.koin.androidx.compose.getViewModel
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MainScreenStateMachine(
     viewModel: MainScreenViewModel = getViewModel(),
@@ -101,7 +105,7 @@ fun MainScreenStateMachine(
                     downloadSpeed = state.downloadSpeed,
                 )
 
-                ChangeSettings -> Text("Settings not implemented...")
+                is ChangeSettings -> ChangeSettingsScreen(state)
             }
         }
     }
@@ -116,6 +120,7 @@ private fun HandleEvent(
         when (event) {
             CannotDownloadPhotos -> Unit
             InvalidWifiInput -> Unit
+            is Events.ConfirmDeleteAllPhotos -> Unit
             is SuccessfulDownload -> snackbarHostState.showSnackbar("Downloaded ${event.numDownloadedPhotos} photos.")
         }
     }
@@ -124,5 +129,23 @@ private fun HandleEvent(
         InvalidWifiInput -> Text(stringResource(R.string.error_invalid_wifi_input))
         CannotDownloadPhotos -> Text(stringResource(R.string.error_cannot_get_photos))
         is SuccessfulDownload -> Unit
+        is Events.ConfirmDeleteAllPhotos -> AlertDialog(
+            onDismissRequest = event.onDismiss,
+            title = { Text("Are you sure you want to delete this?") },
+            text = { Text("This action cannot be undone") },
+            confirmButton = {
+                TextButton(onClick = event.onConfirm) {
+                    Text(
+                        text = "Delete it".uppercase(),
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = event.onDismiss) {
+                    Text("Cancel".uppercase())
+                }
+            },
+        )
     }
 }

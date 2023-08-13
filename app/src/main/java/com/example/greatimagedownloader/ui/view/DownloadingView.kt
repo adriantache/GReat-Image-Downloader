@@ -27,6 +27,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
@@ -53,13 +54,14 @@ fun DownloadingView(
     val contentResolver = context.contentResolver
 
     val boxShape = RoundedCornerShape(8.dp)
+    val shimmerBrush = ShimmerBrush()
 
     var processedDownloadInfo by remember { mutableStateOf(emptyList<ProcessedDownloadInfo>()) }
 
     KeepScreenOn()
 
     LaunchedEffect(photoDownloadInfo) {
-        processedDownloadInfo = photoDownloadInfo.map { it.toProcessedDownloadInfo(contentResolver, processedDownloadInfo) }
+        processedDownloadInfo = photoDownloadInfo.toProcessedDownloadInfo(contentResolver, processedDownloadInfo)
     }
 
     Column(
@@ -67,10 +69,19 @@ fun DownloadingView(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {
+        val downloadSpeedDisplay = remember(downloadSpeed) {
+            getDownloadSpeed(downloadSpeed.value)
+        }
+        val downloadSpeedImage = remember(downloadSpeed) {
+            getDownloadSpeedDisplay(downloadSpeed.value)
+        }
+
         Text(
             text = "Downloading photos: ${currentPhoto}/${totalPhotos}" +
                     "\n" +
-                    getDownloadSpeed(downloadSpeed.value),
+                    downloadSpeedDisplay +
+                    "\n" +
+                    downloadSpeedImage,
             style = MaterialTheme.typography.titleMedium,
             textAlign = TextAlign.Center,
         )
@@ -84,7 +95,7 @@ fun DownloadingView(
         Spacer(Modifier.height(16.dp))
 
         LazyVerticalGrid(
-            columns = GridCells.Adaptive(minSize = 48.dp),
+            columns = GridCells.Adaptive(minSize = 100.dp),
             verticalArrangement = Arrangement.spacedBy(4.dp),
             horizontalArrangement = Arrangement.spacedBy(4.dp),
         ) {
@@ -128,14 +139,19 @@ fun DownloadingView(
             }
 
             items(items = (0 until totalPhotos - processedDownloadInfo.size).toList()) {
-                Box(
-                    modifier = Modifier
-                        .aspectRatio(1f)
-                        .background(ShimmerBrush(), boxShape)
-                )
+                ProgressShimmer(shimmerBrush, boxShape)
             }
         }
     }
+}
+
+@Composable
+private fun ProgressShimmer(shimmerBrush: Brush, boxShape: RoundedCornerShape) {
+    Box(
+        modifier = Modifier
+            .aspectRatio(1f)
+            .background(shimmerBrush, boxShape)
+    )
 }
 
 private fun getDownloadSpeed(downloadSpeedKb: Double): String {
@@ -147,6 +163,15 @@ private fun getDownloadSpeed(downloadSpeedKb: Double): String {
     val formattedSpeed = decimalFormat.format(downloadSpeedMb)
 
     return "($formattedSpeed MB/s)"
+}
+
+private fun getDownloadSpeedDisplay(downloadSpeedKb: Double): String {
+    val downloadSpeedMb = downloadSpeedKb / 1024
+    val roundedSpeedMb = (downloadSpeedMb).toInt()
+
+    return "|".repeat(roundedSpeedMb.coerceAtMost(5)) +
+            ".".repeat((5 - roundedSpeedMb).coerceIn(0..5)) +
+            if (downloadSpeedMb > 6) "+" else ""
 }
 
 @Preview(showBackground = true)

@@ -12,7 +12,16 @@ sealed class ProcessedDownloadInfo(val uri: String) {
     class Finished(val bitmap: ImageBitmap?, uri: String) : ProcessedDownloadInfo(uri)
 
     companion object {
-        fun PhotoDownloadInfo.toProcessedDownloadInfo(
+        fun List<PhotoDownloadInfo>.toProcessedDownloadInfo(
+            contentResolver: ContentResolver,
+            processedDownloadInfo: List<ProcessedDownloadInfo>,
+        ): List<ProcessedDownloadInfo> {
+            return this.map {
+                it.toProcessedDownloadInfo(contentResolver, processedDownloadInfo)
+            }
+        }
+
+        private fun PhotoDownloadInfo.toProcessedDownloadInfo(
             contentResolver: ContentResolver,
             processedDownloadInfo: List<ProcessedDownloadInfo>,
         ): ProcessedDownloadInfo {
@@ -28,7 +37,7 @@ sealed class ProcessedDownloadInfo(val uri: String) {
         private fun PhotoDownloadInfo.getExisting(
             processedDownloadInfo: List<ProcessedDownloadInfo>,
         ): Finished? {
-            return processedDownloadInfo.filterIsInstance<Finished>().find { it.uri == this.uri }
+            return processedDownloadInfo.filterIsInstance<Finished>().find { it.uri == this@getExisting.uri }
         }
 
         private fun PhotoDownloadInfo.generateBitmap(contentResolver: ContentResolver): Finished {

@@ -35,5 +35,10 @@ sealed interface States {
         val downloadSpeed: Kbps = Kbps(0.0),
     ) : States
 
-    data object ChangeSettings : States
+    data class ChangeSettings(
+        val settings: Settings,
+        val onRememberLastDownloadedPhotos: (Boolean) -> Unit,
+        val onDeleteAllPhotos: () -> Unit,
+        val onExitSettings: () -> Unit,
+    ) : States
 }

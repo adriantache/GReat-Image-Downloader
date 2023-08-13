@@ -1,6 +1,7 @@
 package com.example.greatimagedownloader.data.storage
 
 import android.content.ContentResolver
+import android.content.ContentUris
 import android.content.ContentValues
 import android.content.Context
 import android.net.Uri
@@ -32,22 +33,33 @@ private const val DEFAULT_MIME_TYPE = "image/jpg"
 private const val MIME_TYPE_VIDEO = "video"
 private const val MIN_SIZE_BYTES = 100
 private const val OKIO_MAX_BYTES = 8092L
+private const val LAST_PROGRESS_TIME = 300L
+
+private data class DownloadedFile(
+    val id: Long,
+    val name: String,
+)
 
 class FilesStorageImpl(
     private val context: Context,
     private val speedCalculator: SpeedCalculator = SpeedCalculatorImpl(),
 ) : FilesStorage {
     override fun getSavedPhotos(): List<String> {
+        return getSavedPhotoFiles().map { it.name }
+    }
+
+    private fun getSavedPhotoFiles(): List<DownloadedFile> {
         val selection = "${MediaStore.Files.FileColumns.RELATIVE_PATH} like ?"
         val selectionArgs = arrayOf("%$RICOH_PHOTOS_PATH%")
         val contentResolver = context.contentResolver
 
         val projection = arrayOf(
+            MediaStore.MediaColumns._ID,
             MediaStore.MediaColumns.TITLE,
             OpenableColumns.SIZE,
         )
 
-        val results = mutableListOf<String>()
+        val results = mutableListOf<DownloadedFile>()
 
         contentResolver.query(
             /* uri = */ MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
@@ -59,12 +71,13 @@ class FilesStorageImpl(
             if (cursor == null) return emptyList()
 
             while (cursor.moveToNext()) {
-                val title = cursor.getString(0)
-                val size = cursor.getLong(1)
+                val id = cursor.getLong(0)
+                val title = cursor.getString(1)
+                val size = cursor.getLong(2)
 
                 // TODO: return files to delete (size 51) instead
                 if (size > MIN_SIZE_BYTES) {
-                    results.add(title)
+                    results.add(DownloadedFile(id = id, name = title))
                 }
             }
         }
@@ -73,16 +86,21 @@ class FilesStorageImpl(
     }
 
     override fun getSavedMovies(): List<String> {
+        return getSavedMovieFiles().map { it.name }
+    }
+
+    private fun getSavedMovieFiles(): List<DownloadedFile> {
         val selection = "${MediaStore.Files.FileColumns.RELATIVE_PATH} like ?"
         val selectionArgs = arrayOf("%$RICOH_MOVIES_PATH%")
         val contentResolver = context.contentResolver
 
         val projection = arrayOf(
+            MediaStore.MediaColumns._ID,
             MediaStore.MediaColumns.TITLE,
             OpenableColumns.SIZE,
         )
 
-        val results = mutableListOf<String>()
+        val results = mutableListOf<DownloadedFile>()
 
         contentResolver.query(
             /* uri = */ MediaStore.Video.Media.EXTERNAL_CONTENT_URI,
@@ -94,12 +112,13 @@ class FilesStorageImpl(
             if (cursor == null) return emptyList()
 
             while (cursor.moveToNext()) {
-                val title = cursor.getString(0)
-                val size = cursor.getLong(1)
+                val id = cursor.getLong(0)
+                val title = cursor.getString(1)
+                val size = cursor.getLong(2)
 
                 // TODO: return files to delete (size 51) instead
                 if (size > MIN_SIZE_BYTES) {
-                    results.add(title)
+                    results.add(DownloadedFile(id = id, name = title))
                 }
             }
         }
@@ -137,7 +156,7 @@ class FilesStorageImpl(
                                 (totalBytesRead.toFloat() / fileSize * 100).roundToInt().coerceAtMost(99)
                             }
 
-                            if (System.currentTimeMillis() - lastProgressReportTime > 1000L) {
+                            if (System.currentTimeMillis() - lastProgressReportTime > LAST_PROGRESS_TIME) {
                                 emit(
                                     PhotoDownloadInfo(
                                         uri = imageUri,
@@ -179,6 +198,18 @@ class FilesStorageImpl(
             contentResolver = contentResolver,
             uri = Uri.parse(uri),
         )
+    }
+
+    override suspend fun deleteAll() {
+        getSavedPhotoFiles().forEach {
+            val uri = ContentUris.withAppendedId(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, it.id)
+            deleteMedia(uri.toString())
+        }
+
+        getSavedMovieFiles().forEach {
+            val uri = ContentUris.withAppendedId(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, it.id)
+            deleteMedia(uri.toString())
+        }
     }
 
     private fun getFileUri(

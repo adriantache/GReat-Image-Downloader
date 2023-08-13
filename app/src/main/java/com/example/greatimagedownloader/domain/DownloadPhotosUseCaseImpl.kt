@@ -24,7 +24,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 
-private const val CONNECT_TIMEOUT_MS = 30_000
+private const val CONNECT_TIMEOUT_MS = 10_000
 
 // TODO: add tests
 class DownloadPhotosUseCaseImpl(
@@ -37,6 +37,8 @@ class DownloadPhotosUseCaseImpl(
 
     @Suppress("kotlin:S6305")
     override val event: MutableStateFlow<Event<Events>?> = MutableStateFlow(null)
+
+    private val scope = CoroutineScope(dispatcher)
 
     private fun onInit() {
         state.value = RequestPermissions(::onPermissionsGranted)
@@ -54,7 +56,7 @@ class DownloadPhotosUseCaseImpl(
             ConnectWifi(
                 onCheckWifiDisabled = { wifiUtil.isWifiDisabled },
                 onConnect = {
-                    CoroutineScope(dispatcher).launch {
+                    scope.launch {
                         delay(CONNECT_TIMEOUT_MS)
 
                         if (state.value is ConnectWifi) {
@@ -84,7 +86,22 @@ class DownloadPhotosUseCaseImpl(
                     // TODO: add delete all photos
                     // TODO: add option to skip videos
                     // TODO: add option to download all folders with warning for timelapses
-                    state.value = ChangeSettings
+                    scope.launch {
+                        val settings = repository.getSettings()
+
+                        state.value = ChangeSettings(
+                            settings = settings,
+                            onRememberLastDownloadedPhotos = {
+                                scope.launch {
+                                    repository.saveSettings(
+                                        repository.getSettings().copy(rememberLastDownloadedPhotos = it)
+                                    )
+                                }
+                            },
+                            onDeleteAllPhotos = ::deleteAllPhotos,
+                            onExitSettings = ::connectToWifi,
+                        )
+                    }
                 }
             )
         } else {
@@ -93,6 +110,21 @@ class DownloadPhotosUseCaseImpl(
                 onSuggestWifiName = { wifiUtil.suggestNetwork() }
             )
         }
+    }
+
+    // TODO: ensure latest photo is saved by checking setting is enabled and there is data, otherwise return different event
+    private fun deleteAllPhotos() {
+        val confirmDeletionEvent = Events.ConfirmDeleteAllPhotos(
+            onConfirm = {
+                scope.launch {
+                    repository.deleteAll()
+
+                    connectToWifi()
+                }
+            },
+            onDismiss = { event.value = null },
+        )
+        event.value = Event(confirmDeletionEvent)
     }
 
     private fun onWifiCredentialsInput(details: WifiDetailsEntity) {
@@ -116,8 +148,16 @@ class DownloadPhotosUseCaseImpl(
     // TODO: add logic for when we delete already downloaded images and opt-out mechanism
     // TODO: add option to interrupt process, deleting current file in progress
     private fun getMedia() {
-        CoroutineScope(dispatcher).launch {
-            val mediaToDownload = getPhotosToDownload() ?: return@launch
+        scope.launch {
+            val availableMediaToDownload = getPhotosToDownload() ?: return@launch
+
+            val shouldOnlyDownloadRecent = repository.getSettings().rememberLastDownloadedPhotos == true
+
+            val mediaToDownload = if (shouldOnlyDownloadRecent) {
+                getOnlyRecentPhotos(availableMediaToDownload)
+            } else {
+                availableMediaToDownload
+            }
 
             val folderInfo = FolderInfo(mediaToDownload)
 
@@ -140,7 +180,7 @@ class DownloadPhotosUseCaseImpl(
 
         val downloadedPhotoUris = mutableMapOf<String, PhotoDownloadInfo>()
 
-        CoroutineScope(dispatcher).launch {
+        scope.launch {
             photosToDownload.forEachIndexed { index, photo ->
                 repository.downloadMediaToStorage(photo).collect { photoDownloadInfo ->
                     downloadedPhotoUris[photoDownloadInfo.name] = photoDownloadInfo
@@ -153,6 +193,8 @@ class DownloadPhotosUseCaseImpl(
                     )
                 }
             }
+
+            updateLatestDownloadedPhotos(photosToDownload, downloadedPhotoUris)
 
             disconnect(downloadedPhotoUris.count { it.value.downloadProgress == 100 })
         }
@@ -198,7 +240,7 @@ class DownloadPhotosUseCaseImpl(
                 }
             }
 
-            ChangeSettings,
+            is ChangeSettings,
             is ConnectWifi,
             GetPhotos,
             is Init,
@@ -209,5 +251,34 @@ class DownloadPhotosUseCaseImpl(
         }
 
         state.value = Init(::onInit)
+    }
+
+    private suspend fun updateLatestDownloadedPhotos(
+        photosToDownload: List<PhotoFile>,
+        downloadedPhotoUris: MutableMap<String, PhotoDownloadInfo>
+    ) {
+        // Make sure we don't count files that for whatever reason weren't downloaded.
+        val completedFiles = photosToDownload.filter {
+            downloadedPhotoUris[it.name]?.downloadProgress == 100
+        }
+
+        val lastFiles = completedFiles.groupBy { it.directory }
+            .mapValues { entry -> entry.value.maxBy { it.name } }
+
+        repository.saveLatestDownloadedPhotos(lastFiles.values.toList())
+    }
+
+    private suspend fun getOnlyRecentPhotos(availableMediaToDownload: List<PhotoFile>): List<PhotoFile> {
+        val latestDownloadedPhotos = repository.getLatestDownloadedPhotos()
+
+        if (latestDownloadedPhotos.isEmpty()) {
+            return availableMediaToDownload
+        }
+
+        return availableMediaToDownload.filter { currentFile ->
+            val latestPhoto = latestDownloadedPhotos.find { it.directory == currentFile.directory } ?: return@filter true
+
+            latestPhoto.name < currentFile.name
+        }
     }
 }

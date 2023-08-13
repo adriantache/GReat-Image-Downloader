@@ -1,5 +1,8 @@
 package com.example.greatimagedownloader.data.api.model
 
+import kotlinx.serialization.Serializable
+
+@Serializable
 data class RicohConfig(
     val errCode: Float?,
     val errMsg: String?,

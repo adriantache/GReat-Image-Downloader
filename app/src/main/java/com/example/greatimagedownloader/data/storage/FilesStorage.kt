@@ -15,4 +15,6 @@ interface FilesStorage {
     ): Flow<PhotoDownloadInfo>
 
     fun deleteMedia(uri: String)
+
+    suspend fun deleteAll()
 }

@@ -1,13 +1,16 @@
 package com.example.greatimagedownloader.data.api.model
 
 import com.example.greatimagedownloader.domain.data.model.PhotoFile
+import kotlinx.serialization.Serializable
 
+@Serializable
 data class PhotoInfo(
-    val errorCode: Float,
-    val errMsg: String,
+    val errCode: Float?,
+    val errMsg: String?,
     val dirs: List<Dir>,
 )
 
+@Serializable
 data class Dir(
     val name: String,
     val files: List<String>,

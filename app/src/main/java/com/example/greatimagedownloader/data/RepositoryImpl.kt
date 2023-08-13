@@ -2,11 +2,13 @@ package com.example.greatimagedownloader.data
 
 import com.example.greatimagedownloader.data.api.RicohApi
 import com.example.greatimagedownloader.data.storage.FilesStorage
+import com.example.greatimagedownloader.data.storage.PreferencesStorage
 import com.example.greatimagedownloader.data.storage.WifiStorage
 import com.example.greatimagedownloader.domain.data.Repository
 import com.example.greatimagedownloader.domain.data.model.PhotoDownloadInfo
 import com.example.greatimagedownloader.domain.data.model.PhotoFile
 import com.example.greatimagedownloader.domain.data.model.WifiDetails
+import com.example.greatimagedownloader.domain.model.Settings
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
@@ -20,6 +22,7 @@ import kotlinx.coroutines.withContext
 class RepositoryImpl(
     private val wifiStorage: WifiStorage,
     private val filesStorage: FilesStorage,
+    private val preferencesStorage: PreferencesStorage,
     private val ricohApi: RicohApi,
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
 ) : Repository {
@@ -48,6 +51,10 @@ class RepositoryImpl(
 
     override fun deleteMedia(uri: String) {
         filesStorage.deleteMedia(uri)
+    }
+
+    override suspend fun deleteAll() {
+        filesStorage.deleteAll()
     }
 
     override suspend fun getCameraPhotoList(): Result<List<PhotoFile>> {
@@ -87,5 +94,21 @@ class RepositoryImpl(
 
     override suspend fun shutDownCamera() {
         ricohApi.finish()
+    }
+
+    override suspend fun saveLatestDownloadedPhotos(photos: List<PhotoFile>) {
+        preferencesStorage.saveLatestDownloadedPhotos(photos)
+    }
+
+    override suspend fun getLatestDownloadedPhotos(): List<PhotoFile> {
+        return preferencesStorage.getLatestDownloadedPhotos()
+    }
+
+    override suspend fun saveSettings(settings: Settings) {
+        preferencesStorage.saveSettings(settings)
+    }
+
+    override suspend fun getSettings(): Settings {
+        return preferencesStorage.getSettings()
     }
 }

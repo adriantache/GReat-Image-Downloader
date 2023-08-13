@@ -65,7 +65,7 @@ class WifiUtilImpl(context: Context) : WifiUtil {
 
     override fun disconnectFromWifi() {
         // This is to stop the looping request for OnePlus & Xiaomi models.
-        connectivityManager.bindProcessToNetwork(null)
+//        connectivityManager.bindProcessToNetwork(null)
 
         status = DISCONNECTED
     }

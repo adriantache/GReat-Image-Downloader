@@ -6,4 +6,9 @@ sealed interface Events {
     data object CannotDownloadPhotos : Events
 
     data class SuccessfulDownload(val numDownloadedPhotos: Int) : Events
+
+    data class ConfirmDeleteAllPhotos(
+        val onConfirm: () -> Unit,
+        val onDismiss: () -> Unit,
+    ) : Events
 }

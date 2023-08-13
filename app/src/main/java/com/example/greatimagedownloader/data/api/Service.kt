@@ -1,16 +1,21 @@
 package com.example.greatimagedownloader.data.api
 
+import com.jakewharton.retrofit2.converter.kotlinx.serialization.asConverterFactory
+import kotlinx.serialization.json.Json
+import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import retrofit2.Retrofit
-import retrofit2.converter.moshi.MoshiConverterFactory
+
+private const val RICOH_BASE_URL = "http://192.168.0.1/"
 
 fun getApi(): RicohApi {
-    val okHttpClient = OkHttpClient.Builder()
-        .build()
+    val okHttpClient = OkHttpClient.Builder().build()
+    val contentType = "application/json".toMediaType()
+    val json = Json { ignoreUnknownKeys = true }
 
     val retrofit = Retrofit.Builder()
-        .baseUrl("http://192.168.0.1/")
-        .addConverterFactory(MoshiConverterFactory.create())
+        .baseUrl(RICOH_BASE_URL)
+        .addConverterFactory(json.asConverterFactory(contentType))
         .client(okHttpClient)
         .build()
 
