@@ -16,7 +16,6 @@ import com.example.greatimagedownloader.domain.model.States.RequestPermissions
 import com.example.greatimagedownloader.domain.model.States.RequestWifiCredentials
 import com.example.greatimagedownloader.domain.model.WifiDetailsEntity
 import com.example.greatimagedownloader.domain.utils.model.Event
-import com.example.greatimagedownloader.domain.utils.model.delay
 import com.example.greatimagedownloader.domain.wifi.WifiUtil
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
@@ -24,7 +23,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 
-private const val CONNECT_TIMEOUT_MS = 10_000
+private const val CONNECT_TIMEOUT_MS = 60_000
 
 // TODO: add tests
 class DownloadPhotosUseCaseImpl(
@@ -59,20 +58,17 @@ class DownloadPhotosUseCaseImpl(
             ConnectWifi(
                 onCheckWifiDisabled = { wifiUtil.isWifiDisabled },
                 onConnect = {
-                    scope.launch {
-                        delay(CONNECT_TIMEOUT_MS)
-
-                        if (state.value is ConnectWifi) {
-                            wifiUtil.disconnectFromWifi()
-                            state.value = Init(::onInit)
-                        }
-                    }
-
                     wifiUtil.connectToWifi(
                         wifiDetails = wifiDetails,
                         connectTimeoutMs = CONNECT_TIMEOUT_MS,
                         onWifiConnected = ::onConnectionSuccess,
-                        onWifiDisconnected = ::onConnectionLost
+                        onWifiDisconnected = ::onConnectionLost,
+                        onTimeout = {
+                            if (state.value is ConnectWifi) {
+                                wifiUtil.disconnectFromWifi()
+                                state.value = Init(::onInit)
+                            }
+                        }
                     )
                 },
                 onChangeWifiDetails = {

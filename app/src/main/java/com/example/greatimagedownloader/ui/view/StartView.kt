@@ -46,6 +46,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import com.example.greatimagedownloader.R
+import com.example.greatimagedownloader.ui.util.KeepScreenOn
 
 // TODO: rename this file and split it into a loading view and a start view
 // TODO: make some nice animations between the two states
@@ -133,6 +134,8 @@ fun StartView(
                     ),
                     label = "Background Animation"
                 )
+
+                KeepScreenOn()
 
                 Box(
                     modifier = Modifier.fillMaxWidth(),

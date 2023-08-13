@@ -8,6 +8,7 @@ interface WifiUtil {
     fun connectToWifi(
         wifiDetails: WifiDetailsEntity,
         connectTimeoutMs: Int,
+        onTimeout: () -> Unit,
         onWifiConnected: () -> Unit,
         onWifiDisconnected: () -> Unit,
     )

@@ -179,6 +179,7 @@ class FilesStorageImpl(
                             )
                         )
                     } catch (e: IOException) {
+                        // TODO: handle other exceptions, let usecase react to them
                         // TODO: fix this not working
                         deleteInvalidFile(contentResolver, imageUri)
                         return@flow

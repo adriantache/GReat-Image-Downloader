@@ -10,11 +10,26 @@ import android.net.wifi.WifiManager
 import android.net.wifi.WifiNetworkSpecifier
 import android.os.Build
 import com.example.greatimagedownloader.domain.model.WifiDetailsEntity
+import com.example.greatimagedownloader.domain.utils.model.delay
 import com.example.greatimagedownloader.domain.wifi.WifiUtil
 import com.example.greatimagedownloader.platform.wifi.WifiStatus.*
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 
-class WifiUtilImpl(context: Context) : WifiUtil {
+private const val CONNECT_RETRY_INTERVAL = 5_000
+private const val SCAN_WAIT_MS = 5_000
+
+class WifiUtilImpl(
+    context: Context,
+    dispatcher: CoroutineDispatcher = Dispatchers.IO,
+) : WifiUtil {
+    private val scope = CoroutineScope(dispatcher)
+
     private var status: WifiStatus = DISCONNECTED
+
+    private var wifiScanRateLimiter = WifiScanRateLimiter()
 
     override val isWifiDisabled: Boolean
         get() = !wifiManager.isWifiEnabled || wifiManager.wifiState != WifiManager.WIFI_STATE_ENABLED
@@ -25,16 +40,18 @@ class WifiUtilImpl(context: Context) : WifiUtil {
     override fun connectToWifi(
         wifiDetails: WifiDetailsEntity,
         connectTimeoutMs: Int,
+        onTimeout: () -> Unit,
         onWifiConnected: () -> Unit,
         onWifiDisconnected: () -> Unit,
     ) {
         scanForWifi()
 
+        val connectionAttemptTime = System.currentTimeMillis()
+
         val wifiNetworkSpecifier = WifiNetworkSpecifier.Builder()
             .setSsid(wifiDetails.ssid!!)
             .setWpa2Passphrase(wifiDetails.password!!)
             .build()
-
         val networkRequest = NetworkRequest.Builder()
             .addTransportType(NetworkCapabilities.TRANSPORT_WIFI)
             .setNetworkSpecifier(wifiNetworkSpecifier)
@@ -60,12 +77,23 @@ class WifiUtilImpl(context: Context) : WifiUtil {
             }
         }
 
-        connectivityManager.requestNetwork(networkRequest, networkCallback, connectTimeoutMs)
+        scope.launch {
+            while (status == SCANNING) {
+                if (System.currentTimeMillis() - connectionAttemptTime >= connectTimeoutMs) {
+                    onTimeout()
+                    return@launch
+                }
+
+                connectivityManager.requestNetwork(networkRequest, networkCallback, CONNECT_RETRY_INTERVAL)
+
+                delay(CONNECT_RETRY_INTERVAL)
+            }
+        }
     }
 
     override fun disconnectFromWifi() {
         // This is to stop the looping request for OnePlus & Xiaomi models.
-//        connectivityManager.bindProcessToNetwork(null)
+        connectivityManager.bindProcessToNetwork(null)
 
         status = DISCONNECTED
     }
@@ -85,14 +113,29 @@ class WifiUtilImpl(context: Context) : WifiUtil {
             ssid.replace("\"", "")
         }
 
+        status = DISCONNECTED
+
         return scanResults.find { it.startsWith("GR_") }.orEmpty()
     }
 
     private fun scanForWifi() {
         status = SCANNING
 
-        @Suppress("DEPRECATION")
-        wifiManager.startScan()
+        scope.launch {
+            while (status == SCANNING) {
+                val now = System.currentTimeMillis()
+
+                // We currently cannot scan more often than 4 times per 2 minutes.
+                if (wifiScanRateLimiter.canScan) {
+                    @Suppress("DEPRECATION")
+                    wifiManager.startScan()
+
+                    delay(wifiScanRateLimiter.getScanDelay())
+                } else {
+                    delay(SCAN_WAIT_MS)
+                }
+            }
+        }
     }
 }
 

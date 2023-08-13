@@ -5,5 +5,5 @@ import com.example.greatimagedownloader.platform.wifi.WifiUtilImpl
 import org.koin.dsl.module
 
 val platformModule = module {
-    factory<WifiUtil> { WifiUtilImpl(get()) }
+    single<WifiUtil> { WifiUtilImpl(get()) }
 }
