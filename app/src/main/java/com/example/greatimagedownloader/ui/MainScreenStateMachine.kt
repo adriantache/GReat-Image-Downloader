@@ -48,13 +48,17 @@ fun MainScreenStateMachine(
     viewModel: MainScreenViewModel = getViewModel(),
 ) {
     val stateValue by viewModel.downloadPhotosState.collectAsState()
-    val eventValue by viewModel.downloadPhotosEvents.collectAsState()
+    val event by viewModel.downloadPhotosEvents.collectAsState()
 
     val snackbarHostState = remember { SnackbarHostState() }
 
     Scaffold(
         snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
     ) { padding ->
+        event?.value?.let {
+            HandleEvent(it, snackbarHostState)
+        }
+
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -62,10 +66,6 @@ fun MainScreenStateMachine(
             verticalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterVertically),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            eventValue?.value?.let {
-                HandleEvent(it, snackbarHostState)
-            }
-
             when (val state = stateValue) {
                 is Init -> state.onInit()
 
@@ -103,6 +103,8 @@ fun MainScreenStateMachine(
                     totalPhotos = state.totalPhotos,
                     photoDownloadInfo = state.downloadedPhotos,
                     downloadSpeed = state.downloadSpeed,
+                    isStopping = state.isStopping,
+                    onClose = state.onStopDownloading,
                 )
 
                 is ChangeSettings -> ChangeSettingsScreen(state)
@@ -118,17 +120,17 @@ private fun HandleEvent(
 ) {
     LaunchedEffect(event) {
         when (event) {
+            is SuccessfulDownload -> snackbarHostState.showSnackbar("Downloaded ${event.numDownloadedPhotos} photos.")
+
             CannotDownloadPhotos -> Unit
             InvalidWifiInput -> Unit
             is Events.ConfirmDeleteAllPhotos -> Unit
-            is SuccessfulDownload -> snackbarHostState.showSnackbar("Downloaded ${event.numDownloadedPhotos} photos.")
         }
     }
 
     when (event) {
         InvalidWifiInput -> Text(stringResource(R.string.error_invalid_wifi_input))
         CannotDownloadPhotos -> Text(stringResource(R.string.error_cannot_get_photos))
-        is SuccessfulDownload -> Unit
         is Events.ConfirmDeleteAllPhotos -> AlertDialog(
             onDismissRequest = event.onDismiss,
             title = { Text("Are you sure you want to delete this?") },
@@ -147,5 +149,7 @@ private fun HandleEvent(
                 }
             },
         )
+
+        is SuccessfulDownload -> Unit
     }
 }

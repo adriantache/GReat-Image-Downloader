@@ -6,6 +6,8 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.requiredSize
@@ -42,35 +44,49 @@ fun DownloadingView(
     totalPhotos: Int,
     photoDownloadInfo: List<PhotoDownloadInfo>,
     downloadSpeed: Kbps,
+    isStopping: Boolean,
+    onClose: () -> Unit,
 ) {
     val boxShape = RoundedCornerShape(8.dp)
     val shimmerBrush = ShimmerBrush()
 
+    val downloadSpeedDisplay = remember(downloadSpeed) {
+        getDownloadSpeed(downloadSpeed.value)
+    }
+    val downloadSpeedImage = remember(downloadSpeed) {
+        getDownloadSpeedDisplay(downloadSpeed.value)
+    }
+
     KeepScreenOn()
 
     Column(
-        modifier = modifier.padding(16.dp),
+        modifier = modifier
+            .fillMaxSize()
+            .padding(16.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center,
     ) {
-        val downloadSpeedDisplay = remember(downloadSpeed) {
-            getDownloadSpeed(downloadSpeed.value)
-        }
-        val downloadSpeedImage = remember(downloadSpeed) {
-            getDownloadSpeedDisplay(downloadSpeed.value)
+        CloseIcon(onClose)
+
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(MaterialTheme.colorScheme.primary, boxShape)
+                .padding(16.dp)
+        ) {
+            Text(
+                modifier = Modifier.fillMaxWidth(),
+                text = "Downloading photos: ${currentPhoto}/${totalPhotos}" +
+                        "\n" +
+                        downloadSpeedDisplay +
+                        "\n" +
+                        downloadSpeedImage,
+                style = MaterialTheme.typography.titleMedium,
+                textAlign = TextAlign.Center,
+                color = MaterialTheme.colorScheme.onPrimary,
+            )
         }
 
-        Text(
-            text = "Downloading photos: ${currentPhoto}/${totalPhotos}" +
-                    "\n" +
-                    downloadSpeedDisplay +
-                    "\n" +
-                    downloadSpeedImage,
-            style = MaterialTheme.typography.titleMedium,
-            textAlign = TextAlign.Center,
-        )
-
-        Spacer(Modifier.height(4.dp))
+        Spacer(Modifier.height(16.dp))
 
         LinearProgressIndicator(
             progress = currentPhoto.toFloat() / totalPhotos
@@ -121,8 +137,10 @@ fun DownloadingView(
                 }
             }
 
-            items(items = (0 until totalPhotos - photoDownloadInfo.size).toList()) {
-                ProgressShimmer(shimmerBrush, boxShape)
+            if (!isStopping) {
+                items(items = (0 until totalPhotos - photoDownloadInfo.size).toList()) {
+                    ProgressShimmer(shimmerBrush, boxShape)
+                }
             }
         }
     }
@@ -165,5 +183,7 @@ private fun DownloadingViewPreview() {
         totalPhotos = 100,
         photoDownloadInfo = emptyList(),
         downloadSpeed = Kbps(21.22),
+        isStopping = false,
+        onClose = {},
     )
 }

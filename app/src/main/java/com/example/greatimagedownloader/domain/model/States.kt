@@ -33,6 +33,8 @@ sealed interface States {
         val currentPhotoNum: Int = 0,
         val totalPhotos: Int,
         val downloadSpeed: Kbps = Kbps(0.0),
+        val isStopping: Boolean = false,
+        val onStopDownloading: () -> Unit,
     ) : States
 
     data class ChangeSettings(

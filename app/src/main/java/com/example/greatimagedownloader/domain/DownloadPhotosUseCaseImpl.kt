@@ -40,6 +40,9 @@ class DownloadPhotosUseCaseImpl(
 
     private val scope = CoroutineScope(dispatcher)
 
+    // Used to interrupt download without corrupting current file.
+    private var continueDownload = true
+
     private fun onInit() {
         state.value = RequestPermissions(::onPermissionsGranted)
     }
@@ -176,12 +179,19 @@ class DownloadPhotosUseCaseImpl(
     }
 
     private fun downloadMedia(photosToDownload: List<PhotoFile>) {
-        state.value = DownloadPhotos(totalPhotos = photosToDownload.size)
+        state.value = DownloadPhotos(totalPhotos = photosToDownload.size, onStopDownloading = ::onStopDownloading)
 
         val downloadedPhotoUris = mutableMapOf<String, PhotoDownloadInfo>()
 
         scope.launch {
-            photosToDownload.forEachIndexed { index, photo ->
+            for (index in photosToDownload.indices) {
+                val photo = photosToDownload[index]
+
+                if (!continueDownload) {
+                    continueDownload = true
+                    break
+                }
+
                 repository.downloadMediaToStorage(photo).collect { photoDownloadInfo ->
                     downloadedPhotoUris[photoDownloadInfo.name] = photoDownloadInfo
 
@@ -190,6 +200,8 @@ class DownloadPhotosUseCaseImpl(
                         totalPhotos = photosToDownload.size,
                         downloadedPhotos = downloadedPhotoUris.values.toList(),
                         downloadSpeed = photoDownloadInfo.downloadSpeed,
+                        onStopDownloading = ::onStopDownloading,
+                        isStopping = !continueDownload,
                     )
                 }
             }
@@ -280,5 +292,11 @@ class DownloadPhotosUseCaseImpl(
 
             latestPhoto.name < currentFile.name
         }
+    }
+
+    private fun onStopDownloading() {
+        if (!continueDownload) return
+
+        continueDownload = false
     }
 }
