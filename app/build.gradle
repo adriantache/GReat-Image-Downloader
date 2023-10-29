@@ -11,6 +11,7 @@ android {
     defaultConfig {
         applicationId "com.example.greatimagedownloader"
         minSdk 29
+        targetSdk 34
         versionCode 1
         versionName "1.0"
 
@@ -20,8 +21,23 @@ android {
         }
     }
 
+    def localPropertiesFile = new File(rootDir, "local.properties")
+    def localProperties = new Properties()
+    localProperties.load(new FileInputStream(localPropertiesFile))
+
+    signingConfigs {
+        release {
+            storeFile file(localProperties['keystorePath'])
+            storePassword localProperties['keystorePassword']
+            keyAlias localProperties['keyAlias']
+            keyPassword localProperties['keyPassword']
+        }
+        // You can define more signing configurations here if needed
+    }
+
     buildTypes {
         release {
+            signingConfig signingConfigs.release
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
@@ -40,7 +56,7 @@ android {
     }
 
     composeOptions {
-        kotlinCompilerExtensionVersion '1.5.1'
+        kotlinCompilerExtensionVersion '1.5.3'
     }
 
     packagingOptions {
@@ -51,11 +67,11 @@ android {
 }
 
 dependencies {
-    implementation "androidx.core:core-ktx:1.10.1"
-    implementation "androidx.lifecycle:lifecycle-runtime-ktx:2.6.1"
-    implementation "androidx.activity:activity-compose:1.7.2"
+    implementation "androidx.core:core-ktx:1.12.0"
+    implementation "androidx.lifecycle:lifecycle-runtime-ktx:2.6.2"
+    implementation "androidx.activity:activity-compose:1.8.0"
 
-    implementation platform("androidx.compose:compose-bom:2023.08.00")
+    implementation platform("androidx.compose:compose-bom:2023.09.02")
     implementation "androidx.compose.foundation:foundation"
     implementation "androidx.compose.ui:ui"
     implementation "androidx.compose.ui:ui-graphics"
@@ -65,9 +81,12 @@ dependencies {
     implementation "io.insert-koin:koin-android:3.3.3"
     implementation "io.insert-koin:koin-androidx-compose:3.4.2"
 
-    implementation "com.google.accompanist:accompanist-permissions:0.29.1-alpha"
+    implementation "com.google.accompanist:accompanist-permissions:0.33.0-alpha"
 
     implementation("io.coil-kt:coil-compose:2.4.0")
+
+    implementation "androidx.glance:glance-appwidget:1.0.0"
+    implementation "androidx.glance:glance-material3:1.0.0"
 
     implementation "com.squareup.retrofit2:retrofit:2.9.0"
     implementation("com.jakewharton.retrofit:retrofit2-kotlinx-serialization-converter:1.0.0")

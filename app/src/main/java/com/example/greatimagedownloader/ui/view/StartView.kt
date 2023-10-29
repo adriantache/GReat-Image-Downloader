@@ -104,7 +104,8 @@ fun StartView(
                     Icon(
                         painterResource(id = R.drawable.baseline_settings_24),
                         contentDescription = null,
-                        modifier = Modifier.requiredSize(24.dp)
+                        modifier = Modifier.requiredSize(24.dp),
+                        tint = MaterialTheme.colorScheme.onPrimary,
                     )
                 }
             }

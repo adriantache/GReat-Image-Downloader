@@ -1,5 +1,6 @@
 package com.example.greatimagedownloader.ui.view
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -22,10 +23,12 @@ fun SettingsRow(
     primaryText: String,
     secondaryText: String? = null,
     initialValue: Boolean? = null,
-    onSelect: (Boolean) -> Unit,
+    onSelect: () -> Unit,
 ) {
     Row(
-        modifier = modifier.fillMaxWidth(),
+        modifier = modifier
+            .fillMaxWidth()
+            .clickable { onSelect() },
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(modifier = Modifier.weight(1f)) {
@@ -45,7 +48,7 @@ fun SettingsRow(
             }
         }
 
-        Checkbox(checked = initialValue ?: false, onCheckedChange = onSelect)
+        Checkbox(checked = initialValue ?: false, onCheckedChange = { onSelect() })
     }
 }
 

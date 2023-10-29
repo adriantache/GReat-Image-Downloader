@@ -17,6 +17,7 @@ import androidx.compose.ui.unit.dp
 fun PermissionsView(
     isLocationPermissionGranted: Boolean,
     isPhotosPermissionGranted: Boolean,
+    isNotificationsPermissionGranted: Boolean,
     onRequestPermissions: () -> Unit,
 ) {
     Column(
@@ -43,6 +44,13 @@ fun PermissionsView(
             isGranted = isPhotosPermissionGranted,
         )
 
+        Spacer(Modifier.height(8.dp))
+
+        PermissionsRowView(
+            text = "Show notifications - for the service that downloads the files",
+            isGranted = isNotificationsPermissionGranted,
+        )
+
         Spacer(Modifier.height(16.dp))
 
         Button(onClick = onRequestPermissions) {
@@ -57,5 +65,6 @@ private fun PermissionsViewPreview() {
     PermissionsView(
         isLocationPermissionGranted = true,
         isPhotosPermissionGranted = false,
+        isNotificationsPermissionGranted = false,
     ) {}
 }

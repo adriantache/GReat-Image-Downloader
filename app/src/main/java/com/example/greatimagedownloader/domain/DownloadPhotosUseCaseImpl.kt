@@ -32,6 +32,7 @@ class DownloadPhotosUseCaseImpl(
     private val dispatcher: CoroutineDispatcher = Dispatchers.IO,
 ) : DownloadPhotosUseCase {
     @Suppress("kotlin:S6305")
+    @get:Synchronized
     override val state: MutableStateFlow<States> = MutableStateFlow(Init(onInit = ::onInit))
 
     @Suppress("kotlin:S6305")
@@ -54,59 +55,65 @@ class DownloadPhotosUseCaseImpl(
     private fun connectToWifi() {
         val wifiDetails = repository.getWifiDetails().toEntity()
 
-        state.value = if (wifiDetails.isValid) {
-            ConnectWifi(
-                onCheckWifiDisabled = { wifiUtil.isWifiDisabled },
-                onConnect = {
-                    wifiUtil.connectToWifi(
-                        wifiDetails = wifiDetails,
-                        connectTimeoutMs = CONNECT_TIMEOUT_MS,
-                        onWifiConnected = ::onConnectionSuccess,
-                        onWifiDisconnected = ::onConnectionLost,
-                        onTimeout = {
-                            if (state.value is ConnectWifi) {
-                                wifiUtil.disconnectFromWifi()
-                                state.value = Init(::onInit)
-                            }
-                        }
-                    )
-                },
-                onChangeWifiDetails = {
-                    state.value = RequestWifiCredentials(
-                        onWifiCredentialsInput = { onWifiCredentialsInput(it.toEntity()) },
-                        onSuggestWifiName = { wifiUtil.suggestNetwork() }
-                    )
-
-                },
-                onAdjustSettings = {
-                    // TODO: add functionalities and data to this use case
-                    // TODO: add change wifi
-                    // TODO: add remember last download
-                    // TODO: add delete all photos
-                    // TODO: add option to skip videos
-                    // TODO: add option to download all folders with warning for timelapses
-                    scope.launch {
-                        val settings = repository.getSettings()
-
-                        state.value = ChangeSettings(
-                            settings = settings,
-                            onRememberLastDownloadedPhotos = {
-                                scope.launch {
-                                    repository.saveSettings(
-                                        repository.getSettings().copy(rememberLastDownloadedPhotos = it)
-                                    )
-                                }
-                            },
-                            onDeleteAllPhotos = ::deleteAllPhotos,
-                            onExitSettings = ::connectToWifi,
-                        )
-                    }
-                }
-            )
-        } else {
-            RequestWifiCredentials(
+        if (!wifiDetails.isValid) {
+            state.value = RequestWifiCredentials(
                 onWifiCredentialsInput = { onWifiCredentialsInput(it.toEntity()) },
                 onSuggestWifiName = { wifiUtil.suggestNetwork() }
+            )
+
+            return
+        }
+
+        state.value = ConnectWifi(
+            onCheckWifiDisabled = { wifiUtil.isWifiDisabled },
+            onConnect = {
+                wifiUtil.connectToWifi(
+                    wifiDetails = wifiDetails,
+                    connectTimeoutMs = CONNECT_TIMEOUT_MS,
+                    onWifiConnected = ::onConnectionSuccess,
+                    onWifiDisconnected = ::onConnectionLost,
+                    onTimeout = {
+                        if (state.value is ConnectWifi) {
+                            wifiUtil.disconnectFromWifi()
+                            state.value = Init(::onInit)
+                        }
+                    }
+                )
+            },
+            onChangeWifiDetails = {
+                state.value = RequestWifiCredentials(
+                    onWifiCredentialsInput = { onWifiCredentialsInput(it.toEntity()) },
+                    onSuggestWifiName = { wifiUtil.suggestNetwork() }
+                )
+
+            },
+            onAdjustSettings = ::openSettings,
+        )
+    }
+
+    private fun openSettings() {
+        // TODO: add functionalities and data to this use case
+        // TODO: add change wifi
+        // TODO: add remember last download
+        // TODO: add delete all photos
+        // TODO: add option to skip videos
+        // TODO: add option to download all folders with warning for timelapses
+        scope.launch {
+            state.value = ChangeSettings(
+                settings = repository.getSettings(),
+                onRememberLastDownloadedPhotos = {
+                    scope.launch {
+                        val settings = repository.getSettings()
+                        val newSettings = settings.copy(
+                            rememberLastDownloadedPhotos = settings.rememberLastDownloadedPhotos?.not() ?: true
+                        )
+
+                        repository.saveSettings(newSettings)
+                        openSettings()
+                    }
+                },
+                onDeleteAllPhotos = ::deleteAllPhotos,
+                onExitSettings = ::connectToWifi,
             )
         }
     }
@@ -263,7 +270,7 @@ class DownloadPhotosUseCaseImpl(
 
     private suspend fun updateLatestDownloadedPhotos(
         photosToDownload: List<PhotoFile>,
-        downloadedPhotoUris: MutableMap<String, PhotoDownloadInfo>
+        downloadedPhotoUris: MutableMap<String, PhotoDownloadInfo>,
     ) {
         // Make sure we don't count files that for whatever reason weren't downloaded.
         val completedFiles = photosToDownload.filter {

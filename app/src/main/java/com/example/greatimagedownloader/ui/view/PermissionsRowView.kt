@@ -22,7 +22,7 @@ fun PermissionsRowView(
     modifier: Modifier = Modifier,
     text: String,
     isGranted: Boolean,
-    icon: @Composable () -> Unit = { getDefaultIcon(isGranted) },
+    icon: @Composable () -> Unit = { DefaultIcon(isGranted) },
 ) {
     Row(
         modifier = modifier
@@ -47,7 +47,7 @@ fun PermissionsRowView(
 }
 
 @Composable
-private fun getDefaultIcon(isEnabled: Boolean) {
+private fun DefaultIcon(isEnabled: Boolean) {
     val icon = if (isEnabled) {
         android.R.drawable.button_onoff_indicator_on
     } else {

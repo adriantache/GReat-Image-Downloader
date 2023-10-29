@@ -21,8 +21,8 @@ class WifiScanRateLimiter {
         removeStaleEntries()
 
         val delay = when {
-            scanTimes.size < 2 -> 15_000
-            scanTimes.size == 3 -> 30_000
+            scanTimes.size < 2 -> 30_000
+            scanTimes.size == 3 -> 45_000
             else -> 60_000
         }
 

@@ -1,5 +1,6 @@
 package com.example.greatimagedownloader.ui
 
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -52,6 +53,13 @@ fun MainScreenStateMachine(
 
     val snackbarHostState = remember { SnackbarHostState() }
 
+    LaunchedEffect(stateValue) {
+        when (val state = stateValue) {
+            is Init -> state.onInit()
+            else -> Unit
+        }
+    }
+
     Scaffold(
         snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
     ) { padding ->
@@ -66,48 +74,51 @@ fun MainScreenStateMachine(
             verticalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterVertically),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            when (val state = stateValue) {
-                is Init -> state.onInit()
+            AnimatedContent(stateValue, label = "stateMachineAnimation") { state ->
+                when (state) {
+                    is Init -> Unit
 
-                is RequestPermissions -> PermissionsRequester(
-                    onPermissionsGranted = state.onPermissionsGranted
-                ) { isLocationPermissionGranted, isPhotosPermissionGranted, onRequestPermissions ->
-                    PermissionsView(
-                        isLocationPermissionGranted = isLocationPermissionGranted,
-                        isPhotosPermissionGranted = isPhotosPermissionGranted,
-                        onRequestPermissions = onRequestPermissions,
+                    is RequestPermissions -> PermissionsRequester(
+                        onPermissionsGranted = state.onPermissionsGranted
+                    ) { isLocationPermissionGranted, isPhotosPermissionGranted, isNotificationsPermissionGranted, onRequestPermissions ->
+                        PermissionsView(
+                            isLocationPermissionGranted = isLocationPermissionGranted,
+                            isPhotosPermissionGranted = isPhotosPermissionGranted,
+                            isNotificationsPermissionGranted = isNotificationsPermissionGranted,
+                            onRequestPermissions = onRequestPermissions,
+                        )
+                    }
+
+                    is RequestWifiCredentials -> WifiInputView(
+                        onWifiCredentialsInput = state.onWifiCredentialsInput,
+                        onSuggestWifiName = state.onSuggestWifiName,
                     )
+
+                    is ConnectWifi -> StartView(
+                        onCheckWifiDisabled = state.onCheckWifiDisabled,
+                        onConnect = state.onConnect,
+                        onChangeWifiDetails = state.onChangeWifiDetails,
+                        onAdjustSettings = state.onAdjustSettings,
+                    )
+
+                    GetPhotos -> SyncView()
+
+                    is States.SelectFolders -> SelectFoldersView(
+                        folderInfo = state.folderInfo,
+                        onFoldersSelect = state.onFoldersSelect,
+                    )
+
+                    is DownloadPhotos -> DownloadingView(
+                        currentPhoto = state.currentPhotoNum,
+                        totalPhotos = state.totalPhotos,
+                        photoDownloadInfo = state.downloadedPhotos,
+                        downloadSpeed = state.downloadSpeed,
+                        isStopping = state.isStopping,
+                        onClose = state.onStopDownloading,
+                    )
+
+                    is ChangeSettings -> ChangeSettingsScreen(state)
                 }
-
-                is RequestWifiCredentials -> WifiInputView(
-                    onWifiCredentialsInput = state.onWifiCredentialsInput,
-                    onSuggestWifiName = state.onSuggestWifiName,
-                )
-
-                is ConnectWifi -> StartView(
-                    onCheckWifiDisabled = state.onCheckWifiDisabled,
-                    onConnect = state.onConnect,
-                    onChangeWifiDetails = state.onChangeWifiDetails,
-                    onAdjustSettings = state.onAdjustSettings,
-                )
-
-                GetPhotos -> SyncView()
-
-                is States.SelectFolders -> SelectFoldersView(
-                    folderInfo = state.folderInfo,
-                    onFoldersSelect = state.onFoldersSelect,
-                )
-
-                is DownloadPhotos -> DownloadingView(
-                    currentPhoto = state.currentPhotoNum,
-                    totalPhotos = state.totalPhotos,
-                    photoDownloadInfo = state.downloadedPhotos,
-                    downloadSpeed = state.downloadSpeed,
-                    isStopping = state.isStopping,
-                    onClose = state.onStopDownloading,
-                )
-
-                is ChangeSettings -> ChangeSettingsScreen(state)
             }
         }
     }

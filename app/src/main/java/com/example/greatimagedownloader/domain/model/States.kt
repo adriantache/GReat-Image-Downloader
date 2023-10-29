@@ -39,7 +39,7 @@ sealed interface States {
 
     data class ChangeSettings(
         val settings: Settings,
-        val onRememberLastDownloadedPhotos: (Boolean) -> Unit,
+        val onRememberLastDownloadedPhotos: () -> Unit,
         val onDeleteAllPhotos: () -> Unit,
         val onExitSettings: () -> Unit,
     ) : States
