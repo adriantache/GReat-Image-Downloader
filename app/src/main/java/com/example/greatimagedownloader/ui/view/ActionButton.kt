@@ -18,6 +18,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.painter.Painter
@@ -38,6 +39,7 @@ fun ActionButton(
     Box(
         modifier = Modifier
             .requiredSize(200.dp)
+            .clip(CircleShape)
             .conditional(onClick != null) {
                 clickable(
                     enabled = true,
