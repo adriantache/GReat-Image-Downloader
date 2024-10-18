@@ -69,7 +69,7 @@ fun WifiInputView(
             modifier = Modifier.padding(horizontal = 64.dp),
             text = stringResource(R.string.wifi_details_hint),
             textAlign = TextAlign.Center,
-            style = MaterialTheme.typography.titleSmall
+            style = MaterialTheme.typography.titleSmall,
         )
 
         Spacer(modifier = Modifier.height(8.dp))
@@ -77,6 +77,7 @@ fun WifiInputView(
         TextField(
             value = wifiName,
             onValueChange = { wifiName = it },
+            singleLine = true,
             label = { Text("SSID") },
             trailingIcon = {
                 val iconSize = 28.dp
@@ -100,6 +101,7 @@ fun WifiInputView(
 
         TextField(
             value = wifiPass,
+            singleLine = true,
             onValueChange = { wifiPass = it },
             label = { Text("Password") }
         )
