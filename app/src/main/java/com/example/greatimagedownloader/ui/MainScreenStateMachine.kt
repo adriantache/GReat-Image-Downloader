@@ -42,11 +42,11 @@ import com.example.greatimagedownloader.ui.view.SelectFoldersView
 import com.example.greatimagedownloader.ui.view.StartView
 import com.example.greatimagedownloader.ui.view.SyncView
 import com.example.greatimagedownloader.ui.view.WifiInputView
-import org.koin.androidx.compose.getViewModel
+import org.koin.androidx.compose.koinViewModel
 
 @Composable
 fun MainScreenStateMachine(
-    viewModel: MainScreenViewModel = getViewModel(),
+    viewModel: MainScreenViewModel = koinViewModel(),
 ) {
     val stateValue by viewModel.downloadPhotosState.collectAsState()
     val event by viewModel.downloadPhotosEvents.collectAsState()
