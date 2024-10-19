@@ -26,12 +26,16 @@ class SpeedCalculatorImplTest {
 
     @Test
     fun `getAverageSpeed, big dataset`() {
-        repeat(20000) {
-            speedCalculator.registerData(1024 * 1000, it * 100L)
+        val datasetSize = 20000
+        val delayPerSample = 100L
+
+        repeat(datasetSize) {
+            speedCalculator.registerData(1024 * 1000, it * delayPerSample)
         }
 
-        val result = speedCalculator.getAverageSpeedKbps(5000L)
+        val endTime = datasetSize * delayPerSample
+        val result = speedCalculator.getAverageSpeedKbps(currentTime = endTime)
 
-        assertThat(result).isEqualTo(10000.0)
+        assertThat(result).isEqualTo(12250.0)
     }
 }
