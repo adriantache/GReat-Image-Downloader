@@ -1,5 +1,8 @@
 # GReat-Image-Downloader
-An app that connects to a Ricoh GR iii (or iiix) and downloads all images that aren't already on the device.
+
+An app that connects to a Ricoh GR III (or IIIx) and downloads all images that aren't already on the device.
+
+![tests workflow](https://github.com/adriantache/GReat-Image-Downloader/actions/workflows/android.yml/badge.svg)
 
 # Usage
 To use the app, just enter the wifi credentials from your camera and the app will scan your `Pictures / Image Sync` folder for images you've already downloaded with the official app, after which it will download them all and finally shut down the camera to save battery.
