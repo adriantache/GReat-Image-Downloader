@@ -131,7 +131,7 @@ fun DownloadingView(
 
         Spacer(Modifier.height(16.dp))
 
-        LinearProgressIndicator(progress = { currentPhoto.toFloat() / totalPhotos })
+        LinearProgressIndicator(progress = { if (totalPhotos == 0) 0f else currentPhoto.toFloat() / totalPhotos })
 
         Spacer(Modifier.height(16.dp))
 
