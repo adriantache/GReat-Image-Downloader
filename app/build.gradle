@@ -28,7 +28,7 @@ android {
 
     signingConfigs {
         release {
-            storeFile file(localProperties['keystorePath'])
+            storeFile = file("../keystore.jks")
             storePassword localProperties['keystorePassword']
             keyAlias localProperties['keyAlias']
             keyPassword localProperties['keyPassword']
