@@ -20,16 +20,17 @@ import com.example.greatimagedownloader.domain.wifi.WifiUtil
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
-
-private const val CONNECT_TIMEOUT_MS = 60_000
+import kotlin.time.Duration.Companion.seconds
 
 // TODO: add tests
 class DownloadPhotosUseCaseImpl(
     private val repository: Repository,
     private val wifiUtil: WifiUtil,
-    private val dispatcher: CoroutineDispatcher = Dispatchers.IO,
+    dispatcher: CoroutineDispatcher = Dispatchers.IO,
 ) : DownloadPhotosUseCase {
     @Suppress("kotlin:S6305")
     @get:Synchronized
@@ -43,6 +44,9 @@ class DownloadPhotosUseCaseImpl(
     // Used to interrupt download without corrupting current file.
     private var continueDownload = true
 
+    // Used to stop the wifi scan timeout.
+    private var scanningJob: Job? = null
+
     private fun onInit() {
         state.value = RequestPermissions(::onPermissionsGranted)
     }
@@ -52,7 +56,10 @@ class DownloadPhotosUseCaseImpl(
     }
 
     // TODO: check if wifi is enabled first and show error message which redirects to wifi settings
-    private fun connectToWifi() {
+    private fun connectToWifi(
+        isSoftTimeout: Boolean = false,
+        isHardTimeout: Boolean = false,
+    ) {
         val wifiDetails = repository.getWifiDetails().toEntity()
 
         if (!wifiDetails.isValid) {
@@ -65,32 +72,56 @@ class DownloadPhotosUseCaseImpl(
         }
 
         state.value = ConnectWifi(
+            isSoftTimeout = isSoftTimeout,
+            isHardTimeout = isHardTimeout,
             onCheckWifiDisabled = { wifiUtil.isWifiDisabled },
-            onConnect = {
-                wifiUtil.connectToWifi(
-                    wifiDetails = wifiDetails,
-                    connectTimeoutMs = CONNECT_TIMEOUT_MS,
-                    onWifiConnected = ::onConnectionSuccess,
-                    onWifiDisconnected = ::onConnectionLost,
-                    onTimeout = {
-                        if (state.value is ConnectWifi) {
-                            wifiUtil.disconnectFromWifi()
-                            state.value = Init(::onInit)
-                        }
-                    }
-                )
-            },
+            onConnect = { startWifiConnection(wifiDetails) },
             onChangeWifiDetails = {
                 state.value = RequestWifiCredentials(
                     onWifiCredentialsInput = { onWifiCredentialsInput(it.toEntity()) },
                     onSuggestWifiName = { wifiUtil.suggestNetwork() }
                 )
+            },
+            onSoftTimeoutRetry = {
+                startWifiConnection(wifiDetails)
 
+                // Update state to dismiss dialog.
+                connectToWifi()
             },
             onAdjustSettings = ::openSettings,
         )
     }
 
+    private fun startWifiConnection(wifiDetails: WifiDetailsEntity) {
+        scope.launch {
+            wifiUtil.connectToWifi(
+                ssid = wifiDetails.ssid!!,
+                password = wifiDetails.password!!,
+                onScanning = { startWifiScanHintLoop() },
+                onThrottled = { connectToWifi(isHardTimeout = true) },
+                onConnected = {
+                    onConnectionSuccess()
+                    scanningJob?.cancel()
+                },
+                onDisconnected = {
+                    onConnectionLost()
+                    scanningJob?.cancel()
+                }
+            )
+        }
+    }
+
+    private fun startWifiScanHintLoop() {
+        scanningJob?.cancel()
+
+        scanningJob = scope.launch {
+            delay(30.seconds)
+
+            connectToWifi(isSoftTimeout = true)
+        }
+    }
+
+    // TODO: move this to settings use case
     private fun openSettings() {
         // TODO: add functionalities and data to this use case
         // TODO: add change wifi
@@ -262,7 +293,7 @@ class DownloadPhotosUseCaseImpl(
             is RequestPermissions,
             is RequestWifiCredentials,
             is States.SelectFolders,
-            -> Unit
+                -> Unit
         }
 
         state.value = Init(::onInit)

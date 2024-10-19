@@ -93,6 +93,9 @@ fun MainScreenStateMachine(
                 )
 
                 is ConnectWifi -> StartView(
+                    isSoftWifiTimeout = state.isSoftTimeout,
+                    onSoftWifiTimeoutRetry = state.onSoftTimeoutRetry,
+                    isHardWifiTimeout = state.isHardTimeout,
                     onCheckWifiDisabled = state.onCheckWifiDisabled,
                     onConnect = state.onConnect,
                     onChangeWifiDetails = state.onChangeWifiDetails,

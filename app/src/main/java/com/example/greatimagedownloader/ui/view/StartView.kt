@@ -2,12 +2,14 @@ package com.example.greatimagedownloader.ui.view
 
 import android.content.Intent
 import android.provider.Settings.ACTION_WIFI_SETTINGS
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColor
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -19,6 +21,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
@@ -28,7 +31,6 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -42,9 +44,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.LifecycleEventObserver
-import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import com.example.greatimagedownloader.R
 import com.example.greatimagedownloader.ui.util.KeepScreenOn
 
@@ -53,6 +53,9 @@ import com.example.greatimagedownloader.ui.util.KeepScreenOn
 // TODO: add preview
 @Composable
 fun StartView(
+    isSoftWifiTimeout: Boolean,
+    onSoftWifiTimeoutRetry: () -> Unit,
+    isHardWifiTimeout: Boolean,
     onCheckWifiDisabled: () -> Boolean,
     onConnect: () -> Unit,
     onChangeWifiDetails: () -> Unit,
@@ -60,23 +63,14 @@ fun StartView(
 ) {
     val snackbarHostState = remember { SnackbarHostState() }
     val context = LocalContext.current
-    val lifecycle = LocalLifecycleOwner.current.lifecycle
 
     var isLoading by remember { mutableStateOf(false) }
     var isWifiDisabled by remember { mutableStateOf(false) }
 
-    DisposableEffect(Unit) {
-        val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_RESUME) {
-                isWifiDisabled = onCheckWifiDisabled()
-            }
-        }
+    LifecycleResumeEffect(onCheckWifiDisabled) {
+        isWifiDisabled = onCheckWifiDisabled()
 
-        lifecycle.addObserver(observer)
-
-        onDispose {
-            lifecycle.removeObserver(observer)
-        }
+        onPauseOrDispose {}
     }
 
     LaunchedEffect(Unit) {
@@ -148,6 +142,56 @@ fun StartView(
                         text = stringResource(R.string.connecting_to_camera),
                     )
                 }
+
+                AnimatedVisibility(isSoftWifiTimeout) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(32.dp)
+                            .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(16.dp))
+                            .padding(16.dp),
+                        horizontalAlignment = Alignment.End,
+                        verticalArrangement = Arrangement.Center,
+                    ) {
+                        Text(
+                            text = stringResource(R.string.wifi_soft_timeout),
+                            style = MaterialTheme.typography.titleMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        Button(
+                            onClick = onSoftWifiTimeoutRetry,
+                            colors = ButtonDefaults.filledTonalButtonColors(
+                                containerColor = MaterialTheme.colorScheme.secondary,
+                            ),
+                        ) {
+                            Text(
+                                text = stringResource(R.string.wifi_soft_timeout_retry),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSecondary,
+                            )
+                        }
+                    }
+                }
+
+                AnimatedVisibility(isHardWifiTimeout) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp)
+                            .background(MaterialTheme.colorScheme.errorContainer, RoundedCornerShape(16.dp))
+                            .padding(16.dp),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text(
+                            text = stringResource(R.string.wifi_hard_timeout),
+                            style = MaterialTheme.typography.titleMedium,
+                            color = MaterialTheme.colorScheme.onErrorContainer,
+                        )
+                    }
+                }
             } else {
                 Column(
                     modifier = Modifier.fillMaxSize(),
@@ -196,5 +240,8 @@ private fun StartViewPreview() {
         onConnect = {},
         onChangeWifiDetails = {},
         onAdjustSettings = {},
+        isSoftWifiTimeout = true,
+        isHardWifiTimeout = true,
+        onSoftWifiTimeoutRetry = {},
     )
 }

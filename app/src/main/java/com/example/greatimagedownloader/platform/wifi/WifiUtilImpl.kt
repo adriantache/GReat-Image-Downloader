@@ -9,27 +9,21 @@ import android.net.NetworkRequest
 import android.net.wifi.WifiManager
 import android.net.wifi.WifiNetworkSpecifier
 import android.os.Build
-import com.example.greatimagedownloader.domain.model.WifiDetailsEntity
 import com.example.greatimagedownloader.domain.utils.model.delay
 import com.example.greatimagedownloader.domain.wifi.WifiUtil
-import com.example.greatimagedownloader.platform.wifi.WifiStatus.*
-import kotlinx.coroutines.CoroutineDispatcher
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
+import com.example.greatimagedownloader.platform.wifi.WifiStatus.CONNECTED
+import com.example.greatimagedownloader.platform.wifi.WifiStatus.DISCONNECTED
+import com.example.greatimagedownloader.platform.wifi.WifiStatus.SCANNING
+import com.example.greatimagedownloader.platform.wifi.WifiStatus.THROTTLED
 
 private const val CONNECT_RETRY_INTERVAL = 5_000
-private const val SCAN_WAIT_MS = 5_000
+private const val SCAN_WAIT_MS = 2_000
 
 class WifiUtilImpl(
+    private val wifiScanRateLimiter: WifiScanRateLimiter,
     context: Context,
-    dispatcher: CoroutineDispatcher = Dispatchers.IO,
 ) : WifiUtil {
-    private val scope = CoroutineScope(dispatcher)
-
-    private var status: WifiStatus = DISCONNECTED
-
-    private var wifiScanRateLimiter = WifiScanRateLimiter()
+    var status: WifiStatus? = null
 
     override val isWifiDisabled: Boolean
         get() = !wifiManager.isWifiEnabled || wifiManager.wifiState != WifiManager.WIFI_STATE_ENABLED
@@ -37,73 +31,29 @@ class WifiUtilImpl(
     private val wifiManager = context.applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
     private val connectivityManager = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
 
-    override fun connectToWifi(
-        wifiDetails: WifiDetailsEntity,
-        connectTimeoutMs: Int,
-        onTimeout: () -> Unit,
-        onWifiConnected: () -> Unit,
-        onWifiDisconnected: () -> Unit,
+    override suspend fun connectToWifi(
+        ssid: String,
+        password: String,
+        onDisconnected: () -> Unit,
+        onConnected: () -> Unit,
+        onScanning: () -> Unit,
+        onThrottled: () -> Unit,
     ) {
-        scanForWifi()
+        scanForWifi(onScanning = onScanning, onThrottled = onThrottled)
 
-        val connectionAttemptTime = System.currentTimeMillis()
-
-        val wifiNetworkSpecifier = WifiNetworkSpecifier.Builder()
-            .setSsid(wifiDetails.ssid!!)
-            .setWpa2Passphrase(wifiDetails.password!!)
-            .build()
-        val networkRequest = NetworkRequest.Builder()
-            .addTransportType(NetworkCapabilities.TRANSPORT_WIFI)
-            .setNetworkSpecifier(wifiNetworkSpecifier)
-            .build()
-
-        val networkCallback = object : ConnectivityManager.NetworkCallback() {
-            override fun onAvailable(network: Network) {
-                // To make sure that requests don't go over mobile data.
-                connectivityManager.bindProcessToNetwork(network)
-
-                // Avoid triggering connection success multiple times.
-                if (status == SCANNING) {
-                    status = CONNECTED
-                    onWifiConnected()
-                }
-            }
-
-            override fun onLost(network: Network) {
-                super.onLost(network)
-
-                disconnectFromWifi()
-                onWifiDisconnected()
-            }
-        }
-
-        scope.launch {
-            while (status == SCANNING) {
-                if (System.currentTimeMillis() - connectionAttemptTime >= connectTimeoutMs) {
-                    onTimeout()
-                    return@launch
-                }
-
-                connectivityManager.requestNetwork(networkRequest, networkCallback, CONNECT_RETRY_INTERVAL)
-
-                delay(CONNECT_RETRY_INTERVAL)
-            }
-        }
+        // Delay to allow system to scan for Wi-Fi networks before trying to connect.
+        delay(SCAN_WAIT_MS)
+        requestConnect(ssid = ssid, password = password, onConnected = onConnected, onDisconnected = onDisconnected)
     }
 
-    override fun disconnectFromWifi() {
-        // This is to stop the looping request for OnePlus & Xiaomi models.
-        connectivityManager.bindProcessToNetwork(null)
-
-        status = DISCONNECTED
-    }
-
-    override fun suggestNetwork(): String {
+    // TODO: improve user feedback for this feature
+    override suspend fun suggestNetwork(): String {
         if (isWifiDisabled) {
             return "Wifi is off!"
         }
 
-        scanForWifi()
+        // We ignore states for this for now.
+        scanForWifi(onScanning = {}, onThrottled = {})
 
         // Ensure that Wi-Fi is enabled
         @SuppressLint("MissingPermission")
@@ -118,25 +68,65 @@ class WifiUtilImpl(
         return scanResults.find { it.startsWith("GR_") }.orEmpty()
     }
 
-    private fun scanForWifi() {
-        status = SCANNING
+    private suspend fun scanForWifi(
+        onScanning: () -> Unit,
+        onThrottled: () -> Unit,
+    ) {
+        // We currently are not allowed by the system to scan more often than 4 times per 2 minutes.
+        if (wifiScanRateLimiter.canScan) {
+            @Suppress("DEPRECATION")
+            wifiManager.startScan()
 
-        scope.launch {
-            while (status == SCANNING) {
-                // We currently cannot scan more often than 4 times per 2 minutes.
-                if (wifiScanRateLimiter.canScan) {
-                    @Suppress("DEPRECATION")
-                    wifiManager.startScan()
+            status = SCANNING
+            onScanning()
+        } else {
+            status = THROTTLED
+            onThrottled()
 
-                    delay(wifiScanRateLimiter.getScanDelay())
-                } else {
-                    delay(SCAN_WAIT_MS)
-                }
-            }
+            delay(CONNECT_RETRY_INTERVAL)
+            scanForWifi(onScanning = onScanning, onThrottled = onThrottled)
         }
     }
-}
 
-private enum class WifiStatus {
-    DISCONNECTED, CONNECTED, SCANNING
+    private fun requestConnect(
+        ssid: String,
+        password: String,
+        onConnected: () -> Unit,
+        onDisconnected: () -> Unit,
+    ) {
+        val wifiNetworkSpecifier = WifiNetworkSpecifier.Builder()
+            .setSsid(ssid)
+            .setWpa2Passphrase(password)
+            .build()
+        val networkRequest = NetworkRequest.Builder()
+            .addTransportType(NetworkCapabilities.TRANSPORT_WIFI)
+            .setNetworkSpecifier(wifiNetworkSpecifier)
+            .build()
+
+        val networkCallback = object : ConnectivityManager.NetworkCallback() {
+            override fun onAvailable(network: Network) {
+                // To make sure that requests don't go over mobile data.
+                connectivityManager.bindProcessToNetwork(network)
+
+                // Avoid triggering connection success multiple times.
+                if (status == SCANNING) {
+                    status = CONNECTED
+                    onConnected()
+                }
+            }
+
+            override fun onLost(network: Network) {
+                super.onLost(network)
+
+                // TODO: check if this is needed
+                // This is to stop the looping request for OnePlus & Xiaomi models.
+                // connectivityManager.bindProcessToNetwork(null)
+
+                status = DISCONNECTED
+                onDisconnected()
+            }
+        }
+
+        connectivityManager.requestNetwork(networkRequest, networkCallback, CONNECT_RETRY_INTERVAL)
+    }
 }

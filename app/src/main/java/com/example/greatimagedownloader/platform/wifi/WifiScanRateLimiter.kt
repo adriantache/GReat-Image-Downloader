@@ -10,26 +10,15 @@ class WifiScanRateLimiter {
         get() {
             removeStaleEntries()
 
-            return scanTimes.size < MAX_SCANS
+            val result = scanTimes.size < MAX_SCANS
+
+            return result.also { canScan ->
+                if (canScan) registerScan() // We assume that the consumer of this variable will trigger a scan if they can.
+            }
         }
 
     private fun registerScan() {
         scanTimes.add(System.currentTimeMillis())
-    }
-
-    fun getScanDelay(): Int {
-        removeStaleEntries()
-
-        val delay = when {
-            scanTimes.size < 2 -> 30_000
-            scanTimes.size == 3 -> 45_000
-            else -> 60_000
-        }
-
-        // Also register the current scan here, to keep things simple.
-        registerScan()
-
-        return delay
     }
 
     private fun removeStaleEntries() {

@@ -1,19 +1,16 @@
 package com.example.greatimagedownloader.domain.wifi
 
-import com.example.greatimagedownloader.domain.model.WifiDetailsEntity
-
 interface WifiUtil {
     val isWifiDisabled: Boolean
 
-    fun connectToWifi(
-        wifiDetails: WifiDetailsEntity,
-        connectTimeoutMs: Int,
-        onTimeout: () -> Unit,
-        onWifiConnected: () -> Unit,
-        onWifiDisconnected: () -> Unit,
+    suspend fun connectToWifi(
+        ssid: String,
+        password: String,
+        onDisconnected: () -> Unit,
+        onConnected: () -> Unit,
+        onScanning: () -> Unit,
+        onThrottled: () -> Unit,
     )
 
-    fun disconnectFromWifi()
-
-    fun suggestNetwork(): String
+    suspend fun suggestNetwork(): String
 }
