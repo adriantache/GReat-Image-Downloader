@@ -136,11 +136,13 @@ fun StartView(
                     modifier = Modifier.fillMaxWidth(),
                     contentAlignment = Alignment.Center,
                 ) {
-                    ActionButton(
-                        bgColor = bgColor,
-                        iconPainter = painterResource(id = R.drawable.wifi_pending),
-                        text = stringResource(R.string.connecting_to_camera),
-                    )
+                    WifiDecorator {
+                        ActionButton(
+                            bgColor = bgColor,
+                            iconPainter = painterResource(id = R.drawable.wifi_pending),
+                            text = stringResource(R.string.connecting_to_camera),
+                        )
+                    }
                 }
 
                 AnimatedVisibility(isSoftWifiTimeout) {
