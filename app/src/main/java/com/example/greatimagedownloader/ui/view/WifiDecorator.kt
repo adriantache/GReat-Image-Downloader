@@ -95,11 +95,14 @@ fun ArcStack(
     modifier: Modifier = Modifier,
     isReversed: Boolean = false,
 ) {
+    var isFirstArcVisible by remember { mutableStateOf(false) }
     var isSecondArcVisible by remember { mutableStateOf(false) }
     var isThirdArcVisible by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
         launch {
+            isFirstArcVisible = true
+
             delay(DELAY_BETWEEN_ARCS)
             isSecondArcVisible = true
 
@@ -112,7 +115,13 @@ fun ArcStack(
         modifier = modifier,
         contentAlignment = if (isReversed) Alignment.CenterEnd else Alignment.CenterStart,
     ) {
-        Arc(isReversed)
+        AnimatedVisibility(
+            enter = fadeIn(),
+            exit = fadeOut(),
+            visible = isFirstArcVisible,
+        ) {
+            Arc(isReversed)
+        }
 
         AnimatedVisibility(
             enter = fadeIn(),
