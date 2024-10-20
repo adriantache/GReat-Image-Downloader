@@ -46,6 +46,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import com.example.greatimagedownloader.R
+import com.example.greatimagedownloader.domain.utils.model.delay
 import com.example.greatimagedownloader.ui.util.KeepScreenOn
 
 // TODO: rename this file and split it into a loading view and a start view
@@ -146,34 +147,48 @@ fun StartView(
                 }
 
                 AnimatedVisibility(isSoftWifiTimeout) {
+                    var isButtonVisible by remember { mutableStateOf(false) }
+
+                    LaunchedEffect(Unit) {
+                        delay(2000)
+
+                        isButtonVisible = true
+                    }
+
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(32.dp)
                             .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(16.dp))
                             .padding(16.dp),
-                        horizontalAlignment = Alignment.End,
+                        horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.Center,
                     ) {
                         Text(
                             text = stringResource(R.string.wifi_soft_timeout),
-                            style = MaterialTheme.typography.titleMedium,
+                            style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
+                    }
 
-                        Spacer(modifier = Modifier.height(8.dp))
-
-                        Button(
-                            onClick = onSoftWifiTimeoutRetry,
-                            colors = ButtonDefaults.filledTonalButtonColors(
-                                containerColor = MaterialTheme.colorScheme.secondary,
-                            ),
+                    AnimatedVisibility(isButtonVisible) {
+                        Box(
+                            modifier = Modifier.fillMaxWidth(),
+                            contentAlignment = Alignment.Center,
                         ) {
-                            Text(
-                                text = stringResource(R.string.wifi_soft_timeout_retry),
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSecondary,
-                            )
+                            Button(
+                                onClick = onSoftWifiTimeoutRetry,
+                                colors = ButtonDefaults.filledTonalButtonColors(
+                                    containerColor = MaterialTheme.colorScheme.secondary,
+                                    contentColor = MaterialTheme.colorScheme.onSecondary,
+                                ),
+                            ) {
+                                Text(
+                                    text = stringResource(R.string.wifi_soft_timeout_retry),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSecondary,
+                                )
+                            }
                         }
                     }
                 }
@@ -189,7 +204,7 @@ fun StartView(
                     ) {
                         Text(
                             text = stringResource(R.string.wifi_hard_timeout),
-                            style = MaterialTheme.typography.titleMedium,
+                            style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onErrorContainer,
                         )
                     }

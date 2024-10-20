@@ -45,7 +45,7 @@ class DownloadPhotosUseCaseImpl(
     private var continueDownload = true
 
     // Used to stop the wifi scan timeout.
-    private var scanningJob: Job? = null
+    private var scanningTimeoutJob: Job? = null
 
     private fun onInit() {
         state.value = RequestPermissions(::onPermissionsGranted)
@@ -101,20 +101,20 @@ class DownloadPhotosUseCaseImpl(
                 onThrottled = { connectToWifi(isHardTimeout = true) },
                 onConnected = {
                     onConnectionSuccess()
-                    scanningJob?.cancel()
+                    scanningTimeoutJob?.cancel()
                 },
                 onDisconnected = {
                     onConnectionLost()
-                    scanningJob?.cancel()
+                    scanningTimeoutJob?.cancel()
                 }
             )
         }
     }
 
     private fun startWifiScanHintLoop() {
-        scanningJob?.cancel()
+        scanningTimeoutJob?.cancel()
 
-        scanningJob = scope.launch {
+        scanningTimeoutJob = scope.launch {
             delay(20.seconds)
 
             connectToWifi(isSoftTimeout = true)
