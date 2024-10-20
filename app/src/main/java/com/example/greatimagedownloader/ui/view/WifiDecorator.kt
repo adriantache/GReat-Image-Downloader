@@ -177,7 +177,7 @@ private fun Arc(
 
     LaunchedEffect(Unit) {
         heightValue = size / 2
-        offsetValue = if (isReversed) (-10).dp else 10.dp
+        offsetValue = 0.dp
         opacityValue = 0f
         startAngleValue = -30f + if (isReversed) 180f else 0f
         sweepAngleValue = 60f
