@@ -44,6 +44,7 @@ import kotlinx.coroutines.launch
 
 private const val ANIMATION_DURATION = 2400 // Must be a multiple of the content animation duration.
 private const val DELAY_BETWEEN_ARCS = 600
+private const val DURATION_BETWEEN_ANIMATIONS = 1600
 
 @Composable
 fun WifiDecorator(
@@ -54,7 +55,9 @@ fun WifiDecorator(
 
     LaunchedEffect(Unit) {
         while (true) {
-            delay(ANIMATION_DURATION + 2 * DELAY_BETWEEN_ARCS)
+            val delay = if (isArcStackVisible) ANIMATION_DURATION + 2 * DELAY_BETWEEN_ARCS else DURATION_BETWEEN_ANIMATIONS
+            delay(delay)
+
             isArcStackVisible = !isArcStackVisible
         }
     }
