@@ -115,7 +115,7 @@ class DownloadPhotosUseCaseImpl(
         scanningJob?.cancel()
 
         scanningJob = scope.launch {
-            delay(30.seconds)
+            delay(20.seconds)
 
             connectToWifi(isSoftTimeout = true)
         }
