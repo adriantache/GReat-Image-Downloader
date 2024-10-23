@@ -1,5 +1,6 @@
 package com.example.greatimagedownloader.ui.view
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.fillMaxSize
@@ -17,6 +18,10 @@ import com.example.greatimagedownloader.domain.model.States
 
 @Composable
 fun ChangeSettingsScreen(state: States.ChangeSettings) {
+    BackHandler {
+        state.onExitSettings()
+    }
+
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
