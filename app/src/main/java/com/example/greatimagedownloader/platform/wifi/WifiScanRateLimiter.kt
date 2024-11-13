@@ -21,6 +21,7 @@ class WifiScanRateLimiter {
         scanTimes.add(System.currentTimeMillis())
     }
 
+    @Synchronized
     private fun removeStaleEntries() {
         val now = System.currentTimeMillis()
 

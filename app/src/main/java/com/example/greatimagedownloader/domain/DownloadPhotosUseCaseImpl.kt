@@ -215,6 +215,11 @@ class DownloadPhotosUseCaseImpl(
         val totalPhotos = photosToDownload.size
         val downloadedPhotoUris = mutableMapOf<String, PhotoDownloadInfo>()
 
+        if (totalPhotos == 0) {
+            state.value = Init(::onInit)
+            return
+        }
+
         event.value = Event(
             Events.DownloadPhotosWithService(
                 photosToDownload = photosToDownload,
