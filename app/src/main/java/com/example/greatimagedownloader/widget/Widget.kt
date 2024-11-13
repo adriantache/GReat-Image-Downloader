@@ -7,7 +7,7 @@ import androidx.glance.GlanceId
 import androidx.glance.appwidget.GlanceAppWidget
 import androidx.glance.appwidget.action.actionStartService
 import androidx.glance.appwidget.provideContent
-import com.example.greatimagedownloader.service.AppService
+import com.example.greatimagedownloader.service.PhotoDownloadService
 
 class Widget : GlanceAppWidget() {
     override suspend fun provideGlance(context: Context, id: GlanceId) {
@@ -38,7 +38,7 @@ class Widget : GlanceAppWidget() {
 //        ) {
         Button(
             text = "Get photos",
-            actionStartService<AppService>(
+            actionStartService<PhotoDownloadService>(
                 isForegroundService = true,
             )
         )

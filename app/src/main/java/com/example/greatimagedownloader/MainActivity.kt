@@ -9,15 +9,12 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.ui.Modifier
-import com.example.greatimagedownloader.service.registerNotificationChannel
 import com.example.greatimagedownloader.ui.MainScreenStateMachine
 import com.example.greatimagedownloader.ui.theme.GReatImageDownloaderTheme
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-
-        registerNotificationChannel(this)
 
         setContent {
             GReatImageDownloaderTheme {

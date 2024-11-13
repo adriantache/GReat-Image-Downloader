@@ -9,7 +9,9 @@ import retrofit2.Retrofit
 private const val RICOH_BASE_URL = "http://192.168.0.1/"
 
 fun getApi(): RicohApi {
-    val okHttpClient = OkHttpClient.Builder().build()
+    val okHttpClient = OkHttpClient.Builder()
+//        .addInterceptor(HttpLoggingInterceptor().setLevel(HttpLoggingInterceptor.Level.BODY)) // Used for debugging.
+        .build()
     val contentType = "application/json".toMediaType()
     val json = Json { ignoreUnknownKeys = true }
 

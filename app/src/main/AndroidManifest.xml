@@ -23,6 +23,7 @@
     <!-- Permissions for the service. -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE" />
 
     <application
         android:name=".MainApplication"
@@ -63,7 +64,8 @@
         </receiver>
 
         <service
-            android:name=".service.AppService"
+            android:name=".service.PhotoDownloadService"
+            android:exported="false"
             android:foregroundServiceType="connectedDevice" />
     </application>
 </manifest>

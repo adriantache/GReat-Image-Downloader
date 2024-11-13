@@ -4,6 +4,7 @@ import android.app.Application
 import com.example.greatimagedownloader.data.di.dataModule
 import com.example.greatimagedownloader.domain.di.domainModule
 import com.example.greatimagedownloader.platform.di.platformModule
+import com.example.greatimagedownloader.service.serviceModule
 import com.example.greatimagedownloader.ui.di.uiModule
 import org.koin.android.ext.koin.androidContext
 import org.koin.core.context.startKoin
@@ -21,6 +22,7 @@ class MainApplication : Application() {
                     domainModule,
                     dataModule,
                     platformModule,
+                    serviceModule,
                 )
             )
         }

@@ -181,7 +181,6 @@ class DownloadPhotosUseCaseImpl(
         getMedia()
     }
 
-    // TODO: handle directories
     // TODO: add logic for when we delete already downloaded images and opt-out mechanism
     // TODO: add option to interrupt process, deleting current file in progress
     private fun getMedia() {
@@ -203,47 +202,52 @@ class DownloadPhotosUseCaseImpl(
                     folderInfo = folderInfo,
                     onFoldersSelect = { selectedFolders ->
                         val selectedMediaToDownload = mediaToDownload.filter { it.directory in selectedFolders }
-                        downloadMedia(selectedMediaToDownload)
+                        downloadMediaWithService(selectedMediaToDownload)
                     }
                 )
             } else {
-                downloadMedia(mediaToDownload)
+                downloadMediaWithService(mediaToDownload)
             }
         }
     }
 
-    private fun downloadMedia(photosToDownload: List<PhotoFile>) {
-        state.value = DownloadPhotos(totalPhotos = photosToDownload.size, onStopDownloading = ::onStopDownloading)
-
+    private fun downloadMediaWithService(photosToDownload: List<PhotoFile>) {
+        val totalPhotos = photosToDownload.size
         val downloadedPhotoUris = mutableMapOf<String, PhotoDownloadInfo>()
 
-        scope.launch {
-            for (index in photosToDownload.indices) {
-                val photo = photosToDownload[index]
+        event.value = Event(
+            Events.DownloadPhotosWithService(
+                photosToDownload = photosToDownload,
+                onDownloadInfo = {
+                    downloadedPhotoUris[it.name] = it
+                    onDownloadPhotoInfo(it, downloadedPhotoUris, totalPhotos)
+                },
+                onDownloadFinished = {
+                    updateLatestDownloadedPhotos(photosToDownload, downloadedPhotoUris)
 
-                if (!continueDownload) {
-                    continueDownload = true
-                    break
-                }
+                    state.value = Init(::onInit)
 
-                repository.downloadMediaToStorage(photo).collect { photoDownloadInfo ->
-                    downloadedPhotoUris[photoDownloadInfo.name] = photoDownloadInfo
-
-                    state.value = DownloadPhotos(
-                        currentPhotoNum = index + 1,
-                        totalPhotos = photosToDownload.size,
-                        downloadedPhotos = downloadedPhotoUris.values.toList(),
-                        downloadSpeed = photoDownloadInfo.downloadSpeed,
-                        onStopDownloading = ::onStopDownloading,
-                        isStopping = !continueDownload,
+                    event.value = Event(
+                        SuccessfulDownload(numDownloadedPhotos = downloadedPhotoUris.size)
                     )
                 }
-            }
+            )
+        )
+    }
 
-            updateLatestDownloadedPhotos(photosToDownload, downloadedPhotoUris)
-
-            disconnect(downloadedPhotoUris.count { it.value.downloadProgress == 100 })
-        }
+    private fun onDownloadPhotoInfo(
+        info: PhotoDownloadInfo,
+        downloadedPhotoUris: MutableMap<String, PhotoDownloadInfo>,
+        totalPhotos: Int,
+    ) {
+        state.value = DownloadPhotos(
+            currentPhotoNum = downloadedPhotoUris.size,
+            totalPhotos = totalPhotos,
+            downloadedPhotos = downloadedPhotoUris.values.toList(),
+            downloadSpeed = info.downloadSpeed,
+            onStopDownloading = ::onStopDownloading,
+            isStopping = !continueDownload,
+        )
     }
 
     private suspend fun getPhotosToDownload(): List<PhotoFile>? {
@@ -262,16 +266,6 @@ class DownloadPhotosUseCaseImpl(
                 val nameWithoutExtension = it.name.split(".")[0]
                 !savedMedia.contains(nameWithoutExtension)
             }
-    }
-
-    private suspend fun disconnect(numDownloadedPhotos: Int) {
-        repository.shutDownCamera()
-
-        state.value = Init(::onInit)
-
-        event.value = Event(
-            SuccessfulDownload(numDownloadedPhotos = numDownloadedPhotos)
-        )
     }
 
     private fun onConnectionLost() {
@@ -299,7 +293,7 @@ class DownloadPhotosUseCaseImpl(
         state.value = Init(::onInit)
     }
 
-    private suspend fun updateLatestDownloadedPhotos(
+    private fun updateLatestDownloadedPhotos(
         photosToDownload: List<PhotoFile>,
         downloadedPhotoUris: MutableMap<String, PhotoDownloadInfo>,
     ) {
@@ -311,7 +305,9 @@ class DownloadPhotosUseCaseImpl(
         val lastFiles = completedFiles.groupBy { it.directory }
             .mapValues { entry -> entry.value.maxBy { it.name } }
 
-        repository.saveLatestDownloadedPhotos(lastFiles.values.toList())
+        scope.launch {
+            repository.saveLatestDownloadedPhotos(lastFiles.values.toList())
+        }
     }
 
     private suspend fun getOnlyRecentPhotos(availableMediaToDownload: List<PhotoFile>): List<PhotoFile> {

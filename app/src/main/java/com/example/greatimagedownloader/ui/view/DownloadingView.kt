@@ -45,7 +45,6 @@ import coil.compose.AsyncImage
 import com.example.greatimagedownloader.R
 import com.example.greatimagedownloader.domain.data.model.PhotoDownloadInfo
 import com.example.greatimagedownloader.domain.utils.model.Kbps
-import com.example.greatimagedownloader.ui.util.KeepScreenOn
 import kotlinx.coroutines.delay
 import java.text.DecimalFormat
 
@@ -71,8 +70,6 @@ fun DownloadingView(
     }
 
     var photosSize by remember { mutableIntStateOf(0) }
-
-    KeepScreenOn()
 
     LaunchedEffect(photoDownloadInfo) {
         if (photosSize != photoDownloadInfo.size) {
