@@ -16,6 +16,8 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
+        theme.applyStyle(R.style.OptOutEdgeToEdgeEnforcement, /* force */ false)
+
         setContent {
             GReatImageDownloaderTheme {
                 // A surface container using the 'background' color from the theme
