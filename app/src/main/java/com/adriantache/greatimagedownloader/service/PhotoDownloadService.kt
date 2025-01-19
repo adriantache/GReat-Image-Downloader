@@ -24,6 +24,7 @@ class PhotoDownloadService : Service(), KoinComponent {
     private val repository: Repository by inject()
     private val dataTransferTool: DataTransferTool by inject()
 
+    // Used to interrupt download without corrupting current file.
     private var continueDownload = false
 
     override fun onBind(p0: Intent?): IBinder? = null
@@ -65,6 +66,7 @@ class PhotoDownloadService : Service(), KoinComponent {
     private fun start(photosToDownload: List<PhotoFileItem>?) {
         if (photosToDownload.isNullOrEmpty()) {
             Log.e(this::class.java.simpleName, "Photos list is null!")
+            scope.launch { disconnect() }
             return
         }
 

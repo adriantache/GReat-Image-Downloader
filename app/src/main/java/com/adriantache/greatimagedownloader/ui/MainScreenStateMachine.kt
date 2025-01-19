@@ -32,6 +32,7 @@ import com.adriantache.greatimagedownloader.domain.model.Events.CannotDownloadPh
 import com.adriantache.greatimagedownloader.domain.model.Events.ConfirmDeleteAllPhotos
 import com.adriantache.greatimagedownloader.domain.model.Events.DownloadPhotosWithService
 import com.adriantache.greatimagedownloader.domain.model.Events.InvalidWifiInput
+import com.adriantache.greatimagedownloader.domain.model.Events.StopDownload
 import com.adriantache.greatimagedownloader.domain.model.Events.SuccessfulDownload
 import com.adriantache.greatimagedownloader.domain.model.States
 import com.adriantache.greatimagedownloader.domain.model.States.ChangeSettings
@@ -53,6 +54,7 @@ import com.adriantache.greatimagedownloader.ui.view.DownloadingView
 import com.adriantache.greatimagedownloader.ui.view.PermissionsView
 import com.adriantache.greatimagedownloader.ui.view.SelectFoldersView
 import com.adriantache.greatimagedownloader.ui.view.StartView
+import com.adriantache.greatimagedownloader.ui.view.StoppingView
 import com.adriantache.greatimagedownloader.ui.view.SyncView
 import com.adriantache.greatimagedownloader.ui.view.WifiInputView
 import kotlinx.coroutines.launch
@@ -131,11 +133,13 @@ fun MainScreenStateMachine(
                     totalPhotos = state.totalPhotos,
                     photoDownloadInfo = state.downloadedPhotos,
                     downloadSpeed = state.downloadSpeed,
-                    isStopping = state.isStopping,
                     onClose = state.onStopDownloading,
                 )
 
                 is ChangeSettings -> ChangeSettingsScreen(state)
+
+                // TODO: improve this, since the state will likely get overwritten by download progress
+                States.StoppingDownload -> StoppingView()
             }
         }
     }
@@ -170,11 +174,7 @@ private fun HandleEvent(
             is DownloadPhotosWithService -> {
                 launch {
                     dataTransferTool.imageFlow.collect { photoDownloadInfo ->
-                        println("Received: $photoDownloadInfo")
-
-                        if (photoDownloadInfo != null) {
-                            event.onDownloadInfo(photoDownloadInfo)
-                        }
+                        photoDownloadInfo?.let { event.onDownloadInfo(it) }
                     }
                 }
 
@@ -186,6 +186,8 @@ private fun HandleEvent(
 
                 downloadPhotos(context, event.photosToDownload)
             }
+
+            StopDownload -> stopDownload(context)
         }
     }
 
@@ -213,6 +215,7 @@ private fun HandleEvent(
 
         is SuccessfulDownload -> Unit
         is DownloadPhotosWithService -> Unit
+        is StopDownload -> Unit
         null -> Unit
     }
 }
@@ -231,6 +234,13 @@ fun downloadPhotos(
     val serviceIntent = Intent(context, PhotoDownloadService::class.java)
     serviceIntent.putParcelableArrayListExtra(PHOTOS_LIST_EXTRA, ArrayList(photos))
     serviceIntent.action = Actions.START.name
+
+    ContextCompat.startForegroundService(context, serviceIntent)
+}
+
+fun stopDownload(context: Context) {
+    val serviceIntent = Intent(context, PhotoDownloadService::class.java)
+    serviceIntent.action = Actions.STOP.name
 
     ContextCompat.startForegroundService(context, serviceIntent)
 }

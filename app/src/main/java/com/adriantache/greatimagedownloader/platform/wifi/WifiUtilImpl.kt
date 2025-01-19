@@ -2,6 +2,7 @@ package com.adriantache.greatimagedownloader.platform.wifi
 
 import android.annotation.SuppressLint
 import android.content.Context
+import android.content.IntentFilter
 import android.net.ConnectivityManager
 import android.net.Network
 import android.net.NetworkCapabilities
@@ -21,7 +22,7 @@ private const val SCAN_WAIT_MS = 2_000
 
 class WifiUtilImpl(
     private val wifiScanRateLimiter: WifiScanRateLimiter,
-    context: Context,
+    private val context: Context,
 ) : WifiUtil {
     var status: WifiStatus? = null
 
@@ -40,6 +41,16 @@ class WifiUtilImpl(
         onThrottled: () -> Unit,
     ) {
         scanForWifi(onScanning = onScanning, onThrottled = onThrottled)
+
+        val wifiScanReceiver = WifiScanReceiver { results ->
+            println("WifiScanReceiver: $results")
+
+            if (results.any { it.SSID.toString().contains(ssid) }) {
+                requestConnect(ssid = ssid, password = password, onConnected = onConnected, onDisconnected = onDisconnected)
+            }
+        }
+        val intentFilter = IntentFilter(WifiManager.SCAN_RESULTS_AVAILABLE_ACTION)
+        context.registerReceiver(wifiScanReceiver, intentFilter)
 
         // Delay to allow system to scan for Wi-Fi networks before trying to connect.
         delay(SCAN_WAIT_MS)

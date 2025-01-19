@@ -26,7 +26,7 @@ import androidx.compose.ui.unit.dp
 import com.adriantache.greatimagedownloader.R
 
 @Composable
-fun SyncView() {
+fun StoppingView() {
     var rotationAngle by remember { mutableFloatStateOf(0f) }
     val infiniteTransition = rememberInfiniteTransition()
     val rotation by infiniteTransition.animateFloat(
@@ -51,7 +51,7 @@ fun SyncView() {
         Spacer(Modifier.height(16.dp))
 
         Text(
-            text = "Synchronizing...",
+            text = "Stopping download...",
             style = MaterialTheme.typography.headlineSmall
         )
     }
@@ -59,6 +59,6 @@ fun SyncView() {
 
 @Preview(showBackground = true)
 @Composable
-private fun SyncViewPreview() {
-    SyncView()
+private fun StoppingViewPreview() {
+    StoppingView()
 }

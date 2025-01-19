@@ -20,4 +20,6 @@ sealed interface Events {
         val onDownloadInfo: (PhotoDownloadInfo) -> Unit,
         val onDownloadFinished: () -> Unit,
     ) : Events
+
+    data object StopDownload : Events
 }

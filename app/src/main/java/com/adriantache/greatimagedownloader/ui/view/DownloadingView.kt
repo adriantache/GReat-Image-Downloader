@@ -1,6 +1,5 @@
 package com.adriantache.greatimagedownloader.ui.view
 
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -56,7 +55,6 @@ fun DownloadingView(
     totalPhotos: Int,
     photoDownloadInfo: List<PhotoDownloadInfo>,
     downloadSpeed: Kbps,
-    isStopping: Boolean,
     onClose: () -> Unit,
 ) {
     val boxShape = RoundedCornerShape(8.dp)
@@ -86,26 +84,6 @@ fun DownloadingView(
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         CloseIcon(onClose)
-
-        AnimatedVisibility(isStopping) {
-            Column {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(MaterialTheme.colorScheme.errorContainer)
-                        .padding(16.dp),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Text(
-                        text = "Stopping download...",
-                        style = MaterialTheme.typography.titleMedium,
-                        color = MaterialTheme.colorScheme.onErrorContainer,
-                    )
-                }
-
-                Spacer(Modifier.height(16.dp))
-            }
-        }
 
         Box(
             modifier = Modifier
@@ -223,7 +201,6 @@ private fun DownloadingViewPreview() {
         totalPhotos = 100,
         photoDownloadInfo = emptyList(),
         downloadSpeed = Kbps(21.22),
-        isStopping = false,
         onClose = {},
     )
 }

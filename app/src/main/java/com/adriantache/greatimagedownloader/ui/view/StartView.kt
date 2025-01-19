@@ -46,7 +46,6 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import com.adriantache.greatimagedownloader.R
-import com.adriantache.greatimagedownloader.domain.utils.model.delay
 import com.adriantache.greatimagedownloader.ui.util.KeepScreenOn
 
 // TODO: rename this file and split it into a loading view and a start view
@@ -147,14 +146,6 @@ fun StartView(
                 }
 
                 AnimatedVisibility(isSoftWifiTimeout) {
-                    var isButtonVisible by remember { mutableStateOf(false) }
-
-                    LaunchedEffect(Unit) {
-                        delay(2000)
-
-                        isButtonVisible = true
-                    }
-
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -169,9 +160,7 @@ fun StartView(
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
-                    }
 
-                    AnimatedVisibility(isButtonVisible) {
                         Box(
                             modifier = Modifier.fillMaxWidth(),
                             contentAlignment = Alignment.Center,

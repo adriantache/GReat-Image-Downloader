@@ -41,9 +41,6 @@ class DownloadPhotosUseCaseImpl(
 
     private val scope = CoroutineScope(dispatcher)
 
-    // Used to interrupt download without corrupting current file.
-    private var continueDownload = true
-
     // Used to stop the wifi scan timeout.
     private var scanningTimeoutJob: Job? = null
 
@@ -215,11 +212,6 @@ class DownloadPhotosUseCaseImpl(
         val totalPhotos = photosToDownload.size
         val downloadedPhotoUris = mutableMapOf<String, PhotoDownloadInfo>()
 
-        if (totalPhotos == 0) {
-            state.value = Init(::onInit)
-            return
-        }
-
         event.value = Event(
             Events.DownloadPhotosWithService(
                 photosToDownload = photosToDownload,
@@ -251,7 +243,6 @@ class DownloadPhotosUseCaseImpl(
             downloadedPhotos = downloadedPhotoUris.values.toList(),
             downloadSpeed = info.downloadSpeed,
             onStopDownloading = ::onStopDownloading,
-            isStopping = !continueDownload,
         )
     }
 
@@ -292,6 +283,7 @@ class DownloadPhotosUseCaseImpl(
             is RequestPermissions,
             is RequestWifiCredentials,
             is States.SelectFolders,
+            States.StoppingDownload,
                 -> Unit
         }
 
@@ -300,7 +292,7 @@ class DownloadPhotosUseCaseImpl(
 
     private fun updateLatestDownloadedPhotos(
         photosToDownload: List<PhotoFile>,
-        downloadedPhotoUris: MutableMap<String, PhotoDownloadInfo>,
+        downloadedPhotoUris: Map<String, PhotoDownloadInfo>,
     ) {
         // Make sure we don't count files that for whatever reason weren't downloaded.
         val completedFiles = photosToDownload.filter {
@@ -330,8 +322,7 @@ class DownloadPhotosUseCaseImpl(
     }
 
     private fun onStopDownloading() {
-        if (!continueDownload) return
-
-        continueDownload = false
+        state.value = States.StoppingDownload
+        event.value = Event(Events.StopDownload)
     }
 }
