@@ -8,7 +8,6 @@
     <string name="save">Save</string>
     <string name="wifi_is_not_enabled">WiFi is not enabled!</string>
     <string name="connecting_to_camera">Connecting to camera…</string>
-    <string name="wifi_soft_timeout">It seems that it\'s taking a long time to connect to the camera. Please check that the camera is turned on and that WiFi is enabled.</string>
-    <string name="wifi_soft_timeout_retry">Force rescan</string>
+    <string name="wifi_soft_timeout">It seems that it\'s taking a long time to connect to the camera. Please check that the camera is turned on and that WiFi is enabled. \n\nRescanning for WiFi networks…</string>
     <string name="wifi_hard_timeout">The system is limiting the amount of WiFi scans we can perform. The app will automatically retry the connection once possible.</string>
 </resources>
