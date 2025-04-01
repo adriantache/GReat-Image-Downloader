@@ -20,6 +20,7 @@ import com.adriantache.greatimagedownloader.platform.wifi.WifiStatus.THROTTLED
 private const val CONNECT_RETRY_INTERVAL = 5_000
 private const val SCAN_WAIT_MS = 2_000
 
+// TODO: remove if new util is reliable
 class WifiUtilImpl(
     private val wifiScanRateLimiter: WifiScanRateLimiter,
     private val context: Context,
@@ -77,6 +78,10 @@ class WifiUtilImpl(
         status = DISCONNECTED
 
         return scanResults.find { it.startsWith("GR_") }.orEmpty()
+    }
+
+    override fun cleanup() {
+        TODO("Not yet implemented")
     }
 
     private suspend fun scanForWifi(
