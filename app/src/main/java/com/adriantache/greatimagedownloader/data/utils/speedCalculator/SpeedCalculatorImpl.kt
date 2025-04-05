@@ -14,7 +14,7 @@ private data class DataPoint(
 class SpeedCalculatorImpl : SpeedCalculator {
     @get:Synchronized
     @set:Synchronized
-    private var samples = mutableListOf<DataPoint>()
+    private var samples = emptyList<DataPoint>()
 
     override fun registerData(
         downloadedBytes: Long,
@@ -43,11 +43,11 @@ class SpeedCalculatorImpl : SpeedCalculator {
 
     @VisibleForTesting
     fun clearData() {
-        samples.clear()
+        samples = emptyList()
     }
 
     private fun removeStaleSamples(currentTime: Long = System.currentTimeMillis()) {
         // We exclude samples that have expired or are too many.
-        samples = samples.takeLast(MAX_SAMPLES).filter { it.timestamp > currentTime - EXPIRATION_MS }.toMutableList()
+        samples = samples.takeLast(MAX_SAMPLES).filter { it.timestamp > currentTime - EXPIRATION_MS }
     }
 }
