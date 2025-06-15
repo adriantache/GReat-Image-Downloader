@@ -37,6 +37,7 @@ fun getNotification(
         .setContentTitle("Downloading...")
         .setContentText(content)
         .setContentIntent(pendingIntent)
+        // TODO: add action to stop service in case it gets stuck
         .build()
 }
 

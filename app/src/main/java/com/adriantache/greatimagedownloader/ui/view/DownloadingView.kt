@@ -35,6 +35,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextAlign
@@ -57,6 +58,8 @@ fun DownloadingView(
     downloadSpeed: Kbps,
     onClose: () -> Unit,
 ) {
+    val context = LocalContext.current
+
     val boxShape = RoundedCornerShape(8.dp)
     val scrollState = rememberScrollState()
 
@@ -113,6 +116,7 @@ fun DownloadingView(
         val density = LocalDensity.current
         var totalFlowWidth by remember { mutableStateOf(0.dp) }
 
+        // TODO: find a new solution to this mess
         ContextualFlowRow(
             modifier = Modifier
                 .safeDrawingPadding()
@@ -126,7 +130,7 @@ fun DownloadingView(
             maxItemsInEachRow = 3,
         ) { index ->
             val mediaInfo = photoDownloadInfo[index]
-            val width = (totalFlowWidth - 16.dp) / 3
+            val width = (totalFlowWidth - 16.dp) / 3 * if (mediaInfo.isLandscape(context)) 2 else 1
 
             Box(
                 modifier = Modifier

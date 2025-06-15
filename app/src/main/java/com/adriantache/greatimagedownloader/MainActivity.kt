@@ -20,7 +20,6 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             GReatImageDownloaderTheme {
-                // A surface container using the 'background' color from the theme
                 Scaffold {
                     Surface(
                         modifier = Modifier

@@ -26,6 +26,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 import kotlin.time.Duration.Companion.seconds
 
+// TODO: IMPORTANT delete partially downloaded files on error
 // TODO: add tests
 class DownloadPhotosUseCaseImpl(
     private val repository: Repository,
@@ -173,13 +174,14 @@ class DownloadPhotosUseCaseImpl(
     }
 
     private fun onConnectionSuccess() {
+        if (state.value !is ConnectWifi) return
+
         state.value = GetPhotos
 
         getMedia()
     }
 
     // TODO: add logic for when we delete already downloaded images and opt-out mechanism
-    // TODO: add option to interrupt process, deleting current file in progress
     private fun getMedia() {
         scope.launch {
             val availableMediaToDownload = getPhotosToDownload() ?: return@launch

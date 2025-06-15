@@ -82,7 +82,8 @@ class WifiConnector(
         networkCallback?.let {
             connectivityManager.unregisterNetworkCallback(it)
         }
-        connectivityManager.bindProcessToNetwork(null)
+        // TODO: re-enable this or remove after testing
+//        connectivityManager.bindProcessToNetwork(null)
     }
 
     @SuppressLint("MissingPermission")
