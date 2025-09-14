@@ -2,8 +2,6 @@ package com.adriantache.greatimagedownloader.ui
 
 import android.content.Context
 import android.content.Intent
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.AlertDialog
@@ -11,6 +9,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -19,11 +18,9 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import com.adriantache.greatimagedownloader.R
 import com.adriantache.greatimagedownloader.domain.data.model.PhotoFile
@@ -83,12 +80,10 @@ fun MainScreenStateMachine(
     Scaffold(
         snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
     ) { padding ->
-        Column(
+        Surface(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding),
-            verticalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterVertically),
-            horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             HandleEvent(event, snackbarHostState)
 
@@ -109,6 +104,7 @@ fun MainScreenStateMachine(
                 is RequestWifiCredentials -> WifiInputView(
                     onWifiCredentialsInput = state.onWifiCredentialsInput,
                     onSuggestWifiName = state.onSuggestWifiName,
+                    onDismiss = state.onDismiss,
                 )
 
                 is ConnectWifi -> StartView(

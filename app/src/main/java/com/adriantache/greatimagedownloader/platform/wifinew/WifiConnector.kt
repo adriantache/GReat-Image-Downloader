@@ -94,6 +94,7 @@ class WifiConnector(
                 ?.let { extractSsid(it) }
                 ?: "ERROR"
         } catch (e: Exception) {
+            e.printStackTrace()
             "ERROR"
         }
     }
@@ -129,6 +130,7 @@ class WifiConnector(
             android.content.IntentFilter(WifiManager.SCAN_RESULTS_AVAILABLE_ACTION)
         )
 
+        @Suppress("DEPRECATION")
         if (!wifiManager.startScan()) {
             channel.close(RuntimeException("WiFi scan failed"))
         }

@@ -27,9 +27,6 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SnackbarHost
-import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -65,7 +62,6 @@ fun StartView(
     onChangeWifiDetails: () -> Unit,
     onAdjustSettings: () -> Unit,
 ) {
-    val snackbarHostState = remember { SnackbarHostState() }
     val context = LocalContext.current
 
     var isLoading by remember { mutableStateOf(false) }
@@ -81,169 +77,161 @@ fun StartView(
         isWifiDisabled = onCheckWifiDisabled()
     }
 
-    Scaffold(
-        snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
-    ) { padding ->
-        Column(
-            Modifier
-                .fillMaxSize()
-                .padding(padding)
+    Column(modifier = Modifier.fillMaxSize()) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(8.dp),
+            horizontalArrangement = Arrangement.End
         ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(8.dp),
-                horizontalArrangement = Arrangement.End
+            Button(
+                onClick = onAdjustSettings,
+                colors = ButtonDefaults.filledTonalButtonColors(),
             ) {
-                Button(
-                    onClick = onAdjustSettings,
-                    colors = ButtonDefaults.filledTonalButtonColors(),
-                ) {
-                    Icon(
-                        painterResource(id = R.drawable.baseline_settings_24),
-                        contentDescription = null,
-                        modifier = Modifier.requiredSize(24.dp),
-                        tint = MaterialTheme.colorScheme.onPrimary,
+                Icon(
+                    painterResource(id = R.drawable.baseline_settings_24),
+                    contentDescription = null,
+                    modifier = Modifier.requiredSize(24.dp),
+//                    tint = MaterialTheme.colorScheme.onPrimary,
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(200.dp))
+
+        if (isWifiDisabled) {
+            Box(
+                modifier = Modifier.fillMaxWidth(),
+                contentAlignment = Alignment.Center,
+            ) {
+                ActionButton(
+                    bgColor = Color.Red,
+                    iconPainter = painterResource(id = R.drawable.wifi_off),
+                    text = stringResource(R.string.wifi_is_not_enabled),
+                    onClick = { context.startActivity(Intent(ACTION_WIFI_SETTINGS)) }
+                )
+            }
+        } else if (isLoading) {
+            val infiniteTransition = rememberInfiniteTransition(label = "")
+            val bgColor by infiniteTransition.animateColor(
+                initialValue = MaterialTheme.colorScheme.primary,
+                targetValue = Color.Black,
+                animationSpec = infiniteRepeatable(
+                    animation = tween(800, easing = LinearEasing),
+                    repeatMode = RepeatMode.Reverse
+                ),
+                label = "Background Animation"
+            )
+
+            KeepScreenOn()
+
+            Box(
+                modifier = Modifier.fillMaxWidth(),
+                contentAlignment = Alignment.Center,
+            ) {
+                WifiDecorator {
+                    ActionButton(
+                        bgColor = bgColor,
+                        iconPainter = painterResource(id = R.drawable.wifi_pending),
+                        text = stringResource(R.string.connecting_to_camera),
                     )
                 }
             }
 
-            Spacer(modifier = Modifier.height(200.dp))
+            AnimatedVisibility(isSoftWifiTimeout) {
+                var waitingProgress by remember { mutableIntStateOf(0) }
 
-            if (isWifiDisabled) {
-                Box(
-                    modifier = Modifier.fillMaxWidth(),
-                    contentAlignment = Alignment.Center,
+                LaunchedEffect(Unit) {
+                    val delayDurationMs = 5000
+
+                    launch {
+                        val delayInterval = delayDurationMs / 100
+
+                        while (true) {
+                            delay(delayInterval)
+                            waitingProgress = (++waitingProgress).coerceAtMost(100)
+                        }
+                    }
+
+                    delay(delayDurationMs) // Give people time to read the message.
+
+                    onSoftWifiTimeoutRetry()
+                }
+
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(32.dp)
+                        .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(16.dp))
+                        .padding(16.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center,
                 ) {
-                    ActionButton(
-                        bgColor = Color.Red,
-                        iconPainter = painterResource(id = R.drawable.wifi_off),
-                        text = stringResource(R.string.wifi_is_not_enabled),
-                        onClick = { context.startActivity(Intent(ACTION_WIFI_SETTINGS)) }
+                    Text(
+                        text = stringResource(R.string.wifi_soft_timeout),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+
+                    Spacer(modifier = Modifier.height(4.dp))
+
+                    LinearProgressIndicator(
+                        modifier = Modifier.fillMaxWidth(),
+                        progress = { waitingProgress.toFloat() / 100 },
+                        drawStopIndicator = { Unit }
                     )
                 }
-            } else if (isLoading) {
-                val infiniteTransition = rememberInfiniteTransition(label = "")
-                val bgColor by infiniteTransition.animateColor(
-                    initialValue = MaterialTheme.colorScheme.primary,
-                    targetValue = Color.Black,
-                    animationSpec = infiniteRepeatable(
-                        animation = tween(800, easing = LinearEasing),
-                        repeatMode = RepeatMode.Reverse
-                    ),
-                    label = "Background Animation"
+            }
+
+            AnimatedVisibility(isHardWifiTimeout) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp)
+                        .background(MaterialTheme.colorScheme.errorContainer, RoundedCornerShape(16.dp))
+                        .padding(16.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(
+                        text = stringResource(R.string.wifi_hard_timeout),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onErrorContainer,
+                    )
+                }
+            }
+        } else {
+            Column(
+                modifier = Modifier.fillMaxSize(),
+                verticalArrangement = Arrangement.spacedBy(18.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                ActionButton(
+                    iconPainter = painterResource(id = R.drawable.tap_and_play),
+                    text = stringResource(R.string.connect_and_start_download),
+                    onClick = {
+                        isLoading = true
+
+                        onConnect()
+                    }
                 )
 
-                KeepScreenOn()
-
-                Box(
-                    modifier = Modifier.fillMaxWidth(),
-                    contentAlignment = Alignment.Center,
+                // TODO: move to settings
+                Button(
+                    onClick = onChangeWifiDetails,
+                    colors = ButtonDefaults.filledTonalButtonColors(),
                 ) {
-                    WifiDecorator {
-                        ActionButton(
-                            bgColor = bgColor,
-                            iconPainter = painterResource(id = R.drawable.wifi_pending),
-                            text = stringResource(R.string.connecting_to_camera),
-                        )
-                    }
-                }
-
-                AnimatedVisibility(isSoftWifiTimeout) {
-                    var waitingProgress by remember { mutableIntStateOf(0) }
-
-                    LaunchedEffect(Unit) {
-                        val delayDurationMs = 5000
-
-                        launch {
-                            val delayInterval = delayDurationMs / 100
-
-                            while (true) {
-                                delay(delayInterval)
-                                waitingProgress = (++waitingProgress).coerceAtMost(100)
-                            }
-                        }
-
-                        delay(delayDurationMs) // Give people time to read the message.
-
-                        onSoftWifiTimeoutRetry()
-                    }
-
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(32.dp)
-                            .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(16.dp))
-                            .padding(16.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.Center,
-                    ) {
-                        Text(
-                            text = stringResource(R.string.wifi_soft_timeout),
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-
-                        Spacer(modifier = Modifier.height(4.dp))
-
-                        LinearProgressIndicator(
-                            modifier = Modifier.fillMaxWidth(),
-                            progress = { waitingProgress.toFloat() / 100 },
-                            drawStopIndicator = { Unit }
-                        )
-                    }
-                }
-
-                AnimatedVisibility(isHardWifiTimeout) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(16.dp)
-                            .background(MaterialTheme.colorScheme.errorContainer, RoundedCornerShape(16.dp))
-                            .padding(16.dp),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Text(
-                            text = stringResource(R.string.wifi_hard_timeout),
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onErrorContainer,
-                        )
-                    }
-                }
-            } else {
-                Column(
-                    modifier = Modifier.fillMaxSize(),
-                    verticalArrangement = Arrangement.spacedBy(18.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                ) {
-                    ActionButton(
-                        iconPainter = painterResource(id = R.drawable.tap_and_play),
-                        text = stringResource(R.string.connect_and_start_download),
-                        onClick = {
-                            isLoading = true
-
-                            onConnect()
-                        }
+                    Icon(
+                        painterResource(id = R.drawable.wifi_lock),
+                        contentDescription = null,
+                        modifier = Modifier.requiredSize(16.dp)
                     )
 
-                    // TODO: move to settings
-                    Button(
-                        onClick = onChangeWifiDetails,
-                        colors = ButtonDefaults.filledTonalButtonColors(),
-                    ) {
-                        Icon(
-                            painterResource(id = R.drawable.wifi_lock),
-                            contentDescription = null,
-                            modifier = Modifier.requiredSize(16.dp)
-                        )
+                    Spacer(modifier = Modifier.width(8.dp))
 
-                        Spacer(modifier = Modifier.width(8.dp))
-
-                        Text(
-                            text = stringResource(R.string.change_wifi_details),
-                            style = MaterialTheme.typography.labelSmall,
-                        )
-                    }
+                    Text(
+                        text = stringResource(R.string.change_wifi_details),
+                        style = MaterialTheme.typography.labelSmall,
+                    )
                 }
             }
         }

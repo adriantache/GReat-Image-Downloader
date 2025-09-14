@@ -12,6 +12,7 @@ sealed interface States {
     data class RequestWifiCredentials(
         val onWifiCredentialsInput: (WifiDetails) -> Unit,
         val onSuggestWifiName: suspend () -> String,
+        val onDismiss: () -> Unit,
     ) : States
 
     data class ConnectWifi(

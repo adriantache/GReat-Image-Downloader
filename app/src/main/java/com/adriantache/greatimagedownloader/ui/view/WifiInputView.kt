@@ -37,6 +37,7 @@ import com.adriantache.greatimagedownloader.domain.ui.model.WifiDetails
 fun WifiInputView(
     onWifiCredentialsInput: (WifiDetails) -> Unit,
     onSuggestWifiName: suspend () -> String,
+    onDismiss: () -> Unit,
 ) {
     val focusManager = LocalFocusManager.current
 
@@ -59,6 +60,10 @@ fun WifiInputView(
         verticalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterVertically),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
+        CloseIcon { onDismiss() }
+
+        Spacer(Modifier.weight(1f))
+
         Image(
             modifier = Modifier.size(100.dp),
             painter = painterResource(id = R.drawable.wifi_lock),
@@ -109,11 +114,13 @@ fun WifiInputView(
         Button(onClick = { onWifiCredentialsInput(WifiDetails(wifiName, wifiPass)) }) {
             Text(stringResource(R.string.save))
         }
+
+        Spacer(Modifier.weight(1f))
     }
 }
 
 @Preview(showBackground = true)
 @Composable
 private fun WifiInputViewPreview() {
-    WifiInputView({}, { "" })
+    WifiInputView({}, { "" }, {})
 }

@@ -63,7 +63,8 @@ class DownloadPhotosUseCaseImpl(
         if (!wifiDetails.isValid) {
             state.value = RequestWifiCredentials(
                 onWifiCredentialsInput = { onWifiCredentialsInput(it.toEntity()) },
-                onSuggestWifiName = { wifiUtil.suggestNetwork() }
+                onSuggestWifiName = { wifiUtil.suggestNetwork() },
+                onDismiss = {},
             )
 
             return
@@ -77,7 +78,8 @@ class DownloadPhotosUseCaseImpl(
             onChangeWifiDetails = {
                 state.value = RequestWifiCredentials(
                     onWifiCredentialsInput = { onWifiCredentialsInput(it.toEntity()) },
-                    onSuggestWifiName = { wifiUtil.suggestNetwork() }
+                    onSuggestWifiName = { wifiUtil.suggestNetwork() },
+                    onDismiss = { connectToWifi() }
                 )
             },
             onSoftTimeoutRetry = {
@@ -310,16 +312,16 @@ class DownloadPhotosUseCaseImpl(
     }
 
     private suspend fun getOnlyRecentPhotos(availableMediaToDownload: List<PhotoFile>): List<PhotoFile> {
-        val latestDownloadedPhotos = repository.getLatestDownloadedPhotos()
+        val latestDownloadedPhotos = repository.getLatestDownloadedPhotos().groupBy { it.directory }
+        val latestDownloadedDirectories = latestDownloadedPhotos.keys
 
         if (latestDownloadedPhotos.isEmpty()) {
             return availableMediaToDownload
         }
 
         return availableMediaToDownload.filter { currentFile ->
-            val latestPhoto = latestDownloadedPhotos.find { it.directory == currentFile.directory } ?: return@filter true
-
-            latestPhoto.name < currentFile.name
+            currentFile.directory in latestDownloadedDirectories &&
+                    currentFile.name !in latestDownloadedPhotos[currentFile.directory].orEmpty().map { it.name }
         }
     }
 
