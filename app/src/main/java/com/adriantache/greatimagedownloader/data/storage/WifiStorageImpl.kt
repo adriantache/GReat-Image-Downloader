@@ -6,6 +6,7 @@ import com.adriantache.greatimagedownloader.data.utils.getString
 
 private const val WIFI_SSID = "WIFI_NAME"
 private const val WIFI_PASS = "WIFI_PASS"
+private const val WIFI_BSSID = "WIFI_BSSID"
 
 class WifiStorageImpl(
     private val sharedPreferences: SharedPreferences,
@@ -18,6 +19,10 @@ class WifiStorageImpl(
         return sharedPreferences.getString(WIFI_PASS)
     }
 
+    override fun getWifiBssid(): String? {
+        return sharedPreferences.getString(WIFI_BSSID)
+    }
+
     override fun saveWifiSsid(ssid: String) {
         sharedPreferences.edit {
             putString(WIFI_SSID, ssid)
@@ -27,6 +32,12 @@ class WifiStorageImpl(
     override fun saveWifiPassword(password: String) {
         sharedPreferences.edit {
             putString(WIFI_PASS, password)
+        }
+    }
+
+    override fun saveWifiBssid(bssid: String) {
+        sharedPreferences.edit {
+            putString(WIFI_BSSID, bssid)
         }
     }
 }

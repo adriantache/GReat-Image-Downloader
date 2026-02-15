@@ -111,7 +111,7 @@ fun WifiInputView(
             label = { Text("Password") }
         )
 
-        Button(onClick = { onWifiCredentialsInput(WifiDetails(wifiName, wifiPass)) }) {
+        Button(onClick = { onWifiCredentialsInput(WifiDetails(wifiName, wifiPass, null)) }) {
             Text(stringResource(R.string.save))
         }
 

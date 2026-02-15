@@ -1,93 +1,110 @@
+@file:SuppressLint("MissingPermission")
+// All permissions required by this class (ACCESS_FINE_LOCATION, NEARBY_WIFI_DEVICES, CHANGE_WIFI_STATE)
+// are handled at the UI layer (in the use case) before any of these functions are called.
+
 package com.adriantache.greatimagedownloader.platform.wifi
 
 import android.annotation.SuppressLint
 import android.content.Context
 import android.net.ConnectivityManager
 import android.net.ConnectivityManager.NetworkCallback
+import android.net.MacAddress
 import android.net.NetworkRequest
 import android.net.wifi.ScanResult
+import android.net.wifi.WifiInfo
 import android.net.wifi.WifiManager
 import android.net.wifi.WifiNetworkSpecifier
 import android.os.Build
 import com.adriantache.greatimagedownloader.domain.wifi.WifiUtil
-import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.firstOrNull
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
+import kotlin.coroutines.resume
 
-class WifiConnector(
+class WifiUtilImpl(
     private val context: Context,
+    private val dispatcher: CoroutineDispatcher = Dispatchers.IO,
 ) : WifiUtil {
     private val wifiManager by lazy { context.getSystemService(Context.WIFI_SERVICE) as WifiManager }
     private val connectivityManager by lazy { context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager }
 
     private var networkCallback: NetworkCallback? = null
-    private var connectionJob: Job? = null
 
     override val isWifiDisabled: Boolean
         get() = !wifiManager.isWifiEnabled
 
-    @SuppressLint("MissingPermission")
     override suspend fun connectToWifi(
         ssid: String,
         password: String,
-        onDisconnected: () -> Unit,
-        onConnected: () -> Unit,
-        onScanning: () -> Unit,
-        onThrottled: () -> Unit,
-    ) {
-        connectionJob?.cancel() // Cancel any existing connection attempts
+        bssid: String?, // The new, optional BSSID for the "fast path"
+    ): Pair<Boolean, String?> { // Returns success status and the new BSSID if found
+        return withTimeoutOrNull(15_000L) { // Overall 15 second timeout
+            suspendCancellableCoroutine { continuation ->
+                val specifierBuilder = WifiNetworkSpecifier.Builder()
+                    .setSsid(ssid)
+                    .setWpa2Passphrase(password)
 
-        connectionJob = CoroutineScope(Dispatchers.IO).launch {
-            val specifier = WifiNetworkSpecifier.Builder()
-                .setSsid(ssid)
-                .setWpa2Passphrase(password)
-                .build()
-
-            val request = NetworkRequest.Builder()
-                .addTransportType(android.net.NetworkCapabilities.TRANSPORT_WIFI)
-                .setNetworkSpecifier(specifier)
-                .build()
-
-            networkCallback = object : NetworkCallback() {
-                override fun onAvailable(network: android.net.Network) {
-                    super.onAvailable(network)
-                    connectivityManager.bindProcessToNetwork(network)
-                    onConnected()
+                // If we have a BSSID, add it to the specifier for a faster connection
+                bssid?.let {
+                    specifierBuilder.setBssid(MacAddress.fromString(it))
                 }
 
-                override fun onLost(network: android.net.Network) {
-                    super.onLost(network)
-                    onDisconnected()
+                val request = NetworkRequest.Builder()
+                    .addTransportType(android.net.NetworkCapabilities.TRANSPORT_WIFI)
+                    .setNetworkSpecifier(specifierBuilder.build())
+                    .build()
+
+                val callback = object : NetworkCallback() {
+                    override fun onAvailable(network: android.net.Network) {
+                        super.onAvailable(network)
+                        connectivityManager.bindProcessToNetwork(network)
+
+                        // On success, get the BSSID from the network capabilities
+                        val capabilities = connectivityManager.getNetworkCapabilities(network)
+                        val wifiInfo = capabilities?.transportInfo as? WifiInfo
+                        val newBssid = wifiInfo?.bssid
+
+                        if (continuation.isActive) {
+                            continuation.resume(Pair(true, newBssid))
+                        }
+                    }
+
+                    override fun onLost(network: android.net.Network) {
+                        super.onLost(network)
+                        cleanup()
+                    }
+
+                    override fun onUnavailable() {
+                        super.onUnavailable()
+                        if (continuation.isActive) {
+                            continuation.resume(Pair(false, null))
+                        }
+                    }
                 }
 
-                override fun onUnavailable() {
-                    super.onUnavailable()
-                    onThrottled()
+                continuation.invokeOnCancellation {
+                    runCatching { connectivityManager.unregisterNetworkCallback(callback) }
                 }
+
+                connectivityManager.requestNetwork(request, callback, 15_000)
             }
-
-            onScanning()
-            connectivityManager.requestNetwork(request, networkCallback as NetworkCallback)
-        }
+        } ?: Pair(false, null) // Timeout case
     }
 
     override fun cleanup() {
-        connectionJob?.cancel()
         networkCallback?.let {
-            connectivityManager.unregisterNetworkCallback(it)
-        }
-        // TODO: re-enable this or remove after testing
-//        connectivityManager.bindProcessToNetwork(null)
+            runCatching { connectivityManager.unregisterNetworkCallback(it) }
+        }?.also { networkCallback = null }
+        connectivityManager.bindProcessToNetwork(null)
     }
 
-    @SuppressLint("MissingPermission")
-    override suspend fun suggestNetwork(): String = withContext(Dispatchers.IO) {
+    override suspend fun suggestNetwork(): String = withContext(dispatcher) {
         try {
             scanNetworks()
                 .firstOrNull { isLikelyRicohCamera(it) }
@@ -111,7 +128,6 @@ class WifiConnector(
         }
     }
 
-    @SuppressLint("MissingPermission")
     private fun scanNetworks(): Flow<ScanResult> = callbackFlow {
         val wifiManager = context.getSystemService(Context.WIFI_SERVICE) as WifiManager
         val receiver = object : android.content.BroadcastReceiver() {
@@ -138,7 +154,8 @@ class WifiConnector(
         awaitClose {
             try {
                 context.unregisterReceiver(receiver)
-            } catch (e: IllegalArgumentException) { /* Ignore */
+            } catch (_: IllegalArgumentException) {
+                /* Ignore */
             }
         }
     }

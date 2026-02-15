@@ -20,11 +20,9 @@ import com.adriantache.greatimagedownloader.domain.wifi.WifiUtil
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
-import kotlin.time.Duration.Companion.seconds
 
 // TODO: IMPORTANT delete partially downloaded files on error
 // TODO: add tests
@@ -42,9 +40,6 @@ class DownloadPhotosUseCaseImpl(
 
     private val scope = CoroutineScope(dispatcher)
 
-    // Used to stop the wifi scan timeout.
-    private var scanningTimeoutJob: Job? = null
-
     private fun onInit() {
         state.value = RequestPermissions(::onPermissionsGranted)
     }
@@ -54,10 +49,7 @@ class DownloadPhotosUseCaseImpl(
     }
 
     // TODO: check if wifi is enabled first and show error message which redirects to wifi settings
-    private fun connectToWifi(
-        isSoftTimeout: Boolean = false,
-        isHardTimeout: Boolean = false,
-    ) {
+    private fun connectToWifi(isHardTimeout: Boolean = false) {
         val wifiDetails = repository.getWifiDetails().toEntity()
 
         if (!wifiDetails.isValid) {
@@ -71,10 +63,9 @@ class DownloadPhotosUseCaseImpl(
         }
 
         state.value = ConnectWifi(
-            isSoftTimeout = isSoftTimeout,
             isHardTimeout = isHardTimeout,
             onCheckWifiDisabled = { wifiUtil.isWifiDisabled },
-            onConnect = { startWifiConnection(wifiDetails) },
+            onConnect = { startWifiConnection(wifiDetails, isHardTimeout) },
             onChangeWifiDetails = {
                 state.value = RequestWifiCredentials(
                     onWifiCredentialsInput = { onWifiCredentialsInput(it.toEntity()) },
@@ -82,42 +73,45 @@ class DownloadPhotosUseCaseImpl(
                     onDismiss = { connectToWifi() }
                 )
             },
-            onSoftTimeoutRetry = {
-                startWifiConnection(wifiDetails)
-
-                // Update state to dismiss dialog.
-                connectToWifi()
-            },
             onAdjustSettings = ::openSettings,
         )
     }
 
-    private fun startWifiConnection(wifiDetails: WifiDetailsEntity) {
+    private fun startWifiConnection(wifiDetails: WifiDetailsEntity, isHardTimeout: Boolean) {
         scope.launch {
-            wifiUtil.connectToWifi(
-                ssid = wifiDetails.ssid!!,
-                password = wifiDetails.password!!,
-                onScanning = { startWifiScanHintLoop() },
-                onThrottled = { connectToWifi(isHardTimeout = true) },
-                onConnected = {
-                    onConnectionSuccess()
-                    scanningTimeoutJob?.cancel()
-                },
-                onDisconnected = {
-                    onConnectionLost()
-                    scanningTimeoutJob?.cancel()
+            var isConnected = false
+            var newBssid: String? = null
+            val maxRetries = 5
+
+            for (attempt in 1..maxRetries) {
+                val (attemptIsConnected, attemptNewBssid) = wifiUtil.connectToWifi(
+                    ssid = wifiDetails.ssid!!,
+                    password = wifiDetails.password!!,
+                    bssid = wifiDetails.bssid,
+                )
+
+                if (attemptIsConnected) {
+                    isConnected = true
+                    newBssid = attemptNewBssid
+                    break // Exit the loop on success
                 }
-            )
-        }
-    }
 
-    private fun startWifiScanHintLoop() {
-        scanningTimeoutJob?.cancel()
+                // Don't delay after the final attempt
+                if (attempt < maxRetries) delay(2000L)
+            }
 
-        scanningTimeoutJob = scope.launch {
-            delay(30.seconds)
-
-            connectToWifi(isSoftTimeout = true)
+            if (isConnected) {
+                // Save the new BSSID for the next connection attempt.
+                val newDetails = wifiDetails.copy(bssid = newBssid).toData()
+                repository.saveWifiDetails(newDetails)
+                onConnectionSuccess()
+            } else {
+                // If all attempts failed, we're in a hard timeout.
+                onConnectionLost()
+                if (!isHardTimeout) {
+                    connectToWifi(isHardTimeout = true)
+                }
+            }
         }
     }
 
@@ -170,6 +164,7 @@ class DownloadPhotosUseCaseImpl(
             return
         }
 
+        // When the user manually inputs new credentials, the old BSSID is cleared.
         repository.saveWifiDetails(details.toData())
 
         connectToWifi()

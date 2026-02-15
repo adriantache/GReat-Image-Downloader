@@ -25,13 +25,11 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -45,17 +43,13 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import com.adriantache.greatimagedownloader.R
-import com.adriantache.greatimagedownloader.domain.utils.model.delay
 import com.adriantache.greatimagedownloader.ui.util.KeepScreenOn
-import kotlinx.coroutines.launch
 
 // TODO: rename this file and split it into a loading view and a start view
 // TODO: make some nice animations between the two states
 // TODO: add preview
 @Composable
 fun StartView(
-    isSoftWifiTimeout: Boolean,
-    onSoftWifiTimeoutRetry: () -> Unit,
     isHardWifiTimeout: Boolean,
     onCheckWifiDisabled: () -> Boolean,
     onConnect: () -> Unit,
@@ -138,51 +132,6 @@ fun StartView(
                 }
             }
 
-            AnimatedVisibility(isSoftWifiTimeout) {
-                var waitingProgress by remember { mutableIntStateOf(0) }
-
-                LaunchedEffect(Unit) {
-                    val delayDurationMs = 5000
-
-                    launch {
-                        val delayInterval = delayDurationMs / 100
-
-                        while (true) {
-                            delay(delayInterval)
-                            waitingProgress = (++waitingProgress).coerceAtMost(100)
-                        }
-                    }
-
-                    delay(delayDurationMs) // Give people time to read the message.
-
-                    onSoftWifiTimeoutRetry()
-                }
-
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(32.dp)
-                        .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(16.dp))
-                        .padding(16.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Center,
-                ) {
-                    Text(
-                        text = stringResource(R.string.wifi_soft_timeout),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-
-                    Spacer(modifier = Modifier.height(4.dp))
-
-                    LinearProgressIndicator(
-                        modifier = Modifier.fillMaxWidth(),
-                        progress = { waitingProgress.toFloat() / 100 },
-                        drawStopIndicator = { Unit }
-                    )
-                }
-            }
-
             AnimatedVisibility(isHardWifiTimeout) {
                 Box(
                     modifier = Modifier
@@ -246,8 +195,6 @@ private fun StartViewPreview() {
         onConnect = {},
         onChangeWifiDetails = {},
         onAdjustSettings = {},
-        isSoftWifiTimeout = true,
         isHardWifiTimeout = true,
-        onSoftWifiTimeoutRetry = {},
     )
 }

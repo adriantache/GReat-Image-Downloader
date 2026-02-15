@@ -29,16 +29,19 @@ class RepositoryImpl(
     override fun getWifiDetails(): WifiDetails {
         val ssid = wifiStorage.getWifiSsid()
         val password = wifiStorage.getWifiPassword()
+        val bssid = wifiStorage.getWifiBssid()
 
         return WifiDetails(
             ssid = ssid,
             password = password,
+            bssid = bssid,
         )
     }
 
     override fun saveWifiDetails(wifiDetails: WifiDetails) {
         wifiStorage.saveWifiSsid(requireNotNull(wifiDetails.ssid))
         wifiStorage.saveWifiPassword(requireNotNull(wifiDetails.password))
+        wifiDetails.bssid?.let { wifiStorage.saveWifiBssid(it) }
     }
 
     override fun getSavedPhotos(): List<String> {

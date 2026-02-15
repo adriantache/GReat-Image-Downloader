@@ -7,6 +7,7 @@ private const val WIFI_PASS_MIN_LENGTH = 8
 data class WifiDetailsEntity(
     val ssid: String?,
     val password: String?,
+    val bssid: String?,
 ) {
     val isValid = !ssid.isNullOrBlank() &&
             !password.isNullOrBlank() &&
@@ -16,6 +17,7 @@ data class WifiDetailsEntity(
         return WifiDetailsData(
             ssid = requireNotNull(ssid),
             password = requireNotNull(password),
+            bssid = bssid,
         )
     }
 }

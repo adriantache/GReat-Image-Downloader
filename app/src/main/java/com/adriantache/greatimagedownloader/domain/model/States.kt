@@ -16,8 +16,6 @@ sealed interface States {
     ) : States
 
     data class ConnectWifi(
-        val isSoftTimeout: Boolean, // Whether we can prompt the user to retry the connection.
-        val onSoftTimeoutRetry: () -> Unit,
         val isHardTimeout: Boolean, // Whether the user has connected too many times.
         val onCheckWifiDisabled: () -> Boolean,
         val onConnect: () -> Unit,
