@@ -1,4 +1,4 @@
-package com.adriantache.greatimagedownloader.platform.wifinew
+package com.adriantache.greatimagedownloader.platform.wifi
 
 import android.annotation.SuppressLint
 import android.content.Context
