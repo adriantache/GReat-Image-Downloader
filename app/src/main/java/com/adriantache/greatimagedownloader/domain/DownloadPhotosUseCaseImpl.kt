@@ -97,7 +97,7 @@ class DownloadPhotosUseCaseImpl(
                 }
 
                 // Don't delay after the final attempt
-                if (attempt < maxRetries) delay(2000L)
+                if (attempt < maxRetries) delay(5000L)
             }
 
             if (isConnected) {
