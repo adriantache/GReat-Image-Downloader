@@ -82,7 +82,7 @@ dependencies {
     implementation "androidx.compose.material3:material3"
 
     implementation "io.insert-koin:koin-android:4.1.1"
-    implementation "io.insert-koin:koin-androidx-compose:4.1.1"
+    implementation "io.insert-koin:koin-androidx-compose:4.2.0"
 
     implementation "com.google.accompanist:accompanist-permissions:0.37.3"
 
