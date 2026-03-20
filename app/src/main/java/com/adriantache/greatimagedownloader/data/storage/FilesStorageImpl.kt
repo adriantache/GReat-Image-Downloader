@@ -32,7 +32,7 @@ private val RICOH_MOVIES_PATH = Environment.DIRECTORY_MOVIES + "/Image Sync"
 private const val DEFAULT_MIME_TYPE = "image/jpg"
 private const val MIME_TYPE_VIDEO = "video"
 private const val MIN_SIZE_BYTES = 100
-private const val OKIO_MAX_BYTES = 8092L
+private const val OKIO_MAX_BYTES = 1024L * 1024L // 1MB buffer for faster I/O
 private const val LAST_PROGRESS_TIME = 300L
 
 private data class DownloadedFile(
@@ -144,7 +144,7 @@ class FilesStorageImpl(
                         var lastProgressReportTime = 0L
 
                         while (!source.exhausted()) {
-                            val bytesRead = source.buffer.read(destination.buffer, OKIO_MAX_BYTES).takeUnless { it == -1L } ?: break
+                            val bytesRead = source.read(destination.buffer, OKIO_MAX_BYTES).takeUnless { it == -1L } ?: break
                             destination.emit()
 
                             totalBytesRead += bytesRead

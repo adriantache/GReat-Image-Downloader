@@ -44,6 +44,8 @@ class WifiUtilImpl(
         password: String,
         bssid: String?, // The new, optional BSSID for the "fast path"
     ): Pair<Boolean, String?> { // Returns success status and the new BSSID if found
+        cleanup()
+
         return withTimeoutOrNull(15_000L) { // Overall 15 second timeout
             suspendCancellableCoroutine { continuation ->
                 val specifierBuilder = WifiNetworkSpecifier.Builder()
@@ -51,8 +53,9 @@ class WifiUtilImpl(
                     .setWpa2Passphrase(password)
 
                 // If we have a BSSID, add it to the specifier for a faster connection
-                bssid?.let {
-                    specifierBuilder.setBssid(MacAddress.fromString(it))
+                // Only use it if it's not the dummy "02:00:00:00:00:00" address
+                if (isValidBssid(bssid)) {
+                    specifierBuilder.setBssid(MacAddress.fromString(bssid!!))
                 }
 
                 val request = NetworkRequest.Builder()
@@ -60,36 +63,32 @@ class WifiUtilImpl(
                     .setNetworkSpecifier(specifierBuilder.build())
                     .build()
 
-                val callback = object : NetworkCallback() {
-                    override fun onAvailable(network: android.net.Network) {
-                        super.onAvailable(network)
-                        connectivityManager.bindProcessToNetwork(network)
+                val callback = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                    object : NetworkCallback(FLAG_INCLUDE_LOCATION_INFO) {
+                        override fun onAvailable(network: android.net.Network) {
+                            handleOnAvailable(network, continuation)
+                        }
 
-                        // On success, get the BSSID from the network capabilities
-                        val capabilities = connectivityManager.getNetworkCapabilities(network)
-                        val wifiInfo = capabilities?.transportInfo as? WifiInfo
-                        val newBssid = wifiInfo?.bssid
-
-                        if (continuation.isActive) {
-                            continuation.resume(Pair(true, newBssid))
+                        override fun onUnavailable() {
+                            handleOnUnavailable(continuation)
                         }
                     }
+                } else {
+                    object : NetworkCallback() {
+                        override fun onAvailable(network: android.net.Network) {
+                            handleOnAvailable(network, continuation)
+                        }
 
-                    override fun onLost(network: android.net.Network) {
-                        super.onLost(network)
-                        cleanup()
-                    }
-
-                    override fun onUnavailable() {
-                        super.onUnavailable()
-                        if (continuation.isActive) {
-                            continuation.resume(Pair(false, null))
+                        override fun onUnavailable() {
+                            handleOnUnavailable(continuation)
                         }
                     }
                 }
 
+                networkCallback = callback
+
                 continuation.invokeOnCancellation {
-                    runCatching { connectivityManager.unregisterNetworkCallback(callback) }
+                    cleanup()
                 }
 
                 connectivityManager.requestNetwork(request, callback, 15_000)
@@ -97,10 +96,40 @@ class WifiUtilImpl(
         } ?: Pair(false, null) // Timeout case
     }
 
+    private fun handleOnAvailable(
+        network: android.net.Network,
+        continuation: kotlinx.coroutines.CancellableContinuation<Pair<Boolean, String?>>,
+    ) {
+        connectivityManager.bindProcessToNetwork(network)
+
+        // On success, get the BSSID from the network capabilities
+        val capabilities = connectivityManager.getNetworkCapabilities(network)
+        val wifiInfo = capabilities?.transportInfo as? WifiInfo
+        val newBssid = wifiInfo?.bssid?.takeIf { isValidBssid(it) }
+
+        if (continuation.isActive) {
+            continuation.resume(Pair(true, newBssid))
+        }
+    }
+
+    private fun handleOnUnavailable(
+        continuation: kotlinx.coroutines.CancellableContinuation<Pair<Boolean, String?>>,
+    ) {
+        if (continuation.isActive) {
+            continuation.resume(Pair(false, null))
+        }
+    }
+
+    private fun isValidBssid(bssid: String?): Boolean {
+        return !bssid.isNullOrBlank() && bssid != "02:00:00:00:00:00"
+    }
+
     override fun cleanup() {
         networkCallback?.let {
             runCatching { connectivityManager.unregisterNetworkCallback(it) }
-        }?.also { networkCallback = null }
+        }
+        networkCallback = null
+
         connectivityManager.bindProcessToNetwork(null)
     }
 
