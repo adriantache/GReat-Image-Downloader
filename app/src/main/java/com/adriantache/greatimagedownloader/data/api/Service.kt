@@ -4,14 +4,21 @@ import com.jakewharton.retrofit2.converter.kotlinx.serialization.asConverterFact
 import kotlinx.serialization.json.Json
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
+import okhttp3.Protocol
 import retrofit2.Retrofit
+import java.util.concurrent.TimeUnit
 
 private const val RICOH_BASE_URL = "http://192.168.0.1/"
 
 fun getApi(): RicohApi {
     val okHttpClient = OkHttpClient.Builder()
-//        .addInterceptor(HttpLoggingInterceptor().setLevel(HttpLoggingInterceptor.Level.BODY)) // Used for debugging.
+        .connectTimeout(15, TimeUnit.SECONDS)
+        .readTimeout(60, TimeUnit.SECONDS)
+        .writeTimeout(15, TimeUnit.SECONDS)
+        .protocols(listOf(Protocol.HTTP_1_1)) // Cameras often have issues with HTTP/2 negotiation.
+        .retryOnConnectionFailure(true)
         .build()
+
     val contentType = "application/json".toMediaType()
     val json = Json { ignoreUnknownKeys = true }
 

@@ -32,7 +32,7 @@ private val RICOH_MOVIES_PATH = Environment.DIRECTORY_MOVIES + "/Image Sync"
 private const val DEFAULT_MIME_TYPE = "image/jpg"
 private const val MIME_TYPE_VIDEO = "video"
 private const val MIN_SIZE_BYTES = 100
-private const val OKIO_MAX_BYTES = 1024L * 1024L // 1MB buffer for faster I/O
+private const val OKIO_BUFFER_SIZE = 256 * 1024L // 256KB buffer for optimized I/O
 private const val LAST_PROGRESS_TIME = 300L
 
 private data class DownloadedFile(
@@ -132,6 +132,7 @@ class FilesStorageImpl(
     ): Flow<PhotoDownloadInfo> {
         return flow {
             val fileSize = responseBody.contentLength()
+            speedCalculator.reset()
 
             val contentResolver = context.contentResolver
             val imageUri = getFileUri(contentResolver, file, responseBody.contentType()) ?: return@flow
@@ -143,30 +144,33 @@ class FilesStorageImpl(
                         var totalBytesRead = 0L
                         var lastProgressReportTime = 0L
 
-                        while (!source.exhausted()) {
-                            val bytesRead = source.read(destination.buffer, OKIO_MAX_BYTES).takeUnless { it == -1L } ?: break
+                        while (true) {
+                            val bytesRead = source.read(destination.buffer, OKIO_BUFFER_SIZE)
+                            if (bytesRead == -1L) break
+                            
                             destination.emit()
 
                             totalBytesRead += bytesRead
                             speedCalculator.registerData(bytesRead)
 
-                            val progress = if (fileSize == -1L) {
-                                0
-                            } else {
-                                (totalBytesRead.toFloat() / fileSize * 100).roundToInt().coerceAtMost(99)
-                            }
+                            val currentTime = System.currentTimeMillis()
+                            if (currentTime - lastProgressReportTime > LAST_PROGRESS_TIME) {
+                                val progress = if (fileSize <= 0L) {
+                                    0
+                                } else {
+                                    (totalBytesRead.toFloat() / fileSize * 100).roundToInt().coerceAtMost(99)
+                                }
 
-                            if (System.currentTimeMillis() - lastProgressReportTime > LAST_PROGRESS_TIME) {
                                 emit(
                                     PhotoDownloadInfo(
                                         uri = imageUri,
                                         downloadProgress = progress,
                                         name = file.name,
-                                        downloadSpeed = Kbps(speedCalculator.getAverageSpeedKbps()),
+                                        downloadSpeed = Kbps(speedCalculator.getAverageSpeedKbps(currentTime)),
                                     )
                                 )
 
-                                lastProgressReportTime = System.currentTimeMillis()
+                                lastProgressReportTime = currentTime
                             }
                         }
 
@@ -179,8 +183,6 @@ class FilesStorageImpl(
                             )
                         )
                     } catch (e: IOException) {
-                        // TODO: handle other exceptions, let usecase react to them
-                        // TODO: fix this not working
                         deleteInvalidFile(contentResolver, imageUri)
                         return@flow
                     }

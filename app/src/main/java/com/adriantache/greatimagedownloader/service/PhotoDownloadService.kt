@@ -2,10 +2,11 @@ package com.adriantache.greatimagedownloader.service
 
 import android.app.NotificationManager
 import android.app.Service
-import android.content.Context
 import android.content.Intent
+import android.net.wifi.WifiManager
 import android.os.Build
 import android.os.IBinder
+import android.os.PowerManager
 import android.util.Log
 import com.adriantache.greatimagedownloader.domain.data.Repository
 import com.adriantache.greatimagedownloader.domain.data.model.PhotoFile
@@ -24,6 +25,9 @@ class PhotoDownloadService : Service(), KoinComponent {
     private val repository: Repository by inject()
     private val dataTransferTool: DataTransferTool by inject()
 
+    private var wifiLock: WifiManager.WifiLock? = null
+    private var wakeLock: PowerManager.WakeLock? = null
+
     // Used to interrupt download without corrupting current file.
     private var continueDownload = false
 
@@ -36,6 +40,8 @@ class PhotoDownloadService : Service(), KoinComponent {
 
         val notification = getNotification(this)
         startForeground(1, notification)
+
+        acquireLocks()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -61,6 +67,12 @@ class PhotoDownloadService : Service(), KoinComponent {
         }
 
         return super.onStartCommand(intent, flags, startId)
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        releaseLocks()
+        scope.cancel()
     }
 
     private fun start(photosToDownload: List<PhotoFileItem>?) {
@@ -104,7 +116,7 @@ class PhotoDownloadService : Service(), KoinComponent {
     }
 
     private fun updateNotification(currentImage: Int, totalImages: Int) {
-        val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        val notificationManager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
 
         val notification = getNotification(this, currentImage, totalImages)
         notificationManager.notify(1, notification)
@@ -113,8 +125,31 @@ class PhotoDownloadService : Service(), KoinComponent {
     private suspend fun disconnect() {
         repository.shutDownCamera()
 
-        scope.cancel()
         stopSelf()
+    }
+
+    private fun acquireLocks() {
+        val wifiManager = applicationContext.getSystemService(WIFI_SERVICE) as WifiManager
+        val lockType =
+            WifiManager.WIFI_MODE_FULL_LOW_LATENCY
+        wifiLock = wifiManager.createWifiLock(lockType, "PhotoDownloadService:WifiLock")
+        wifiLock?.acquire()
+
+        val powerManager = getSystemService(POWER_SERVICE) as PowerManager
+        wakeLock = powerManager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "PhotoDownloadService:WakeLock")
+        wakeLock?.acquire(10 * 60 * 1000L /*10 minutes max*/)
+    }
+
+    private fun releaseLocks() {
+        if (wifiLock?.isHeld == true) {
+            wifiLock?.release()
+        }
+        wifiLock = null
+
+        if (wakeLock?.isHeld == true) {
+            wakeLock?.release()
+        }
+        wakeLock = null
     }
 
     enum class Actions {

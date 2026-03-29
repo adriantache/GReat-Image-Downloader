@@ -12,4 +12,6 @@ interface SpeedCalculator {
         @VisibleForTesting
         currentTime: Long = System.currentTimeMillis(),
     ): Double
+
+    fun reset()
 }

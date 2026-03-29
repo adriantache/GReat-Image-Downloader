@@ -3,7 +3,7 @@ package com.adriantache.greatimagedownloader.data.utils.speedCalculator
 import androidx.annotation.VisibleForTesting
 
 private const val EXPIRATION_MS = 5 * 1000L
-private const val MAX_SAMPLES = 10000
+private const val MAX_SAMPLES = 5000
 private const val BYTES_PER_KB = 1024
 
 private data class DataPoint(
@@ -12,19 +12,26 @@ private data class DataPoint(
 )
 
 class SpeedCalculatorImpl : SpeedCalculator {
-    @get:Synchronized
-    @set:Synchronized
-    private var samples = emptyList<DataPoint>()
+    private val samples = ArrayDeque<DataPoint>()
+    private var totalKbInWindow = 0.0
 
+    @Synchronized
     override fun registerData(
         downloadedBytes: Long,
         currentTime: Long,
     ) {
-        val dataPoint = DataPoint(downloadedKb = downloadedBytes.toDouble() / BYTES_PER_KB, timestamp = currentTime)
+        val downloadedKb = downloadedBytes.toDouble() / BYTES_PER_KB
+        val dataPoint = DataPoint(downloadedKb = downloadedKb, timestamp = currentTime)
 
-        samples += dataPoint
+        samples.addLast(dataPoint)
+        totalKbInWindow += downloadedKb
+
+        while (samples.size > MAX_SAMPLES) {
+            totalKbInWindow -= samples.removeFirst().downloadedKb
+        }
     }
 
+    @Synchronized
     override fun getAverageSpeedKbps(
         @VisibleForTesting
         currentTime: Long,
@@ -33,21 +40,30 @@ class SpeedCalculatorImpl : SpeedCalculator {
 
         if (samples.size < 2) return 0.0
 
-        val initialTimestamp = samples[0].timestamp
-        val durationSeconds = (currentTime - initialTimestamp) / 1000
+        val initialTimestamp = samples.first().timestamp
+        val durationMs = currentTime - initialTimestamp
 
-        if (durationSeconds < 1) return 0.0
+        if (durationMs < 500) return 0.0
 
-        return samples.sumOf { it.downloadedKb } / durationSeconds
+        return (totalKbInWindow / durationMs) * 1000.0
+    }
+
+    @Synchronized
+    override fun reset() {
+        samples.clear()
+        totalKbInWindow = 0.0
     }
 
     @VisibleForTesting
+    @Synchronized
     fun clearData() {
-        samples = emptyList()
+        reset()
     }
 
     private fun removeStaleSamples(currentTime: Long = System.currentTimeMillis()) {
-        // We exclude samples that have expired or are too many.
-        samples = samples.takeLast(MAX_SAMPLES).filter { it.timestamp > currentTime - EXPIRATION_MS }
+        val threshold = currentTime - EXPIRATION_MS
+        while (samples.isNotEmpty() && samples.first().timestamp < threshold) {
+            totalKbInWindow -= samples.removeFirst().downloadedKb
+        }
     }
 }
