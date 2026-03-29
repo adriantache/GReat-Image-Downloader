@@ -246,7 +246,7 @@ class DownloadPhotosUseCaseImpl(
     }
 
     private suspend fun getPhotosToDownload(): List<PhotoFile>? {
-        val savedMedia = (repository.getSavedPhotos() + repository.getSavedMovies()).distinct()
+        val savedMedia = (repository.getSavedPhotos().map { it.name } + repository.getSavedMovies()).distinct()
         val availablePhotos = repository.getCameraPhotoList()
 
         if (availablePhotos.isFailure) {
