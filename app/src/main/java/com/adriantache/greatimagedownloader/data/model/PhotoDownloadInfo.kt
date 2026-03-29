@@ -9,6 +9,7 @@ data class PhotoDownloadInfo(
     val uri: Uri,
     val downloadProgress: Int,
     val downloadSpeed: Kbps,
+    val isLandscape: Boolean = false,
 ) {
     fun toDomain(): PhotoDownloadInfo {
         return PhotoDownloadInfo(
@@ -16,6 +17,7 @@ data class PhotoDownloadInfo(
             uri = uri.toString(),
             downloadProgress = downloadProgress,
             downloadSpeed = downloadSpeed,
+            isLandscape = isLandscape,
         )
     }
 }

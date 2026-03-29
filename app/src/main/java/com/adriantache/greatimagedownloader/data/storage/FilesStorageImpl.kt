@@ -4,13 +4,14 @@ import android.content.ContentResolver
 import android.content.ContentUris
 import android.content.ContentValues
 import android.content.Context
+import android.graphics.BitmapFactory
+import android.media.ExifInterface
 import android.net.Uri
 import android.os.Build
 import android.os.Environment
 import android.provider.MediaStore
 import android.provider.OpenableColumns
 import androidx.core.app.ActivityCompat.startIntentSenderForResult
-import com.adriantache.greatimagedownloader.data.model.PhotoDownloadInfo
 import com.adriantache.greatimagedownloader.data.utils.speedCalculator.SpeedCalculator
 import com.adriantache.greatimagedownloader.data.utils.speedCalculator.SpeedCalculatorImpl
 import com.adriantache.greatimagedownloader.domain.data.model.PhotoFile
@@ -38,14 +39,23 @@ private const val LAST_PROGRESS_TIME = 300L
 private data class DownloadedFile(
     val id: Long,
     val name: String,
+    val isLandscape: Boolean,
 )
 
 class FilesStorageImpl(
     private val context: Context,
     private val speedCalculator: SpeedCalculator = SpeedCalculatorImpl(),
 ) : FilesStorage {
-    override fun getSavedPhotos(): List<String> {
-        return getSavedPhotoFiles().map { it.name }
+    override fun getSavedPhotos(): List<com.adriantache.greatimagedownloader.domain.data.model.PhotoDownloadInfo> {
+        return getSavedPhotoFiles().map {
+            com.adriantache.greatimagedownloader.domain.data.model.PhotoDownloadInfo(
+                name = it.name,
+                uri = ContentUris.withAppendedId(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, it.id).toString(),
+                downloadProgress = 100,
+                downloadSpeed = Kbps(0.0),
+                isLandscape = it.isLandscape
+            )
+        }
     }
 
     private fun getSavedPhotoFiles(): List<DownloadedFile> {
@@ -57,6 +67,9 @@ class FilesStorageImpl(
             MediaStore.MediaColumns._ID,
             MediaStore.MediaColumns.TITLE,
             OpenableColumns.SIZE,
+            MediaStore.Images.ImageColumns.WIDTH,
+            MediaStore.Images.ImageColumns.HEIGHT,
+            MediaStore.Images.ImageColumns.ORIENTATION,
         )
 
         val results = mutableListOf<DownloadedFile>()
@@ -74,10 +87,25 @@ class FilesStorageImpl(
                 val id = cursor.getLong(0)
                 val title = cursor.getString(1)
                 val size = cursor.getLong(2)
+                val width = cursor.getInt(3)
+                val height = cursor.getInt(4)
+                val orientation = cursor.getInt(5)
 
-                // TODO: return files to delete (size 51) instead
                 if (size > MIN_SIZE_BYTES) {
-                    results.add(DownloadedFile(id = id, name = title))
+                    // Check if EXIF orientation swaps width and height
+                    val isActuallyLandscape = if (orientation == 90 || orientation == 270) {
+                        height > width
+                    } else {
+                        width > height
+                    }
+
+                    results.add(
+                        DownloadedFile(
+                            id = id,
+                            name = title,
+                            isLandscape = isActuallyLandscape
+                        )
+                    )
                 }
             }
         }
@@ -98,6 +126,8 @@ class FilesStorageImpl(
             MediaStore.MediaColumns._ID,
             MediaStore.MediaColumns.TITLE,
             OpenableColumns.SIZE,
+            MediaStore.Video.VideoColumns.WIDTH,
+            MediaStore.Video.VideoColumns.HEIGHT,
         )
 
         val results = mutableListOf<DownloadedFile>()
@@ -115,10 +145,17 @@ class FilesStorageImpl(
                 val id = cursor.getLong(0)
                 val title = cursor.getString(1)
                 val size = cursor.getLong(2)
+                val width = cursor.getInt(3)
+                val height = cursor.getInt(4)
 
-                // TODO: return files to delete (size 51) instead
                 if (size > MIN_SIZE_BYTES) {
-                    results.add(DownloadedFile(id = id, name = title))
+                    results.add(
+                        DownloadedFile(
+                            id = id,
+                            name = title,
+                            isLandscape = width > height
+                        )
+                    )
                 }
             }
         }
@@ -129,7 +166,7 @@ class FilesStorageImpl(
     override fun savePhoto(
         responseBody: ResponseBody,
         file: PhotoFile,
-    ): Flow<PhotoDownloadInfo> {
+    ): Flow<com.adriantache.greatimagedownloader.domain.data.model.PhotoDownloadInfo> {
         return flow {
             val fileSize = responseBody.contentLength()
             speedCalculator.reset()
@@ -147,7 +184,7 @@ class FilesStorageImpl(
                         while (true) {
                             val bytesRead = source.read(destination.buffer, OKIO_BUFFER_SIZE)
                             if (bytesRead == -1L) break
-                            
+
                             destination.emit()
 
                             totalBytesRead += bytesRead
@@ -162,8 +199,8 @@ class FilesStorageImpl(
                                 }
 
                                 emit(
-                                    PhotoDownloadInfo(
-                                        uri = imageUri,
+                                    com.adriantache.greatimagedownloader.domain.data.model.PhotoDownloadInfo(
+                                        uri = imageUri.toString(),
                                         downloadProgress = progress,
                                         name = file.name,
                                         downloadSpeed = Kbps(speedCalculator.getAverageSpeedKbps(currentTime)),
@@ -174,12 +211,16 @@ class FilesStorageImpl(
                             }
                         }
 
+                        // Get image dimensions after download completes
+                        val isLandscape = isLandscape(contentResolver, imageUri)
+
                         emit(
-                            PhotoDownloadInfo(
-                                uri = imageUri,
+                            com.adriantache.greatimagedownloader.domain.data.model.PhotoDownloadInfo(
+                                uri = imageUri.toString(),
                                 downloadProgress = 100,
                                 name = file.name,
                                 downloadSpeed = Kbps(speedCalculator.getAverageSpeedKbps()),
+                                isLandscape = isLandscape,
                             )
                         )
                     } catch (e: IOException) {
@@ -192,6 +233,26 @@ class FilesStorageImpl(
             outputStream.close()
             responseBody.close()
         }.flowOn(Dispatchers.IO)
+    }
+
+    private fun isLandscape(resolver: ContentResolver, uri: Uri): Boolean {
+        return try {
+            val options = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+            resolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, options) }
+
+            var orientation = ExifInterface.ORIENTATION_NORMAL
+            resolver.openInputStream(uri)?.use {
+                orientation = ExifInterface(it).getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL)
+            }
+
+            if (orientation == ExifInterface.ORIENTATION_ROTATE_90 || orientation == ExifInterface.ORIENTATION_ROTATE_270) {
+                options.outHeight > options.outWidth
+            } else {
+                options.outWidth > options.outHeight
+            }
+        } catch (e: Exception) {
+            false
+        }
     }
 
     override fun deleteMedia(uri: String) {

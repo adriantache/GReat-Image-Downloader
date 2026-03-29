@@ -12,7 +12,7 @@ interface Repository {
     fun saveWifiDetails(wifiDetails: WifiDetails)
 
     // Data storage
-    fun getSavedPhotos(): List<String>
+    fun getSavedPhotos(): List<PhotoDownloadInfo>
     fun getSavedMovies(): List<String>
     fun deleteMedia(uri: String)
     suspend fun deleteAll()

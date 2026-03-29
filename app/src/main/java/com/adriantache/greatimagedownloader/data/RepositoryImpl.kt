@@ -15,7 +15,6 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
 
 // TODO: [IMPORTANT] add error handling to all network calls
@@ -44,7 +43,7 @@ class RepositoryImpl(
         wifiDetails.bssid?.let { wifiStorage.saveWifiBssid(it) }
     }
 
-    override fun getSavedPhotos(): List<String> {
+    override fun getSavedPhotos(): List<PhotoDownloadInfo> {
         return filesStorage.getSavedPhotos()
     }
 
@@ -87,9 +86,7 @@ class RepositoryImpl(
             val result = filesStorage.savePhoto(
                 responseBody = imageResponse,
                 file = photo,
-            ).map {
-                it.toDomain()
-            }
+            )
 
             emitAll(result)
         }.flowOn(ioDispatcher)
