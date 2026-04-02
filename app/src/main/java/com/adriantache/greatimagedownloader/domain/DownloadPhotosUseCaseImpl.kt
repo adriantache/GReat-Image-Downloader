@@ -17,6 +17,7 @@ import com.adriantache.greatimagedownloader.domain.model.States.RequestWifiCrede
 import com.adriantache.greatimagedownloader.domain.model.WifiDetailsEntity
 import com.adriantache.greatimagedownloader.domain.utils.model.Event
 import com.adriantache.greatimagedownloader.domain.wifi.WifiUtil
+import com.adriantache.greatimagedownloader.service.DataTransferTool
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -29,6 +30,7 @@ import kotlinx.coroutines.launch
 class DownloadPhotosUseCaseImpl(
     private val repository: Repository,
     private val wifiUtil: WifiUtil,
+    private val dataTransferTool: DataTransferTool,
     dispatcher: CoroutineDispatcher = Dispatchers.IO,
 ) : DownloadPhotosUseCase {
     @Suppress("kotlin:S6305")
@@ -39,6 +41,28 @@ class DownloadPhotosUseCaseImpl(
     override val event: MutableStateFlow<Event<Events>?> = MutableStateFlow(null)
 
     private val scope = CoroutineScope(dispatcher)
+
+    private var photosToDownload: List<PhotoFile> = emptyList()
+    private val downloadedPhotoUris = mutableMapOf<String, PhotoDownloadInfo>()
+
+    init {
+        scope.launch {
+            dataTransferTool.imageFlow.collect { info ->
+                info?.let {
+                    downloadedPhotoUris[it.name] = it
+                    onDownloadPhotoInfo(it)
+                }
+            }
+        }
+
+        scope.launch {
+            dataTransferTool.downloadFinishedFlow.collect { eventValue ->
+                if (eventValue?.value != null) {
+                    onDownloadFinished()
+                }
+            }
+        }
+    }
 
     private fun onInit() {
         state.value = RequestPermissions(::onPermissionsGranted)
@@ -208,41 +232,42 @@ class DownloadPhotosUseCaseImpl(
     }
 
     private fun downloadMediaWithService(photosToDownload: List<PhotoFile>) {
-        val totalPhotos = photosToDownload.size
-        val downloadedPhotoUris = mutableMapOf<String, PhotoDownloadInfo>()
+        this.photosToDownload = photosToDownload
+        this.downloadedPhotoUris.clear()
+        this.dataTransferTool.reset()
 
         event.value = Event(
             Events.DownloadPhotosWithService(
-                photosToDownload = photosToDownload,
-                onDownloadInfo = {
-                    downloadedPhotoUris[it.name] = it
-                    onDownloadPhotoInfo(it, downloadedPhotoUris, totalPhotos)
-                },
-                onDownloadFinished = {
-                    updateLatestDownloadedPhotos(photosToDownload, downloadedPhotoUris)
-
-                    state.value = Init(::onInit)
-
-                    event.value = Event(
-                        SuccessfulDownload(numDownloadedPhotos = downloadedPhotoUris.size)
-                    )
-                }
+                photosToDownload = photosToDownload
             )
         )
     }
 
-    private fun onDownloadPhotoInfo(
-        info: PhotoDownloadInfo,
-        downloadedPhotoUris: MutableMap<String, PhotoDownloadInfo>,
-        totalPhotos: Int,
-    ) {
-        state.value = DownloadPhotos(
-            currentPhotoNum = downloadedPhotoUris.size,
-            totalPhotos = totalPhotos,
-            downloadedPhotos = downloadedPhotoUris.values.toList(),
-            downloadSpeed = info.downloadSpeed,
-            onStopDownloading = ::onStopDownloading,
-        )
+    private fun onDownloadPhotoInfo(info: PhotoDownloadInfo) {
+        val currentState = state.value
+        if (currentState is DownloadPhotos || currentState is GetPhotos || currentState is States.SelectFolders) {
+            state.value = DownloadPhotos(
+                currentPhotoNum = downloadedPhotoUris.size,
+                totalPhotos = photosToDownload.size,
+                downloadedPhotos = downloadedPhotoUris.values.toList(),
+                downloadSpeed = info.downloadSpeed,
+                onStopDownloading = ::onStopDownloading,
+            )
+        }
+    }
+
+    private fun onDownloadFinished() {
+        val wasStopping = state.value is States.StoppingDownload
+
+        updateLatestDownloadedPhotos(photosToDownload, downloadedPhotoUris)
+
+        state.value = Init(::onInit)
+
+        if (!wasStopping) {
+            event.value = Event(
+                SuccessfulDownload(numDownloadedPhotos = downloadedPhotoUris.size)
+            )
+        }
     }
 
     private suspend fun getPhotosToDownload(): List<PhotoFile>? {

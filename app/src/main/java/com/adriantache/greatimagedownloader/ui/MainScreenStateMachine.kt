@@ -40,7 +40,6 @@ import com.adriantache.greatimagedownloader.domain.model.States.Init
 import com.adriantache.greatimagedownloader.domain.model.States.RequestPermissions
 import com.adriantache.greatimagedownloader.domain.model.States.RequestWifiCredentials
 import com.adriantache.greatimagedownloader.domain.utils.model.Event
-import com.adriantache.greatimagedownloader.service.DataTransferTool
 import com.adriantache.greatimagedownloader.service.PhotoDownloadService
 import com.adriantache.greatimagedownloader.service.PhotoDownloadService.Actions
 import com.adriantache.greatimagedownloader.service.PhotoDownloadService.Companion.PHOTOS_LIST_EXTRA
@@ -54,9 +53,7 @@ import com.adriantache.greatimagedownloader.ui.view.StartView
 import com.adriantache.greatimagedownloader.ui.view.StoppingView
 import com.adriantache.greatimagedownloader.ui.view.SyncView
 import com.adriantache.greatimagedownloader.ui.view.WifiInputView
-import kotlinx.coroutines.launch
 import org.koin.androidx.compose.koinViewModel
-import org.koin.compose.koinInject
 
 
 @Composable
@@ -132,7 +129,6 @@ fun MainScreenStateMachine(
 
                 is ChangeSettings -> ChangeSettingsScreen(state)
 
-                // TODO: improve this, since the state will likely get overwritten by download progress
                 States.StoppingDownload -> StoppingView()
             }
         }
@@ -143,7 +139,6 @@ fun MainScreenStateMachine(
 private fun HandleEvent(
     events: Event<Events>?,
     snackbarHostState: SnackbarHostState,
-    dataTransferTool: DataTransferTool = koinInject(),
 ) {
     val context = LocalContext.current
 
@@ -165,22 +160,7 @@ private fun HandleEvent(
             CannotDownloadPhotos -> Unit
             InvalidWifiInput -> Unit
             is ConfirmDeleteAllPhotos -> Unit
-            is DownloadPhotosWithService -> {
-                launch {
-                    dataTransferTool.imageFlow.collect { photoDownloadInfo ->
-                        photoDownloadInfo?.let { event.onDownloadInfo(it) }
-                    }
-                }
-
-                launch {
-                    dataTransferTool.downloadFinishedFlow.collect {
-                        if (it?.value != null) event.onDownloadFinished()
-                    }
-                }
-
-                downloadPhotos(context, event.photosToDownload)
-            }
-
+            is DownloadPhotosWithService -> downloadPhotos(context, event.photosToDownload)
             StopDownload -> stopDownload(context)
         }
     }

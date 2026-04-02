@@ -7,4 +7,9 @@ import kotlinx.coroutines.flow.MutableStateFlow
 class DataTransferTool {
     val imageFlow = MutableStateFlow<PhotoDownloadInfo?>(null)
     val downloadFinishedFlow = MutableStateFlow<Event<Unit>?>(null)
+
+    fun reset() {
+        imageFlow.value = null
+        downloadFinishedFlow.value = null
+    }
 }

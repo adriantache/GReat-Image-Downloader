@@ -5,5 +5,5 @@ import com.adriantache.greatimagedownloader.domain.DownloadPhotosUseCaseImpl
 import org.koin.dsl.module
 
 val domainModule = module {
-    single<DownloadPhotosUseCase> { DownloadPhotosUseCaseImpl(get(), get()) }
+    single<DownloadPhotosUseCase> { DownloadPhotosUseCaseImpl(get(), get(), get()) }
 }

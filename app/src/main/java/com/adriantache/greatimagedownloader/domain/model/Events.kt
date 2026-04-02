@@ -1,6 +1,5 @@
 package com.adriantache.greatimagedownloader.domain.model
 
-import com.adriantache.greatimagedownloader.domain.data.model.PhotoDownloadInfo
 import com.adriantache.greatimagedownloader.domain.data.model.PhotoFile
 
 sealed interface Events {
@@ -17,8 +16,6 @@ sealed interface Events {
 
     data class DownloadPhotosWithService(
         val photosToDownload: List<PhotoFile>,
-        val onDownloadInfo: (PhotoDownloadInfo) -> Unit,
-        val onDownloadFinished: () -> Unit,
     ) : Events
 
     data object StopDownload : Events
