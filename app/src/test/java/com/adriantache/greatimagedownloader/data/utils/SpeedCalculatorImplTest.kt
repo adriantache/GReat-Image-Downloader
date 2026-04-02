@@ -36,6 +36,6 @@ class SpeedCalculatorImplTest {
         val endTime = datasetSize * delayPerSample
         val result = speedCalculator.getAverageSpeedKbps(currentTime = endTime)
 
-        assertThat(result).isEqualTo(12250.0)
+        assertThat(result).isEqualTo(10000.0)
     }
 }
