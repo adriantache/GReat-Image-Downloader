@@ -215,6 +215,11 @@ class DownloadPhotosUseCaseImpl(
                 availableMediaToDownload
             }
 
+            if (mediaToDownload.isEmpty()) {
+                onDownloadFinished()
+                return@launch
+            }
+
             val folderInfo = FolderInfo(mediaToDownload)
 
             if (folderInfo.hasMultipleFolders) {
