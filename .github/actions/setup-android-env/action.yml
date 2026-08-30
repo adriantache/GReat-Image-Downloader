@@ -3,12 +3,16 @@ description: 'Sets up Java 17, Android SDK, and decodes the keystore'
 
 inputs:
   keystore-b64:
+    description: 'Base64 encoded keystore string'
     required: true
   keystore-password:
+    description: 'Password for the release keystore'
     required: true
   keystore-alias:
+    description: 'Alias for the release key'
     required: true
   key-password:
+    description: 'Password for the release key'
     required: true
 
 runs:
