@@ -3,13 +3,13 @@ name: Android CI
 on:
   push:
     branches: [ "master" ]
-    tags:
-      - 'v*' # Triggers release job when you push a tag like 'v1.0.0'
   pull_request:
     branches: [ "master" ]
+  release:
+    types: [ published ]
 
 permissions:
-  contents: write # REQUIRED to create a GitHub Release
+  contents: write
 
 jobs:
   build:
@@ -31,8 +31,8 @@ jobs:
 
   release:
     name: Build and Publish Release APK
-    needs: build # Ensures this only runs if the tests pass first
-    if: startsWith(github.ref, 'refs/tags/') # Only runs when a tag is pushed
+    needs: build
+    if: github.event_name == 'release'
     runs-on: ubuntu-latest
     steps:
       - name: Checking out branch
@@ -52,5 +52,5 @@ jobs:
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: app/build/outputs/apk/release/*.apk # Verify this path matches your app module name
+          files: app/build/outputs/apk/release/*.apk
           generate_release_notes: true
