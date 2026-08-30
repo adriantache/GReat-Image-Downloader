@@ -169,7 +169,6 @@ class FilesStorageImpl(
     ): Flow<com.adriantache.greatimagedownloader.domain.data.model.PhotoDownloadInfo> {
         return flow {
             val fileSize = responseBody.contentLength()
-            speedCalculator.reset()
 
             val contentResolver = context.contentResolver
             val imageUri = getFileUri(contentResolver, file, responseBody.contentType()) ?: return@flow

@@ -24,6 +24,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
+import kotlin.time.Duration.Companion.seconds
 
 // TODO: IMPORTANT delete partially downloaded files on error
 // TODO: add tests
@@ -121,7 +122,7 @@ class DownloadPhotosUseCaseImpl(
                 }
 
                 // Don't delay after the final attempt
-                if (attempt < maxRetries) delay(20000L)
+                if (attempt < maxRetries) delay(20.seconds)
             }
 
             if (isConnected) {
