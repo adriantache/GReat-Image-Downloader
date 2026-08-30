@@ -28,6 +28,9 @@ jobs:
             build-mode: manual
 
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
       - name: Setup Shared Android Environment
         uses: ./.github/actions/setup-android-env
         with:
