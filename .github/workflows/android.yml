@@ -39,7 +39,6 @@ jobs:
 
         run: |
           echo $ENCODED_STRING > keystore-b64.txt
-          cat keystore-b64.txt
           base64 -d keystore-b64.txt > keystore.jks
           echo $RELEASE_KEYSTORE_PASSWORD > local.properties
           echo $RELEASE_KEYSTORE_ALIAS >> local.properties
