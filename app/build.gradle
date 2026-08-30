@@ -7,12 +7,12 @@ plugins {
 
 android {
     namespace 'com.adriantache.greatimagedownloader'
-    compileSdk 36
+    compileSdk 37
 
     defaultConfig {
         applicationId "com.adriantache.greatimagedownloader"
         minSdk 30
-        targetSdk 36
+        targetSdk 37
         versionCode 10101
         versionName "1.1.1"
 
