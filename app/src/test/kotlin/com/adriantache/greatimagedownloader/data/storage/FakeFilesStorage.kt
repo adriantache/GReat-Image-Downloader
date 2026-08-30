@@ -10,7 +10,7 @@ import okhttp3.ResponseBody
 class FakeFilesStorage : FilesStorage {
     var savedPhotos = mutableListOf<PhotoDownloadInfo>()
     var savedMovies = mutableListOf<String>()
-    val savePhotoFlow = MutableSharedFlow<Result<PhotoDownloadInfo>>()
+    val savePhotoFlow = MutableSharedFlow<Result<PhotoDownloadInfo>>(replay = 1)
     
     var getSavedPhotosResult: Result<List<PhotoDownloadInfo>> = Result.success(emptyList())
     var getSavedMoviesResult: Result<List<String>> = Result.success(emptyList())

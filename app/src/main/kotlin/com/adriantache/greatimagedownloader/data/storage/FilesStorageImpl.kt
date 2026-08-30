@@ -5,13 +5,13 @@ import android.content.ContentUris
 import android.content.ContentValues
 import android.content.Context
 import android.graphics.BitmapFactory
-import android.media.ExifInterface
 import android.net.Uri
-import android.os.Build
 import android.os.Environment
 import android.provider.MediaStore
 import android.provider.OpenableColumns
 import androidx.core.app.ActivityCompat.startIntentSenderForResult
+import androidx.core.net.toUri
+import androidx.exifinterface.media.ExifInterface
 import com.adriantache.greatimagedownloader.data.storage.error.FilesStorageException
 import com.adriantache.greatimagedownloader.data.utils.speedCalculator.SpeedCalculator
 import com.adriantache.greatimagedownloader.data.utils.speedCalculator.SpeedCalculatorImpl
@@ -271,7 +271,7 @@ class FilesStorageImpl(
             } else {
                 options.outWidth > options.outHeight
             }
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             false
         }
     }
@@ -281,7 +281,7 @@ class FilesStorageImpl(
 
         deleteInvalidFile(
             contentResolver = contentResolver,
-            uri = Uri.parse(uri),
+            uri = uri.toUri(),
         )
     }.fold(
         onSuccess = { Result.success(it) },
@@ -309,7 +309,7 @@ class FilesStorageImpl(
         file: PhotoFile,
         contentType: MediaType?,
     ): Uri? {
-        val mediaTypeString = contentType?.toString() ?: DEFAULT_MIME_TYPE
+        val mediaTypeString = contentType?.let { "${it.type}/${it.subtype}" } ?: DEFAULT_MIME_TYPE
         val isVideo = contentType?.type == MIME_TYPE_VIDEO
         val rootFolder = if (isVideo) RICOH_MOVIES_PATH else RICOH_PHOTOS_PATH
         val fullPath = rootFolder + "/" + file.directory
@@ -330,10 +330,6 @@ class FilesStorageImpl(
         uri: Uri,
     ) {
         val activity = context.findActivity() ?: return
-
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
-            return
-        }
 
         val pendingIntent = MediaStore.createDeleteRequest(contentResolver, listOf(uri))
         startIntentSenderForResult(activity, pendingIntent.intentSender, 1, null, 0, 0, 0, null)

@@ -2,6 +2,8 @@ package com.adriantache.greatimagedownloader.data.mapper
 
 import com.adriantache.greatimagedownloader.data.api.error.CameraException
 import com.adriantache.greatimagedownloader.data.storage.error.FilesStorageException
+import com.adriantache.greatimagedownloader.data.storage.error.PreferencesStorageException
+import com.adriantache.greatimagedownloader.data.storage.error.WifiStorageException
 import com.adriantache.greatimagedownloader.domain.model.DomainError
 import com.adriantache.greatimagedownloader.domain.model.DomainException
 
@@ -9,8 +11,13 @@ fun Throwable.toDomainException(): DomainException {
     val domainError = when (this) {
         is CameraException.CameraDisconnected -> DomainError.CameraDisconnected
         is CameraException.NetworkError -> DomainError.NetworkError
+        is CameraException.Unknown -> DomainError.Unknown(message)
         is FilesStorageException.StorageFull -> DomainError.StorageFull
-        is FilesStorageException.FileCreationError -> DomainError.NetworkError // Or maybe a new DomainError?
+        is FilesStorageException.FileCreationError -> DomainError.NetworkError
+        is FilesStorageException.Unknown -> DomainError.Unknown(cause.message)
+        is WifiStorageException.Unknown -> DomainError.Unknown(cause.message)
+        is PreferencesStorageException.SerializationError -> DomainError.Unknown("Serialization error: ${cause.message}")
+        is PreferencesStorageException.Unknown -> DomainError.Unknown(cause.message)
         is DomainException -> return this
         else -> DomainError.Unknown(message)
     }

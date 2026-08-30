@@ -99,6 +99,8 @@ dependencies {
     testImplementation libs.assertj.core
     testImplementation libs.mockk
     testImplementation libs.kotlinx.coroutines.test
+    testImplementation libs.robolectric
+    testImplementation libs.androidx.test.core
 
     androidTestImplementation libs.androidx.test.ext.junit
     androidTestImplementation libs.androidx.espresso.core
