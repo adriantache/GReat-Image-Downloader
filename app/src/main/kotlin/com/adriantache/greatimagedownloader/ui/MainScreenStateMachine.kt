@@ -2,6 +2,7 @@ package com.adriantache.greatimagedownloader.ui
 
 import android.content.Context
 import android.content.Intent
+import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.AlertDialog
@@ -81,7 +82,8 @@ fun MainScreenStateMachine(
         Surface(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(padding),
+                .padding(padding)
+                .consumeWindowInsets(padding),
         ) {
             HandleEvent(event, snackbarHostState)
 
