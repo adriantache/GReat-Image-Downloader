@@ -3,19 +3,20 @@ name: Android CI
 on:
   push:
     branches: [ "master" ]
+    tags:
+      - 'v*' # Triggers release job when you push a tag like 'v1.0.0'
   pull_request:
     branches: [ "master" ]
 
 permissions:
-  contents: read
+  contents: write # REQUIRED to create a GitHub Release
 
 jobs:
   build:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checking out branch
-        uses: actions/checkout@v7
+        uses: actions/checkout@v4
 
       - name: Setup Shared Android Environment
         uses: ./.github/actions/setup-android-env
@@ -27,3 +28,29 @@ jobs:
 
       - name: Run Tests with Gradle
         run: ./gradlew test
+
+  release:
+    name: Build and Publish Release APK
+    needs: build # Ensures this only runs if the tests pass first
+    if: startsWith(github.ref, 'refs/tags/') # Only runs when a tag is pushed
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checking out branch
+        uses: actions/checkout@v4
+
+      - name: Setup Shared Android Environment
+        uses: ./.github/actions/setup-android-env
+        with:
+          keystore-b64: ${{ secrets.KEYSTORE_BASE_64 }}
+          keystore-password: ${{ secrets.RELEASE_KEYSTORE_PASSWORD }}
+          keystore-alias: ${{ secrets.RELEASE_KEYSTORE_ALIAS }}
+          key-password: ${{ secrets.RELEASE_KEY_PASSWORD }}
+
+      - name: Build Release APK
+        run: ./gradlew assembleRelease
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: app/build/outputs/apk/release/*.apk # Verify this path matches your app module name
+          generate_release_notes: true
