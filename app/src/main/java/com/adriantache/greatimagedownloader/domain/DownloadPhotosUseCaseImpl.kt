@@ -216,6 +216,7 @@ class DownloadPhotosUseCaseImpl(
             }
 
             if (mediaToDownload.isEmpty()) {
+                repository.shutDownCamera()
                 onDownloadFinished()
                 return@launch
             }
@@ -280,6 +281,7 @@ class DownloadPhotosUseCaseImpl(
         val availablePhotos = repository.getCameraPhotoList()
 
         if (availablePhotos.isFailure) {
+            repository.shutDownCamera()
             event.value = Event(Events.CannotDownloadPhotos)
             state.value = Init(::onInit)
             return null

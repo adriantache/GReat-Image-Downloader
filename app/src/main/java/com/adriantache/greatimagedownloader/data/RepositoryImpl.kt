@@ -93,7 +93,11 @@ class RepositoryImpl(
     }
 
     override suspend fun shutDownCamera() {
-        ricohApi.finish()
+        try {
+            ricohApi.finish()
+        } catch (e: Exception) {
+            // Ignore errors when shutting down the camera.
+        }
     }
 
     override suspend fun saveLatestDownloadedPhotos(photos: List<PhotoFile>) {
