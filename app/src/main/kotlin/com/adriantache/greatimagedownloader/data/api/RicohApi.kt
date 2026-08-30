@@ -24,6 +24,6 @@ interface RicohApi {
         @Path("file") file: String,
     ): ResponseBody
 
-    @POST("/v1/device/finish")
+    @POST("v1/device/finish")
     suspend fun finish()
 }

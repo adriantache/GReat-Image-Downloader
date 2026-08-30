@@ -27,6 +27,7 @@ import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.coroutines.resume
+import kotlin.time.Duration.Companion.seconds
 
 class WifiUtilImpl(
     private val context: Context,
@@ -52,7 +53,7 @@ class WifiUtilImpl(
 
         cleanup()
 
-        return withTimeoutOrNull(15_000L) { // Overall 15 second timeout
+        return withTimeoutOrNull(15.seconds) { // Overall 15 second timeout
             suspendCancellableCoroutine { continuation ->
                 val specifierBuilder = WifiNetworkSpecifier.Builder()
                     .setSsid(ssid)
@@ -132,7 +133,11 @@ class WifiUtilImpl(
         val wifiInfo = capabilities.transportInfo as? WifiInfo ?: return false
         
         val currentSsid = wifiInfo.ssid?.removeSurrounding("\"")
-        return currentSsid == targetSsid.removeSurrounding("\"")
+        if (currentSsid == targetSsid.removeSurrounding("\"")) {
+            connectivityManager.bindProcessToNetwork(network)
+            return true
+        }
+        return false
     }
 
     private fun isValidBssid(bssid: String?): Boolean {

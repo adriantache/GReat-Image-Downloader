@@ -80,16 +80,17 @@ class DownloadPhotosUseCaseImplTest {
         wifiUtil.connectResult = Pair(true, "BSSID")
         repository.cameraPhotoListResult = Result.failure(DomainException(DomainError.CameraDisconnected))
 
-        val init = useCase.state.value as States.Init
-        init.onInit()
+        (useCase.state.value as States.Init).onInit()
         advanceUntilIdle()
 
-        val reqPerm = useCase.state.value as States.RequestPermissions
-        reqPerm.onPermissionsGranted()
+        (useCase.state.value as States.RequestPermissions).onPermissionsGranted()
         advanceUntilIdle()
 
-        val connectWifi = useCase.state.value as States.ConnectWifi
-        connectWifi.onConnect()
+        (useCase.state.value as States.ConnectWifi).onConnect()
+        advanceUntilIdle()
+
+        // Simulate Service connecting successfully
+        dataTransferTool.serviceStateFlow.value = DataTransferTool.ServiceState.FETCHING
         advanceUntilIdle()
 
         // Assert
@@ -125,6 +126,10 @@ class DownloadPhotosUseCaseImplTest {
         (useCase.state.value as States.RequestPermissions).onPermissionsGranted()
         advanceUntilIdle()
         (useCase.state.value as States.ConnectWifi).onConnect()
+        advanceUntilIdle()
+        
+        // Simulate Service connecting
+        dataTransferTool.serviceStateFlow.value = DataTransferTool.ServiceState.FETCHING
         advanceUntilIdle()
 
         val eventValue = useCase.event.value?.value as Events.ErrorDialog
@@ -171,6 +176,10 @@ class DownloadPhotosUseCaseImplTest {
         (useCase.state.value as States.ConnectWifi).onConnect()
         advanceUntilIdle()
 
+        // Simulate Service connected
+        dataTransferTool.serviceStateFlow.value = DataTransferTool.ServiceState.FETCHING
+        advanceUntilIdle()
+
         // Assert
         assertThat(useCase.state.value).isInstanceOf(States.SelectFolders::class.java)
     }
@@ -191,6 +200,10 @@ class DownloadPhotosUseCaseImplTest {
         (useCase.state.value as States.RequestPermissions).onPermissionsGranted()
         advanceUntilIdle()
         (useCase.state.value as States.ConnectWifi).onConnect()
+        advanceUntilIdle()
+
+        // Simulate Service connected
+        dataTransferTool.serviceStateFlow.value = DataTransferTool.ServiceState.FETCHING
         advanceUntilIdle()
 
         val selectFolders = useCase.state.value as States.SelectFolders
@@ -226,8 +239,11 @@ class DownloadPhotosUseCaseImplTest {
         advanceUntilIdle()
         
         repository.wifiDetails = WifiDetails("SSID", "PASS", "BSSID")
-        val connectWifi = useCase.state.value as States.ConnectWifi
-        connectWifi.onConnect()
+        (useCase.state.value as States.ConnectWifi).onConnect()
+        advanceUntilIdle()
+        
+        // Simulate Service connected
+        dataTransferTool.serviceStateFlow.value = DataTransferTool.ServiceState.FETCHING
         advanceUntilIdle()
 
         // Assert

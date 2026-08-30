@@ -18,6 +18,7 @@ fun PermissionsView(
     isLocationPermissionGranted: Boolean,
     isPhotosPermissionGranted: Boolean,
     isNotificationsPermissionGranted: Boolean,
+    isLocalNetworkPermissionGranted: Boolean,
     onRequestPermissions: () -> Unit,
 ) {
     Column(
@@ -35,6 +36,13 @@ fun PermissionsView(
         PermissionsRowView(
             text = "Location access - for scanning of and connecting to WiFi",
             isGranted = isLocationPermissionGranted,
+        )
+
+        Spacer(Modifier.height(8.dp))
+
+        PermissionsRowView(
+            text = "Local network access - for communicating with the camera",
+            isGranted = isLocalNetworkPermissionGranted,
         )
 
         Spacer(Modifier.height(8.dp))
@@ -66,5 +74,6 @@ private fun PermissionsViewPreview() {
         isLocationPermissionGranted = true,
         isPhotosPermissionGranted = false,
         isNotificationsPermissionGranted = false,
+        isLocalNetworkPermissionGranted = true,
     ) {}
 }

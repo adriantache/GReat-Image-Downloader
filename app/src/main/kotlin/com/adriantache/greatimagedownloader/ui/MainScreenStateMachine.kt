@@ -95,11 +95,12 @@ fun MainScreenStateMachine(
 
                 is RequestPermissions -> PermissionsRequester(
                     onPermissionsGranted = state.onPermissionsGranted
-                ) { isLocationPermissionGranted, isPhotosPermissionGranted, isNotificationsPermissionGranted, onRequestPermissions ->
+                ) { isLocationPermissionGranted, isPhotosPermissionGranted, isNotificationsPermissionGranted, isLocalNetworkPermissionGranted, onRequestPermissions ->
                     PermissionsView(
                         isLocationPermissionGranted = isLocationPermissionGranted,
                         isPhotosPermissionGranted = isPhotosPermissionGranted,
                         isNotificationsPermissionGranted = isNotificationsPermissionGranted,
+                        isLocalNetworkPermissionGranted = isLocalNetworkPermissionGranted,
                         onRequestPermissions = onRequestPermissions,
                     )
                 }
@@ -213,6 +214,7 @@ private fun HandleEvent(
 
         is SuccessfulDownload -> Unit
         is DownloadPhotosWithService -> Unit
+        is ConnectWithService -> Unit
         is StopDownload -> Unit
         null -> Unit
     }
@@ -254,7 +256,7 @@ fun connectToWifiWithService(
 ) {
     val serviceIntent = Intent(context, PhotoDownloadService::class.java)
     serviceIntent.putExtra(WIFI_DETAILS_EXTRA, WifiDetailsItem(ssid, password, bssid))
-    serviceIntent.action = Actions.CONNECT_AND_DOWNLOAD.name
+    serviceIntent.action = Actions.CONNECT.name
 
     ContextCompat.startForegroundService(context, serviceIntent)
 }

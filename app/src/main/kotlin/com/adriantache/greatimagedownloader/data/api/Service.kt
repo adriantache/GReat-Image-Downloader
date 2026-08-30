@@ -1,11 +1,11 @@
 package com.adriantache.greatimagedownloader.data.api
 
-import retrofit2.converter.kotlinx.serialization.asConverterFactory
 import kotlinx.serialization.json.Json
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Protocol
 import retrofit2.Retrofit
+import retrofit2.converter.kotlinx.serialization.asConverterFactory
 import java.util.concurrent.TimeUnit
 
 private const val RICOH_BASE_URL = "http://192.168.0.1/"

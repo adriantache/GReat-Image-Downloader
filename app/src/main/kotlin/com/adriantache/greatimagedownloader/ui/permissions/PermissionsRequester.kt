@@ -24,9 +24,21 @@ fun PermissionsRequester(
         isLocationPermissionGranted: Boolean,
         isPhotosPermissionGranted: Boolean,
         isNotificationsPermissionGranted: Boolean,
+        isLocalNetworkPermissionGranted: Boolean,
         onRequestPermissions: () -> Unit,
     ) -> Unit,
 ) {
+    val localNetworkPermissionState = if (Build.VERSION.SDK_INT >= 37) { // API 37: Android 17
+        rememberPermissionState(permission = "android.permission.ACCESS_LOCAL_NETWORK") { }
+    } else {
+        null
+    }
+
+    val isLocalNetworkPermissionGranted by remember(localNetworkPermissionState) {
+        derivedStateOf {
+            localNetworkPermissionState == null || localNetworkPermissionState.status.isGranted
+        }
+    }
     val photosPermissionState = rememberPermissionState(
         permission = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             READ_MEDIA_IMAGES
@@ -50,10 +62,16 @@ fun PermissionsRequester(
         }
     }
 
-    LaunchedEffect(locationPermissionState, photosPermissionState, isNotificationsPermissionGranted) {
+    LaunchedEffect(
+        locationPermissionState,
+        photosPermissionState,
+        isNotificationsPermissionGranted,
+        isLocalNetworkPermissionGranted
+    ) {
         if (locationPermissionState.status.isGranted &&
             photosPermissionState.status.isGranted &&
-            isNotificationsPermissionGranted
+            isNotificationsPermissionGranted &&
+            isLocalNetworkPermissionGranted
         ) {
             onPermissionsGranted()
         }
@@ -63,11 +81,13 @@ fun PermissionsRequester(
         /* isLocationPermissionGranted */ locationPermissionState.status.isGranted,
         /* isPhotosPermissionGranted */ photosPermissionState.status.isGranted,
         /* isNotificationsPermissionGranted */ isNotificationsPermissionGranted,
+        /* isLocalNetworkPermissionGranted */ isLocalNetworkPermissionGranted,
     ) /* onRequestPermissions */ {
         onRequestPermissions(
             photosPermissionState,
             locationPermissionState,
             notificationsPermissionsState,
+            localNetworkPermissionState,
             onPermissionsGranted,
         )
     }
@@ -78,12 +98,14 @@ private fun onRequestPermissions(
     photosPermissionState: PermissionState,
     locationPermissionState: PermissionState,
     notificationsPermissionState: PermissionState?,
+    localNetworkPermissionState: PermissionState?,
     onPermissionsGranted: () -> Unit,
 ) {
     when {
         !locationPermissionState.status.isGranted -> locationPermissionState.launchPermissionRequest()
         !photosPermissionState.status.isGranted -> photosPermissionState.launchPermissionRequest()
         notificationsPermissionState != null && !notificationsPermissionState.status.isGranted -> notificationsPermissionState.launchPermissionRequest()
+        localNetworkPermissionState != null && !localNetworkPermissionState.status.isGranted -> localNetworkPermissionState.launchPermissionRequest()
         else -> onPermissionsGranted()
     }
 }

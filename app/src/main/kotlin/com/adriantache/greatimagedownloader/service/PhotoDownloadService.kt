@@ -16,7 +16,6 @@ import com.adriantache.greatimagedownloader.domain.utils.model.Event
 import com.adriantache.greatimagedownloader.domain.wifi.WifiUtil
 import com.adriantache.greatimagedownloader.service.DataTransferTool.ServiceState
 import com.adriantache.greatimagedownloader.service.model.PhotoFileItem
-import com.adriantache.greatimagedownloader.service.model.WifiDetailsItem
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.TimeoutCancellationException
@@ -33,7 +32,6 @@ import kotlin.time.Duration.Companion.seconds
 class PhotoDownloadService : Service(), KoinComponent {
     private val scope = CoroutineScope(Dispatchers.IO)
     private val repository: Repository by inject()
-    private val wifiUtil: WifiUtil by inject()
     private val dataTransferTool: DataTransferTool by inject()
 
     private var wifiLock: WifiManager.WifiLock? = null
@@ -58,6 +56,7 @@ class PhotoDownloadService : Service(), KoinComponent {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
             Actions.START.name -> {
+                Log.d("PhotoDownloadService", "onStartCommand: START")
                 val photosToDownload = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                     intent.extras?.getParcelableArrayList(PHOTOS_LIST_EXTRA, PhotoFileItem::class.java)
                 } else {
@@ -67,14 +66,9 @@ class PhotoDownloadService : Service(), KoinComponent {
                 start(photosToDownload?.toList())
             }
 
-            Actions.CONNECT_AND_DOWNLOAD.name -> {
-                val wifiDetails = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                    intent.getParcelableExtra(WIFI_DETAILS_EXTRA, WifiDetailsItem::class.java)
-                } else {
-                    @Suppress("DEPRECATION")
-                    intent.getParcelableExtra(WIFI_DETAILS_EXTRA)
-                }
-                connectAndDownload(wifiDetails)
+            Actions.CONNECT.name -> {
+                Log.d("PhotoDownloadService", "onStartCommand: CONNECT")
+                dataTransferTool.serviceStateFlow.value = ServiceState.CONNECTING
             }
 
             Actions.STOP.name -> {
@@ -111,90 +105,6 @@ class PhotoDownloadService : Service(), KoinComponent {
         }
     }
 
-    private fun connectAndDownload(wifiDetails: WifiDetailsItem?) {
-        if (wifiDetails == null) {
-            Log.e(this::class.java.simpleName, "Wifi details are null!")
-            scope.launch { disconnect() }
-            return
-        }
-
-        continueDownload = true
-
-        scope.launch {
-            try {
-                withTimeout(2.minutes) {
-                    dataTransferTool.serviceStateFlow.value = ServiceState.CONNECTING
-
-                    var isConnected = false
-                    var newBssid: String? = null
-                    val maxRetries = 3 // Reduced retries to keep within timeout and avoid too many dialogs
-
-                    for (attempt in 1..maxRetries) {
-                        val (attemptIsConnected, attemptNewBssid) = wifiUtil.connectToWifi(
-                            ssid = wifiDetails.ssid,
-                            password = wifiDetails.password,
-                            bssid = wifiDetails.bssid,
-                        )
-
-                        if (attemptIsConnected) {
-                            isConnected = true
-                            newBssid = attemptNewBssid
-                            break
-                        }
-
-                        if (!continueDownload) break
-                        // If we failed and it's not the last attempt, wait a bit
-                        if (attempt < maxRetries) delay(10.seconds)
-                    }
-
-                    if (!isConnected || !continueDownload) {
-                        if (continueDownload) {
-                            handleError(DomainError.NetworkError)
-                        }
-                        disconnect()
-                        return@withTimeout
-                    }
-
-                    // Save new BSSID
-                    repository.getWifiDetails().getOrNull()?.let { currentDetails ->
-                        repository.saveWifiDetails(currentDetails.copy(bssid = newBssid))
-                    }
-
-                    dataTransferTool.serviceStateFlow.value = ServiceState.FETCHING
-                    delay(1.seconds) // Stability delay
-
-                    val availableMedia = getPhotosToDownload()
-                    if (availableMedia == null) {
-                        disconnect()
-                        return@withTimeout
-                    }
-
-                    val settings = repository.getSettings().getOrNull()
-                    val shouldOnlyDownloadRecent = settings?.rememberLastDownloadedPhotos == true
-
-                    val mediaToDownload = if (shouldOnlyDownloadRecent) {
-                        getOnlyRecentPhotos(availableMedia)
-                    } else {
-                        availableMedia
-                    }
-
-                    if (mediaToDownload.isEmpty()) {
-                        dataTransferTool.downloadFinishedFlow.value = Event(Unit)
-                        disconnect()
-                        return@withTimeout
-                    }
-
-                    dataTransferTool.serviceStateFlow.value = ServiceState.DOWNLOADING
-                    downloadPhotos(mediaToDownload.map { PhotoFileItem(it.directory, it.name) })
-                }
-            } catch (_: TimeoutCancellationException) {
-                Log.e(this::class.java.simpleName, "Operation timed out!")
-                handleError(DomainError.NetworkError) // Or a specific timeout error
-                disconnect()
-            }
-        }
-    }
-
     private fun handleError(error: DomainError) {
         val message = when (error) {
             DomainError.CameraDisconnected -> "Camera connection lost."
@@ -207,41 +117,6 @@ class PhotoDownloadService : Service(), KoinComponent {
         notificationManager.notify(2, getErrorNotification(this, message))
 
         dataTransferTool.errorFlow.value = Event(error)
-    }
-
-    private suspend fun getPhotosToDownload(): List<PhotoFile>? {
-        val savedPhotos = repository.getSavedPhotos().getOrNull().orEmpty()
-        val savedMovies = repository.getSavedMovies().getOrNull().orEmpty()
-        val savedMedia = (savedPhotos.map { it.name } + savedMovies).distinct()
-        val availablePhotosResult = repository.getCameraPhotoList()
-
-        if (availablePhotosResult.isFailure) {
-            val throwable = availablePhotosResult.exceptionOrNull()
-            val domainError = (throwable as? DomainException)?.domainError ?: DomainError.Unknown(throwable?.message)
-            handleError(domainError)
-            return null
-        }
-
-        return availablePhotosResult.getOrNull()
-            .orEmpty()
-            .filter {
-                val nameWithoutExtension = it.name.split(".")[0]
-                !savedMedia.contains(nameWithoutExtension)
-            }
-    }
-
-    private suspend fun getOnlyRecentPhotos(availableMediaToDownload: List<PhotoFile>): List<PhotoFile> {
-        val latestDownloadedPhotos = repository.getLatestDownloadedPhotos().getOrNull().orEmpty().groupBy { it.directory }
-        val latestDownloadedDirectories = latestDownloadedPhotos.keys
-
-        if (latestDownloadedPhotos.isEmpty()) {
-            return availableMediaToDownload
-        }
-
-        return availableMediaToDownload.filter { currentFile ->
-            currentFile.directory in latestDownloadedDirectories &&
-                    currentFile.name !in latestDownloadedPhotos[currentFile.directory].orEmpty().map { it.name }
-        }
     }
 
     private fun downloadPhotos(photosToDownload: List<PhotoFileItem>) {
@@ -343,7 +218,7 @@ class PhotoDownloadService : Service(), KoinComponent {
     }
 
     enum class Actions {
-        START, CONNECT_AND_DOWNLOAD, STOP
+        START, CONNECT, STOP
     }
 
     companion object {
