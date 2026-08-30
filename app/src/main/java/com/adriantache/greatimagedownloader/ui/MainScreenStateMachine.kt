@@ -24,6 +24,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.core.content.ContextCompat
 import com.adriantache.greatimagedownloader.R
 import com.adriantache.greatimagedownloader.domain.data.model.PhotoFile
+import com.adriantache.greatimagedownloader.domain.model.DomainError
 import com.adriantache.greatimagedownloader.domain.model.Events
 import com.adriantache.greatimagedownloader.domain.model.Events.CannotDownloadPhotos
 import com.adriantache.greatimagedownloader.domain.model.Events.ConfirmDeleteAllPhotos
@@ -162,6 +163,7 @@ private fun HandleEvent(
             is ConfirmDeleteAllPhotos -> Unit
             is DownloadPhotosWithService -> downloadPhotos(context, event.photosToDownload)
             StopDownload -> stopDownload(context)
+            is Events.ErrorDialog -> Unit
         }
     }
 
@@ -187,10 +189,36 @@ private fun HandleEvent(
             },
         )
 
+        is Events.ErrorDialog -> AlertDialog(
+            onDismissRequest = event.onDismiss,
+            title = { Text("Error") },
+            text = { Text(getErrorMessage(event.error)) },
+            confirmButton = {
+                TextButton(onClick = event.onRetry) {
+                    Text("Retry".uppercase())
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = event.onDismiss) {
+                    Text("Cancel".uppercase())
+                }
+            },
+        )
+
         is SuccessfulDownload -> Unit
         is DownloadPhotosWithService -> Unit
         is StopDownload -> Unit
         null -> Unit
+    }
+}
+
+@Composable
+private fun getErrorMessage(error: DomainError): String {
+    return when (error) {
+        DomainError.CameraDisconnected -> "Camera connection lost. Please reconnect."
+        DomainError.StorageFull -> "Storage full! Please free up space on your device."
+        DomainError.NetworkError -> "Network error. Please check your connection."
+        is DomainError.Unknown -> "An unexpected error occurred: ${error.message}"
     }
 }
 

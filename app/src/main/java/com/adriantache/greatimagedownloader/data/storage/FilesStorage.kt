@@ -6,15 +6,15 @@ import kotlinx.coroutines.flow.Flow
 import okhttp3.ResponseBody
 
 interface FilesStorage {
-    fun getSavedPhotos(): List<PhotoDownloadInfo>
-    fun getSavedMovies(): List<String>
+    fun getSavedPhotos(): Result<List<PhotoDownloadInfo>>
+    fun getSavedMovies(): Result<List<String>>
 
     fun savePhoto(
         responseBody: ResponseBody,
         file: PhotoFile,
-    ): Flow<PhotoDownloadInfo>
+    ): Flow<Result<PhotoDownloadInfo>>
 
-    fun deleteMedia(uri: String)
+    fun deleteMedia(uri: String): Result<Unit>
 
-    suspend fun deleteAll()
+    suspend fun deleteAll(): Result<Unit>
 }

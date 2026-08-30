@@ -19,4 +19,10 @@ sealed interface Events {
     ) : Events
 
     data object StopDownload : Events
+
+    data class ErrorDialog(
+        val error: DomainError,
+        val onRetry: () -> Unit,
+        val onDismiss: () -> Unit,
+    ) : Events
 }

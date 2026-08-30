@@ -4,11 +4,11 @@ import com.adriantache.greatimagedownloader.domain.data.model.PhotoFile
 import com.adriantache.greatimagedownloader.domain.model.Settings
 
 interface PreferencesStorage {
-    suspend fun saveLatestDownloadedPhotos(photos: List<PhotoFile>)
+    suspend fun saveLatestDownloadedPhotos(photos: List<PhotoFile>): Result<Unit>
 
-    suspend fun getLatestDownloadedPhotos(): List<PhotoFile>
+    suspend fun getLatestDownloadedPhotos(): Result<List<PhotoFile>>
 
-    suspend fun saveSettings(settings: Settings)
+    suspend fun saveSettings(settings: Settings): Result<Unit>
 
-    suspend fun getSettings(): Settings
+    suspend fun getSettings(): Result<Settings>
 }

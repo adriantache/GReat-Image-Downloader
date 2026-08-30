@@ -5,9 +5,9 @@ import com.adriantache.greatimagedownloader.domain.data.model.WifiDetails as Wif
 private const val WIFI_PASS_MIN_LENGTH = 8
 
 data class WifiDetailsEntity(
-    val ssid: String?,
-    val password: String?,
-    val bssid: String?,
+    val ssid: String? = null,
+    val password: String? = null,
+    val bssid: String? = null,
 ) {
     val isValid = !ssid.isNullOrBlank() &&
             !password.isNullOrBlank() &&

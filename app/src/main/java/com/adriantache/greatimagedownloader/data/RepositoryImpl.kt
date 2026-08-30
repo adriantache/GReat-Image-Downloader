@@ -1,6 +1,9 @@
 package com.adriantache.greatimagedownloader.data
 
 import com.adriantache.greatimagedownloader.data.api.RicohApi
+import com.adriantache.greatimagedownloader.data.api.error.CameraException
+import com.adriantache.greatimagedownloader.data.mapper.mapDomainError
+import com.adriantache.greatimagedownloader.data.mapper.toDomainException
 import com.adriantache.greatimagedownloader.data.storage.FilesStorage
 import com.adriantache.greatimagedownloader.data.storage.PreferencesStorage
 import com.adriantache.greatimagedownloader.data.storage.WifiStorage
@@ -12,12 +15,12 @@ import com.adriantache.greatimagedownloader.domain.model.Settings
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.withContext
+import java.io.IOException
+import java.net.SocketTimeoutException
 
-// TODO: [IMPORTANT] add error handling to all network calls
 class RepositoryImpl(
     private val wifiStorage: WifiStorage,
     private val filesStorage: FilesStorage,
@@ -25,94 +28,127 @@ class RepositoryImpl(
     private val ricohApi: RicohApi,
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
 ) : Repository {
-    override fun getWifiDetails(): WifiDetails {
-        val ssid = wifiStorage.getWifiSsid()
-        val password = wifiStorage.getWifiPassword()
-        val bssid = wifiStorage.getWifiBssid()
+    override fun getWifiDetails(): Result<WifiDetails> {
+        val ssidResult = wifiStorage.getWifiSsid()
+        val passwordResult = wifiStorage.getWifiPassword()
+        val bssidResult = wifiStorage.getWifiBssid()
 
-        return WifiDetails(
-            ssid = ssid,
-            password = password,
-            bssid = bssid,
-        )
+        return if (ssidResult.isSuccess && passwordResult.isSuccess && bssidResult.isSuccess) {
+            Result.success(
+                WifiDetails(
+                    ssid = ssidResult.getOrNull(),
+                    password = passwordResult.getOrNull(),
+                    bssid = bssidResult.getOrNull(),
+                )
+            )
+        } else {
+            // Pick the first failure if any.
+            val failure = ssidResult.exceptionOrNull()
+                ?: passwordResult.exceptionOrNull()
+                ?: bssidResult.exceptionOrNull()
+                ?: Exception("Unknown WifiStorage error")
+
+            Result.failure(failure.toDomainException())
+        }
     }
 
-    override fun saveWifiDetails(wifiDetails: WifiDetails) {
-        wifiStorage.saveWifiSsid(requireNotNull(wifiDetails.ssid))
-        wifiStorage.saveWifiPassword(requireNotNull(wifiDetails.password))
-        wifiDetails.bssid?.let { wifiStorage.saveWifiBssid(it) }
+    override fun saveWifiDetails(wifiDetails: WifiDetails): Result<Unit> {
+        return wifiStorage.saveWifiSsid(requireNotNull(wifiDetails.ssid))
+            .onSuccess { wifiStorage.saveWifiPassword(requireNotNull(wifiDetails.password)) }
+            .onSuccess { wifiDetails.bssid?.let { bssid -> wifiStorage.saveWifiBssid(bssid) } }
+            .mapDomainError()
     }
 
-    override fun getSavedPhotos(): List<PhotoDownloadInfo> {
-        return filesStorage.getSavedPhotos()
+    override fun getSavedPhotos(): Result<List<PhotoDownloadInfo>> =
+        filesStorage.getSavedPhotos().mapDomainError()
+
+    override fun getSavedMovies(): Result<List<String>> =
+        filesStorage.getSavedMovies().mapDomainError()
+
+    override fun deleteMedia(uri: String): Result<Unit> =
+        filesStorage.deleteMedia(uri).mapDomainError()
+
+    override suspend fun deleteAll(): Result<Unit> = withContext(ioDispatcher) {
+        filesStorage.deleteAll().mapDomainError()
     }
 
-    override fun getSavedMovies(): List<String> {
-        return filesStorage.getSavedMovies()
-    }
-
-    override fun deleteMedia(uri: String) {
-        filesStorage.deleteMedia(uri)
-    }
-
-    override suspend fun deleteAll() {
-        filesStorage.deleteAll()
-    }
 
     override suspend fun getCameraPhotoList(): Result<List<PhotoFile>> {
         return withContext(ioDispatcher) {
-            val response = ricohApi.getPhotos()
+            try {
+                val response = ricohApi.getPhotos()
 
-            if (response.isSuccessful) {
-                val photoFile = response.body()?.dirs?.flatMap { it.toPhotoInfoList() }.orEmpty()
+                if (response.isSuccessful) {
+                    val photoFile = response.body()?.dirs?.flatMap { it.toPhotoInfoList() }.orEmpty()
 
-                Result.success(photoFile)
-            } else {
-                val exception = Exception(response.errorBody().toString())
-                Result.failure(exception)
+                    Result.success(photoFile)
+                } else {
+                    val exception = CameraException.Unknown(response.errorBody().toString())
+                    Result.failure(exception.toDomainException())
+                }
+            } catch (e: Exception) {
+                val exception = when (e) {
+                    is SocketTimeoutException -> CameraException.CameraDisconnected
+                    is IOException -> CameraException.NetworkError(e)
+                    else -> CameraException.Unknown(e.message)
+                }
+                Result.failure(exception.toDomainException())
             }
         }
     }
 
-    override fun downloadMediaToStorage(photo: PhotoFile): Flow<PhotoDownloadInfo> {
+    override fun downloadMediaToStorage(photo: PhotoFile): Flow<Result<PhotoDownloadInfo>> {
         return flow {
-            // TODO: try catch this call in case of connection issues and maybe delete current pending file afterwards
-            val imageResponse = ricohApi.getPhoto(
-                directory = photo.directory,
-                file = photo.name
-            )
+            try {
+                val imageResponse = ricohApi.getPhoto(
+                    directory = photo.directory,
+                    file = photo.name
+                )
 
-            // TODO: handle unsuccessful response
-            val result = filesStorage.savePhoto(
-                responseBody = imageResponse,
-                file = photo,
-            )
-
-            emitAll(result)
+                filesStorage.savePhoto(
+                    responseBody = imageResponse,
+                    file = photo,
+                ).collect { result ->
+                    emit(result.mapDomainError())
+                }
+            } catch (e: Exception) {
+                val exception = when (e) {
+                    is SocketTimeoutException -> CameraException.CameraDisconnected
+                    is IOException -> CameraException.NetworkError(e)
+                    else -> CameraException.Unknown(e.message)
+                }
+                emit(Result.failure(exception.toDomainException()))
+            }
         }.flowOn(ioDispatcher)
     }
 
-    override suspend fun shutDownCamera() {
+    override suspend fun shutDownCamera(): Result<Unit> = withContext(ioDispatcher) {
         try {
             ricohApi.finish()
+            Result.success(Unit)
         } catch (e: Exception) {
-            // Ignore errors when shutting down the camera.
+            val exception = when (e) {
+                is SocketTimeoutException -> CameraException.CameraDisconnected
+                is IOException -> CameraException.NetworkError(e)
+                else -> CameraException.Unknown(e.message)
+            }
+            Result.failure(exception.toDomainException())
         }
     }
 
-    override suspend fun saveLatestDownloadedPhotos(photos: List<PhotoFile>) {
-        preferencesStorage.saveLatestDownloadedPhotos(photos)
+    override suspend fun saveLatestDownloadedPhotos(photos: List<PhotoFile>): Result<Unit> = withContext(ioDispatcher) {
+        preferencesStorage.saveLatestDownloadedPhotos(photos).mapDomainError()
     }
 
-    override suspend fun getLatestDownloadedPhotos(): List<PhotoFile> {
-        return preferencesStorage.getLatestDownloadedPhotos()
+    override suspend fun getLatestDownloadedPhotos(): Result<List<PhotoFile>> = withContext(ioDispatcher) {
+        preferencesStorage.getLatestDownloadedPhotos().mapDomainError()
     }
 
-    override suspend fun saveSettings(settings: Settings) {
-        preferencesStorage.saveSettings(settings)
+    override suspend fun saveSettings(settings: Settings): Result<Unit> = withContext(ioDispatcher) {
+        preferencesStorage.saveSettings(settings).mapDomainError()
     }
 
-    override suspend fun getSettings(): Settings {
-        return preferencesStorage.getSettings()
+    override suspend fun getSettings(): Result<Settings> = withContext(ioDispatcher) {
+        preferencesStorage.getSettings().mapDomainError()
     }
 }

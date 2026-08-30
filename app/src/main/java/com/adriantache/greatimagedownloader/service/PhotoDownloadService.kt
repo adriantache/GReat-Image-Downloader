@@ -10,6 +10,8 @@ import android.os.PowerManager
 import android.util.Log
 import com.adriantache.greatimagedownloader.domain.data.Repository
 import com.adriantache.greatimagedownloader.domain.data.model.PhotoFile
+import com.adriantache.greatimagedownloader.domain.model.DomainError
+import com.adriantache.greatimagedownloader.domain.model.DomainException
 import com.adriantache.greatimagedownloader.domain.utils.model.Event
 import com.adriantache.greatimagedownloader.service.model.PhotoFileItem
 import kotlinx.coroutines.CoroutineScope
@@ -91,6 +93,7 @@ class PhotoDownloadService : Service(), KoinComponent {
 
     private fun downloadPhotos(photosToDownload: List<PhotoFileItem>) {
         scope.launch {
+            var isError = false
             for (index in photosToDownload.indices) {
                 updateNotification(index + 1, photosToDownload.size)
 
@@ -104,12 +107,38 @@ class PhotoDownloadService : Service(), KoinComponent {
                     break
                 }
 
-                repository.downloadMediaToStorage(photo).collect { photoDownloadInfo ->
-                    dataTransferTool.imageFlow.value = photoDownloadInfo
+                var lastUri: String? = null
+                var lastProgress = 0
+
+                repository.downloadMediaToStorage(photo).collect { result ->
+                    result.fold(
+                        onSuccess = { info ->
+                            lastUri = info.uri
+                            lastProgress = info.downloadProgress
+                            dataTransferTool.imageFlow.value = info
+                        },
+                        onFailure = { throwable ->
+                            isError = true
+                            // Cleanup partial download
+                            lastUri?.let { uri ->
+                                if (lastProgress < 100) {
+                                    repository.deleteMedia(uri)
+                                }
+                            }
+
+                            val domainError = (throwable as? DomainException)?.domainError
+                                ?: DomainError.Unknown(throwable.message)
+                            dataTransferTool.errorFlow.value = Event(domainError)
+                        }
+                    )
                 }
+
+                if (isError) break
             }
 
-            dataTransferTool.downloadFinishedFlow.value = Event(Unit)
+            if (!isError) {
+                dataTransferTool.downloadFinishedFlow.value = Event(Unit)
+            }
 
             disconnect()
         }

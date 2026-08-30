@@ -12,6 +12,7 @@ import android.os.Environment
 import android.provider.MediaStore
 import android.provider.OpenableColumns
 import androidx.core.app.ActivityCompat.startIntentSenderForResult
+import com.adriantache.greatimagedownloader.data.storage.error.FilesStorageException
 import com.adriantache.greatimagedownloader.data.utils.speedCalculator.SpeedCalculator
 import com.adriantache.greatimagedownloader.data.utils.speedCalculator.SpeedCalculatorImpl
 import com.adriantache.greatimagedownloader.domain.data.model.PhotoFile
@@ -46,8 +47,8 @@ class FilesStorageImpl(
     private val context: Context,
     private val speedCalculator: SpeedCalculator = SpeedCalculatorImpl(),
 ) : FilesStorage {
-    override fun getSavedPhotos(): List<com.adriantache.greatimagedownloader.domain.data.model.PhotoDownloadInfo> {
-        return getSavedPhotoFiles().map {
+    override fun getSavedPhotos(): Result<List<com.adriantache.greatimagedownloader.domain.data.model.PhotoDownloadInfo>> = runCatching {
+        getSavedPhotoFiles().map {
             com.adriantache.greatimagedownloader.domain.data.model.PhotoDownloadInfo(
                 name = it.name,
                 uri = ContentUris.withAppendedId(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, it.id).toString(),
@@ -56,7 +57,10 @@ class FilesStorageImpl(
                 isLandscape = it.isLandscape
             )
         }
-    }
+    }.fold(
+        onSuccess = { Result.success(it) },
+        onFailure = { Result.failure(FilesStorageException.Unknown(it)) }
+    )
 
     private fun getSavedPhotoFiles(): List<DownloadedFile> {
         val selection = "${MediaStore.Files.FileColumns.RELATIVE_PATH} like ?"
@@ -113,9 +117,12 @@ class FilesStorageImpl(
         return results
     }
 
-    override fun getSavedMovies(): List<String> {
-        return getSavedMovieFiles().map { it.name }
-    }
+    override fun getSavedMovies(): Result<List<String>> = runCatching {
+        getSavedMovieFiles().map { it.name }
+    }.fold(
+        onSuccess = { Result.success(it) },
+        onFailure = { Result.failure(FilesStorageException.Unknown(it)) }
+    )
 
     private fun getSavedMovieFiles(): List<DownloadedFile> {
         val selection = "${MediaStore.Files.FileColumns.RELATIVE_PATH} like ?"
@@ -166,13 +173,19 @@ class FilesStorageImpl(
     override fun savePhoto(
         responseBody: ResponseBody,
         file: PhotoFile,
-    ): Flow<com.adriantache.greatimagedownloader.domain.data.model.PhotoDownloadInfo> {
+    ): Flow<Result<com.adriantache.greatimagedownloader.domain.data.model.PhotoDownloadInfo>> {
         return flow {
             val fileSize = responseBody.contentLength()
 
             val contentResolver = context.contentResolver
-            val imageUri = getFileUri(contentResolver, file, responseBody.contentType()) ?: return@flow
-            val outputStream = contentResolver.openOutputStream(imageUri) ?: return@flow
+            val imageUri = getFileUri(contentResolver, file, responseBody.contentType()) ?: run {
+                emit(Result.failure(FilesStorageException.FileCreationError))
+                return@flow
+            }
+            val outputStream = contentResolver.openOutputStream(imageUri) ?: run {
+                emit(Result.failure(FilesStorageException.FileCreationError))
+                return@flow
+            }
 
             responseBody.source().use { source ->
                 outputStream.sink().buffer().use { destination ->
@@ -198,11 +211,13 @@ class FilesStorageImpl(
                                 }
 
                                 emit(
-                                    com.adriantache.greatimagedownloader.domain.data.model.PhotoDownloadInfo(
-                                        uri = imageUri.toString(),
-                                        downloadProgress = progress,
-                                        name = file.name,
-                                        downloadSpeed = Kbps(speedCalculator.getAverageSpeedKbps(currentTime)),
+                                    Result.success(
+                                        com.adriantache.greatimagedownloader.domain.data.model.PhotoDownloadInfo(
+                                            uri = imageUri.toString(),
+                                            downloadProgress = progress,
+                                            name = file.name,
+                                            downloadSpeed = Kbps(speedCalculator.getAverageSpeedKbps(currentTime)),
+                                        )
                                     )
                                 )
 
@@ -214,17 +229,24 @@ class FilesStorageImpl(
                         val isLandscape = isLandscape(contentResolver, imageUri)
 
                         emit(
-                            com.adriantache.greatimagedownloader.domain.data.model.PhotoDownloadInfo(
-                                uri = imageUri.toString(),
-                                downloadProgress = 100,
-                                name = file.name,
-                                downloadSpeed = Kbps(speedCalculator.getAverageSpeedKbps()),
-                                isLandscape = isLandscape,
+                            Result.success(
+                                com.adriantache.greatimagedownloader.domain.data.model.PhotoDownloadInfo(
+                                    uri = imageUri.toString(),
+                                    downloadProgress = 100,
+                                    name = file.name,
+                                    downloadSpeed = Kbps(speedCalculator.getAverageSpeedKbps()),
+                                    isLandscape = isLandscape,
+                                )
                             )
                         )
                     } catch (e: IOException) {
                         deleteInvalidFile(contentResolver, imageUri)
-                        return@flow
+                        val error = if (e.message?.contains("No space left on device", ignoreCase = true) == true) {
+                            FilesStorageException.StorageFull
+                        } else {
+                            FilesStorageException.Unknown(e)
+                        }
+                        emit(Result.failure(error))
                     }
                 }
             }
@@ -254,16 +276,19 @@ class FilesStorageImpl(
         }
     }
 
-    override fun deleteMedia(uri: String) {
+    override fun deleteMedia(uri: String): Result<Unit> = runCatching {
         val contentResolver = context.contentResolver
 
         deleteInvalidFile(
             contentResolver = contentResolver,
             uri = Uri.parse(uri),
         )
-    }
+    }.fold(
+        onSuccess = { Result.success(it) },
+        onFailure = { Result.failure(FilesStorageException.Unknown(it)) }
+    )
 
-    override suspend fun deleteAll() {
+    override suspend fun deleteAll(): Result<Unit> = runCatching {
         getSavedPhotoFiles().forEach {
             val uri = ContentUris.withAppendedId(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, it.id)
             deleteMedia(uri.toString())
@@ -273,7 +298,11 @@ class FilesStorageImpl(
             val uri = ContentUris.withAppendedId(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, it.id)
             deleteMedia(uri.toString())
         }
-    }
+    }.fold(
+        onSuccess = { Result.success(it) },
+        onFailure = { Result.failure(FilesStorageException.Unknown(it)) }
+    )
+
 
     private fun getFileUri(
         contentResolver: ContentResolver,
