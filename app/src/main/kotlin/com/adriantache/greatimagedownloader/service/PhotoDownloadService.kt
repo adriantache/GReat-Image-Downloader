@@ -13,20 +13,14 @@ import com.adriantache.greatimagedownloader.domain.data.model.PhotoFile
 import com.adriantache.greatimagedownloader.domain.model.DomainError
 import com.adriantache.greatimagedownloader.domain.model.DomainException
 import com.adriantache.greatimagedownloader.domain.utils.model.Event
-import com.adriantache.greatimagedownloader.domain.wifi.WifiUtil
 import com.adriantache.greatimagedownloader.service.DataTransferTool.ServiceState
 import com.adriantache.greatimagedownloader.service.model.PhotoFileItem
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.cancel
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withTimeout
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.inject
-import kotlin.time.Duration.Companion.minutes
-import kotlin.time.Duration.Companion.seconds
 
 
 class PhotoDownloadService : Service(), KoinComponent {
@@ -72,12 +66,7 @@ class PhotoDownloadService : Service(), KoinComponent {
             }
 
             Actions.STOP.name -> {
-                if (continueDownload) {
-                    continueDownload = false
-                } else {
-                    scope.cancel()
-                    stopSelf()
-                }
+                continueDownload = false
             }
         }
 
@@ -167,6 +156,8 @@ class PhotoDownloadService : Service(), KoinComponent {
             if (!isError && continueDownload) {
                 updateLatestDownloadedPhotos(photosToDownload.map { PhotoFile(it.directory, it.name) })
                 dataTransferTool.downloadFinishedFlow.value = Event(Unit)
+            } else if (!continueDownload) {
+                dataTransferTool.downloadFinishedFlow.value = Event(Unit)
             }
 
             disconnect()
@@ -188,6 +179,7 @@ class PhotoDownloadService : Service(), KoinComponent {
     }
 
     private suspend fun disconnect() {
+        dataTransferTool.serviceStateFlow.value = ServiceState.IDLE
         repository.shutDownCamera()
 
         stopSelf()

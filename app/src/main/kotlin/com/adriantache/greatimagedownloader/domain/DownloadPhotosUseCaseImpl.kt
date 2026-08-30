@@ -396,6 +396,8 @@ class DownloadPhotosUseCaseImpl(
                 SuccessfulDownload(numDownloadedPhotos = downloadedPhotoUris.size)
             )
         }
+
+        dataTransferTool.reset()
     }
 
     private fun updateLatestDownloadedPhotos(
