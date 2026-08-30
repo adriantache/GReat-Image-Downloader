@@ -1,0 +1,29 @@
+name: Dependency Submission
+
+on:
+  push:
+    branches: [ "master" ]
+
+permissions:
+  contents: write # This permission is required to write to the Dependency Graph
+
+jobs:
+  dependency-submission:
+    runs-on: ubuntu-latest
+    steps:
+      # 1. Check out the code first (so it can find your action!)
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # 2. Use your new reusable action to set up JDK, SDK, and Keystore
+      - name: Setup Shared Android Environment
+        uses: ./.github/actions/setup-android-env
+        with:
+          keystore-b64: ${{ secrets.KEYSTORE_BASE_64 }}
+          keystore-password: ${{ secrets.RELEASE_KEYSTORE_PASSWORD }}
+          keystore-alias: ${{ secrets.RELEASE_KEYSTORE_ALIAS }}
+          key-password: ${{ secrets.RELEASE_KEY_PASSWORD }}
+
+      # 3. Run the Gradle Dependency Submission action
+      - name: Submit Dependencies
+        uses: gradle/actions/dependency-submission@v4
