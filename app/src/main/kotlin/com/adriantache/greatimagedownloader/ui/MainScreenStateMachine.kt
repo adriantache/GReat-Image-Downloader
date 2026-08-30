@@ -29,6 +29,7 @@ import com.adriantache.greatimagedownloader.domain.model.DomainError
 import com.adriantache.greatimagedownloader.domain.model.Events
 import com.adriantache.greatimagedownloader.domain.model.Events.CannotDownloadPhotos
 import com.adriantache.greatimagedownloader.domain.model.Events.ConfirmDeleteAllPhotos
+import com.adriantache.greatimagedownloader.domain.model.Events.ConnectWithService
 import com.adriantache.greatimagedownloader.domain.model.Events.DownloadPhotosWithService
 import com.adriantache.greatimagedownloader.domain.model.Events.InvalidWifiInput
 import com.adriantache.greatimagedownloader.domain.model.Events.StopDownload
@@ -45,7 +46,9 @@ import com.adriantache.greatimagedownloader.domain.utils.model.Event
 import com.adriantache.greatimagedownloader.service.PhotoDownloadService
 import com.adriantache.greatimagedownloader.service.PhotoDownloadService.Actions
 import com.adriantache.greatimagedownloader.service.PhotoDownloadService.Companion.PHOTOS_LIST_EXTRA
+import com.adriantache.greatimagedownloader.service.PhotoDownloadService.Companion.WIFI_DETAILS_EXTRA
 import com.adriantache.greatimagedownloader.service.model.PhotoFileItem
+import com.adriantache.greatimagedownloader.service.model.WifiDetailsItem
 import com.adriantache.greatimagedownloader.ui.permissions.PermissionsRequester
 import com.adriantache.greatimagedownloader.ui.view.ChangeSettingsScreen
 import com.adriantache.greatimagedownloader.ui.view.DownloadingView
@@ -164,6 +167,7 @@ private fun HandleEvent(
             InvalidWifiInput -> Unit
             is ConfirmDeleteAllPhotos -> Unit
             is DownloadPhotosWithService -> downloadPhotos(context, event.photosToDownload)
+            is ConnectWithService -> connectToWifiWithService(context, event.ssid, event.password, event.bssid)
             StopDownload -> stopDownload(context)
             is Events.ErrorDialog -> Unit
         }
@@ -238,6 +242,19 @@ fun downloadPhotos(
     val serviceIntent = Intent(context, PhotoDownloadService::class.java)
     serviceIntent.putParcelableArrayListExtra(PHOTOS_LIST_EXTRA, ArrayList(photos))
     serviceIntent.action = Actions.START.name
+
+    ContextCompat.startForegroundService(context, serviceIntent)
+}
+
+fun connectToWifiWithService(
+    context: Context,
+    ssid: String,
+    password: String,
+    bssid: String?,
+) {
+    val serviceIntent = Intent(context, PhotoDownloadService::class.java)
+    serviceIntent.putExtra(WIFI_DETAILS_EXTRA, WifiDetailsItem(ssid, password, bssid))
+    serviceIntent.action = Actions.CONNECT_AND_DOWNLOAD.name
 
     ContextCompat.startForegroundService(context, serviceIntent)
 }

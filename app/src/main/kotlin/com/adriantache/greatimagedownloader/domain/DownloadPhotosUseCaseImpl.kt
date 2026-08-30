@@ -1,6 +1,5 @@
 package com.adriantache.greatimagedownloader.domain
 
-import android.util.Log
 import com.adriantache.greatimagedownloader.domain.data.Repository
 import com.adriantache.greatimagedownloader.domain.data.model.PhotoDownloadInfo
 import com.adriantache.greatimagedownloader.domain.data.model.PhotoFile
@@ -21,6 +20,7 @@ import com.adriantache.greatimagedownloader.domain.model.WifiDetailsEntity
 import com.adriantache.greatimagedownloader.domain.utils.model.Event
 import com.adriantache.greatimagedownloader.domain.wifi.WifiUtil
 import com.adriantache.greatimagedownloader.service.DataTransferTool
+import com.adriantache.greatimagedownloader.service.DataTransferTool.ServiceState
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -73,6 +73,40 @@ class DownloadPhotosUseCaseImpl(
                 onError(error)
             }
         }
+
+        scope.launch {
+            dataTransferTool.serviceStateFlow.collect { serviceState ->
+                onServiceStateChanged(serviceState)
+            }
+        }
+    }
+
+    private fun onServiceStateChanged(serviceState: ServiceState) {
+        when (serviceState) {
+            ServiceState.CONNECTING -> {
+                val wifiDetails = repository.getWifiDetails().getOrNull()?.toEntity() ?: WifiDetailsEntity()
+                if (state.value !is ConnectWifi) {
+                    state.value = ConnectWifi(
+                        isHardTimeout = false,
+                        onCheckWifiDisabled = { wifiUtil.isWifiDisabled },
+                        onConnect = { startWifiConnection(wifiDetails) },
+                        onChangeWifiDetails = {
+                            state.value = RequestWifiCredentials(
+                                onWifiCredentialsInput = { onWifiCredentialsInput(it.toEntity()) },
+                                onSuggestWifiName = { wifiUtil.suggestNetwork() },
+                                onDismiss = { connectToWifi() }
+                            )
+                        },
+                        onAdjustSettings = ::openSettings,
+                    )
+                }
+            }
+
+            ServiceState.FETCHING -> state.value = GetPhotos
+            ServiceState.DOWNLOADING -> Unit // Handled by imageFlow
+            ServiceState.IDLE -> Unit
+            ServiceState.STOPPING -> state.value = States.StoppingDownload
+        }
     }
 
     private fun onError(error: DomainError) {
@@ -88,7 +122,7 @@ class DownloadPhotosUseCaseImpl(
                         state.value = ConnectWifi(
                             isHardTimeout = false,
                             onCheckWifiDisabled = { wifiUtil.isWifiDisabled },
-                            onConnect = { startWifiConnection(wifiDetails, false) },
+                            onConnect = { startWifiConnection(wifiDetails) },
                             onChangeWifiDetails = {
                                 state.value = RequestWifiCredentials(
                                     onWifiCredentialsInput = { onWifiCredentialsInput(it.toEntity()) },
@@ -98,7 +132,7 @@ class DownloadPhotosUseCaseImpl(
                             },
                             onAdjustSettings = ::openSettings,
                         )
-                        startWifiConnection(wifiDetails, isHardTimeout = false)
+                        startWifiConnection(wifiDetails)
                     } else {
                         connectToWifi()
                     }
@@ -138,7 +172,7 @@ class DownloadPhotosUseCaseImpl(
         state.value = ConnectWifi(
             isHardTimeout = isHardTimeout,
             onCheckWifiDisabled = { wifiUtil.isWifiDisabled },
-            onConnect = { startWifiConnection(wifiDetails, isHardTimeout) },
+            onConnect = { startWifiConnection(wifiDetails) },
             onChangeWifiDetails = {
                 state.value = RequestWifiCredentials(
                     onWifiCredentialsInput = { onWifiCredentialsInput(it.toEntity()) },
@@ -150,42 +184,14 @@ class DownloadPhotosUseCaseImpl(
         )
     }
 
-    private fun startWifiConnection(wifiDetails: WifiDetailsEntity, isHardTimeout: Boolean) {
-        scope.launch {
-            var isConnected = false
-            var newBssid: String? = null
-            val maxRetries = 5
-
-            for (attempt in 1..maxRetries) {
-                val (attemptIsConnected, attemptNewBssid) = wifiUtil.connectToWifi(
-                    ssid = wifiDetails.ssid!!,
-                    password = wifiDetails.password!!,
-                    bssid = wifiDetails.bssid,
-                )
-
-                if (attemptIsConnected) {
-                    isConnected = true
-                    newBssid = attemptNewBssid
-                    break // Exit the loop on success
-                }
-
-                // Don't delay after the final attempt
-                if (attempt < maxRetries) delay(20.seconds)
-            }
-
-            if (isConnected) {
-                // Save the new BSSID for the next connection attempt.
-                val newDetails = wifiDetails.copy(bssid = newBssid).toData()
-                repository.saveWifiDetails(newDetails)
-                onConnectionSuccess()
-            } else {
-                // If all attempts failed, we're in a hard timeout.
-                onConnectionLost()
-                if (!isHardTimeout) {
-                    connectToWifi(isHardTimeout = true)
-                }
-            }
-        }
+    private fun startWifiConnection(wifiDetails: WifiDetailsEntity) {
+        event.value = Event(
+            Events.ConnectWithService(
+                ssid = wifiDetails.ssid!!,
+                password = wifiDetails.password!!,
+                bssid = wifiDetails.bssid,
+            )
+        )
     }
 
     // TODO: move this to settings use case
@@ -242,72 +248,12 @@ class DownloadPhotosUseCaseImpl(
         // When the user manually inputs new credentials, the old BSSID is cleared.
         repository.saveWifiDetails(details.toData())
 
-        connectToWifi()
-    }
-
-    private fun onConnectionSuccess() {
-        Log.d("DownloadPhotosUseCase", "Connection success, fetching media list...")
-        val currentState = state.value
-        if (currentState !is ConnectWifi && currentState !is GetPhotos && currentState !is DownloadPhotos) return
-
-        state.value = GetPhotos
-
-        getMedia()
-    }
-
-    // TODO: add logic for when we delete already downloaded images and opt-out mechanism
-    private fun getMedia() {
-        scope.launch {
-            delay(1.seconds) // Small delay to allow the camera's HTTP server to stabilize after connection.
-
-            val availableMediaToDownload = getPhotosToDownload() ?: return@launch
-
-            val settings = repository.getSettings().getOrNull()
-            val shouldOnlyDownloadRecent = settings?.rememberLastDownloadedPhotos == true
-
-            val mediaToDownload = if (shouldOnlyDownloadRecent) {
-                getOnlyRecentPhotos(availableMediaToDownload)
-            } else {
-                availableMediaToDownload
-            }
-
-            if (mediaToDownload.isEmpty()) {
-                repository.shutDownCamera()
-                onDownloadFinished()
-                return@launch
-            }
-
-            val folderInfo = FolderInfo(mediaToDownload)
-
-            if (folderInfo.hasMultipleFolders) {
-                state.value = States.SelectFolders(
-                    folderInfo = folderInfo,
-                    onFoldersSelect = { selectedFolders ->
-                        val selectedMediaToDownload = mediaToDownload.filter { it.directory in selectedFolders }
-                        downloadMediaWithService(selectedMediaToDownload)
-                    }
-                )
-            } else {
-                downloadMediaWithService(mediaToDownload)
-            }
-        }
-    }
-
-    private fun downloadMediaWithService(photosToDownload: List<PhotoFile>) {
-        this.photosToDownload = photosToDownload
-        this.downloadedPhotoUris.clear()
-        this.dataTransferTool.reset()
-
-        event.value = Event(
-            Events.DownloadPhotosWithService(
-                photosToDownload = photosToDownload
-            )
-        )
+        startWifiConnection(details)
     }
 
     private fun onDownloadPhotoInfo(info: PhotoDownloadInfo) {
         val currentState = state.value
-        if (currentState is DownloadPhotos || currentState is GetPhotos || currentState is States.SelectFolders) {
+        if ((currentState is DownloadPhotos) || (currentState is GetPhotos) || (currentState is States.SelectFolders)) {
             state.value = DownloadPhotos(
                 currentPhotoNum = downloadedPhotoUris.size,
                 totalPhotos = photosToDownload.size,
@@ -332,49 +278,6 @@ class DownloadPhotosUseCaseImpl(
         }
     }
 
-    private suspend fun getPhotosToDownload(): List<PhotoFile>? {
-        Log.d("DownloadPhotosUseCase", "Getting photos to download...")
-        val savedPhotos = repository.getSavedPhotos().getOrNull().orEmpty()
-        val savedMovies = repository.getSavedMovies().getOrNull().orEmpty()
-        val savedMedia = (savedPhotos.map { it.name } + savedMovies).distinct()
-        val availablePhotosResult = repository.getCameraPhotoList()
-
-        if (availablePhotosResult.isFailure) {
-            val throwable = availablePhotosResult.exceptionOrNull()
-            val error = (throwable as? DomainException)?.domainError ?: DomainError.Unknown(throwable?.message)
-
-            onError(error)
-
-            return null
-        }
-
-        return availablePhotosResult.getOrNull()
-            .orEmpty()
-            .filter {
-                val nameWithoutExtension = it.name.split(".")[0]
-                !savedMedia.contains(nameWithoutExtension)
-            }
-    }
-
-    private fun onConnectionLost() {
-        when (val currentState = state.value) {
-            is DownloadPhotos -> {
-                val currentMedia = currentState.downloadedPhotos[currentState.currentPhotoNum - 1]
-                val currentProgress = currentMedia.downloadProgress
-
-                // Delete the current file if it's incomplete.
-                if (currentProgress != 100) {
-                    repository.deleteMedia(currentMedia.uri)
-                }
-            }
-
-            else -> Unit
-        }
-
-        state.value = Init(::onInit)
-        onError(DomainError.NetworkError)
-    }
-
     private fun updateLatestDownloadedPhotos(
         photosToDownload: List<PhotoFile>,
         downloadedPhotoUris: Map<String, PhotoDownloadInfo>,
@@ -389,20 +292,6 @@ class DownloadPhotosUseCaseImpl(
 
         scope.launch {
             repository.saveLatestDownloadedPhotos(lastFiles.values.toList())
-        }
-    }
-
-    private suspend fun getOnlyRecentPhotos(availableMediaToDownload: List<PhotoFile>): List<PhotoFile> {
-        val latestDownloadedPhotos = repository.getLatestDownloadedPhotos().getOrNull().orEmpty().groupBy { it.directory }
-        val latestDownloadedDirectories = latestDownloadedPhotos.keys
-
-        if (latestDownloadedPhotos.isEmpty()) {
-            return availableMediaToDownload
-        }
-
-        return availableMediaToDownload.filter { currentFile ->
-            currentFile.directory in latestDownloadedDirectories &&
-                    currentFile.name !in latestDownloadedPhotos[currentFile.directory].orEmpty().map { it.name }
         }
     }
 

@@ -5,11 +5,12 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
+import android.content.Intent
 import androidx.core.app.NotificationCompat
-import androidx.core.app.NotificationCompat.PRIORITY_MIN
 import com.adriantache.greatimagedownloader.R
 
 private const val NOTIFICATION_CHANNEL = "SERVICE_NOTIFICATION_CHANNEL"
+private const val ERROR_CHANNEL = "ERROR_NOTIFICATION_CHANNEL"
 
 fun getNotification(
     context: Context,
@@ -29,28 +30,66 @@ fun getNotification(
         /* flags = */ PendingIntent.FLAG_IMMUTABLE
     )
 
+    val stopIntent = Intent(context, PhotoDownloadService::class.java).apply {
+        action = PhotoDownloadService.Actions.STOP.name
+    }
+    val stopPendingIntent = PendingIntent.getService(
+        context,
+        2,
+        stopIntent,
+        PendingIntent.FLAG_IMMUTABLE
+    )
+
     return NotificationCompat.Builder(context, NOTIFICATION_CHANNEL)
         .setOngoing(true)
-        .setPriority(PRIORITY_MIN)
+        .setPriority(NotificationCompat.PRIORITY_LOW)
         .setCategory(Notification.CATEGORY_SERVICE)
         .setSmallIcon(R.drawable.ic_stat_gr)
         .setContentTitle("Downloading...")
         .setContentText(content)
         .setContentIntent(pendingIntent)
-        // TODO: add action to stop service in case it gets stuck
+        .addAction(android.R.drawable.ic_menu_close_clear_cancel, "Stop", stopPendingIntent)
+        .build()
+}
+
+fun getErrorNotification(
+    context: Context,
+    errorMessage: String,
+): Notification {
+    val pendingIntent = PendingIntent.getActivity(
+        /* context = */ context,
+        /* requestCode = */ 1,
+        /* intent = */ context.packageManager.getLaunchIntentForPackage(context.packageName),
+        /* flags = */ PendingIntent.FLAG_IMMUTABLE
+    )
+
+    return NotificationCompat.Builder(context, ERROR_CHANNEL)
+        .setPriority(NotificationCompat.PRIORITY_HIGH)
+        .setCategory(Notification.CATEGORY_ERROR)
+        .setSmallIcon(R.drawable.ic_stat_gr)
+        .setContentTitle("Download Error")
+        .setContentText(errorMessage)
+        .setContentIntent(pendingIntent)
+        .setAutoCancel(true)
         .build()
 }
 
 fun registerNotificationChannel(
     context: Context,
 ) {
-    val channel = NotificationChannel(
+    val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+
+    val progressChannel = NotificationChannel(
         /* id = */ NOTIFICATION_CHANNEL,
         /* name = */ "Download progress",
         /* importance = */ NotificationManager.IMPORTANCE_LOW,
     )
+    notificationManager.createNotificationChannel(progressChannel)
 
-    val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-
-    notificationManager.createNotificationChannel(channel)
+    val errorChannel = NotificationChannel(
+        /* id = */ ERROR_CHANNEL,
+        /* name = */ "Download errors",
+        /* importance = */ NotificationManager.IMPORTANCE_HIGH,
+    )
+    notificationManager.createNotificationChannel(errorChannel)
 }

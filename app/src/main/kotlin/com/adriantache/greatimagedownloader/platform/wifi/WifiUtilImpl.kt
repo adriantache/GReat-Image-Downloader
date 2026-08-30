@@ -15,6 +15,7 @@ import android.net.wifi.WifiInfo
 import android.net.wifi.WifiManager
 import android.net.wifi.WifiNetworkSpecifier
 import android.os.Build
+import android.util.Log
 import com.adriantache.greatimagedownloader.domain.wifi.WifiUtil
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
@@ -44,6 +45,11 @@ class WifiUtilImpl(
         password: String,
         bssid: String?, // The new, optional BSSID for the "fast path"
     ): Pair<Boolean, String?> { // Returns success status and the new BSSID if found
+        if (isAlreadyConnected(ssid)) {
+            Log.d("WifiUtilImpl", "Already connected to $ssid")
+            return Pair(true, bssid)
+        }
+
         cleanup()
 
         return withTimeoutOrNull(15_000L) { // Overall 15 second timeout
@@ -118,6 +124,15 @@ class WifiUtilImpl(
         if (continuation.isActive) {
             continuation.resume(Pair(false, null))
         }
+    }
+
+    private fun isAlreadyConnected(targetSsid: String): Boolean {
+        val network = connectivityManager.activeNetwork ?: return false
+        val capabilities = connectivityManager.getNetworkCapabilities(network) ?: return false
+        val wifiInfo = capabilities.transportInfo as? WifiInfo ?: return false
+        
+        val currentSsid = wifiInfo.ssid?.removeSurrounding("\"")
+        return currentSsid == targetSsid.removeSurrounding("\"")
     }
 
     private fun isValidBssid(bssid: String?): Boolean {

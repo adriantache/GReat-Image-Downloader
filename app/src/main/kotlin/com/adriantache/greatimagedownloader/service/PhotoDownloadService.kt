@@ -13,18 +13,27 @@ import com.adriantache.greatimagedownloader.domain.data.model.PhotoFile
 import com.adriantache.greatimagedownloader.domain.model.DomainError
 import com.adriantache.greatimagedownloader.domain.model.DomainException
 import com.adriantache.greatimagedownloader.domain.utils.model.Event
+import com.adriantache.greatimagedownloader.domain.wifi.WifiUtil
+import com.adriantache.greatimagedownloader.service.DataTransferTool.ServiceState
 import com.adriantache.greatimagedownloader.service.model.PhotoFileItem
+import com.adriantache.greatimagedownloader.service.model.WifiDetailsItem
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeout
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.inject
+import kotlin.time.Duration.Companion.minutes
+import kotlin.time.Duration.Companion.seconds
 
 
 class PhotoDownloadService : Service(), KoinComponent {
     private val scope = CoroutineScope(Dispatchers.IO)
     private val repository: Repository by inject()
+    private val wifiUtil: WifiUtil by inject()
     private val dataTransferTool: DataTransferTool by inject()
 
     private var wifiLock: WifiManager.WifiLock? = null
@@ -58,6 +67,16 @@ class PhotoDownloadService : Service(), KoinComponent {
                 start(photosToDownload?.toList())
             }
 
+            Actions.CONNECT_AND_DOWNLOAD.name -> {
+                val wifiDetails = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    intent.getParcelableExtra(WIFI_DETAILS_EXTRA, WifiDetailsItem::class.java)
+                } else {
+                    @Suppress("DEPRECATION")
+                    intent.getParcelableExtra(WIFI_DETAILS_EXTRA)
+                }
+                connectAndDownload(wifiDetails)
+            }
+
             Actions.STOP.name -> {
                 if (continueDownload) {
                     continueDownload = false
@@ -68,7 +87,7 @@ class PhotoDownloadService : Service(), KoinComponent {
             }
         }
 
-        return super.onStartCommand(intent, flags, startId)
+        return START_STICKY
     }
 
     override fun onDestroy() {
@@ -87,7 +106,141 @@ class PhotoDownloadService : Service(), KoinComponent {
         continueDownload = true
 
         scope.launch {
+            dataTransferTool.serviceStateFlow.value = ServiceState.DOWNLOADING
             downloadPhotos(photosToDownload)
+        }
+    }
+
+    private fun connectAndDownload(wifiDetails: WifiDetailsItem?) {
+        if (wifiDetails == null) {
+            Log.e(this::class.java.simpleName, "Wifi details are null!")
+            scope.launch { disconnect() }
+            return
+        }
+
+        continueDownload = true
+
+        scope.launch {
+            try {
+                withTimeout(2.minutes) {
+                    dataTransferTool.serviceStateFlow.value = ServiceState.CONNECTING
+
+                    var isConnected = false
+                    var newBssid: String? = null
+                    val maxRetries = 3 // Reduced retries to keep within timeout and avoid too many dialogs
+
+                    for (attempt in 1..maxRetries) {
+                        val (attemptIsConnected, attemptNewBssid) = wifiUtil.connectToWifi(
+                            ssid = wifiDetails.ssid,
+                            password = wifiDetails.password,
+                            bssid = wifiDetails.bssid,
+                        )
+
+                        if (attemptIsConnected) {
+                            isConnected = true
+                            newBssid = attemptNewBssid
+                            break
+                        }
+
+                        if (!continueDownload) break
+                        // If we failed and it's not the last attempt, wait a bit
+                        if (attempt < maxRetries) delay(10.seconds)
+                    }
+
+                    if (!isConnected || !continueDownload) {
+                        if (continueDownload) {
+                            handleError(DomainError.NetworkError)
+                        }
+                        disconnect()
+                        return@withTimeout
+                    }
+
+                    // Save new BSSID
+                    repository.getWifiDetails().getOrNull()?.let { currentDetails ->
+                        repository.saveWifiDetails(currentDetails.copy(bssid = newBssid))
+                    }
+
+                    dataTransferTool.serviceStateFlow.value = ServiceState.FETCHING
+                    delay(1.seconds) // Stability delay
+
+                    val availableMedia = getPhotosToDownload()
+                    if (availableMedia == null) {
+                        disconnect()
+                        return@withTimeout
+                    }
+
+                    val settings = repository.getSettings().getOrNull()
+                    val shouldOnlyDownloadRecent = settings?.rememberLastDownloadedPhotos == true
+
+                    val mediaToDownload = if (shouldOnlyDownloadRecent) {
+                        getOnlyRecentPhotos(availableMedia)
+                    } else {
+                        availableMedia
+                    }
+
+                    if (mediaToDownload.isEmpty()) {
+                        dataTransferTool.downloadFinishedFlow.value = Event(Unit)
+                        disconnect()
+                        return@withTimeout
+                    }
+
+                    dataTransferTool.serviceStateFlow.value = ServiceState.DOWNLOADING
+                    downloadPhotos(mediaToDownload.map { PhotoFileItem(it.directory, it.name) })
+                }
+            } catch (_: TimeoutCancellationException) {
+                Log.e(this::class.java.simpleName, "Operation timed out!")
+                handleError(DomainError.NetworkError) // Or a specific timeout error
+                disconnect()
+            }
+        }
+    }
+
+    private fun handleError(error: DomainError) {
+        val message = when (error) {
+            DomainError.CameraDisconnected -> "Camera connection lost."
+            DomainError.StorageFull -> "Storage full!"
+            DomainError.NetworkError -> "Connection failed. Please check if the camera is on."
+            is DomainError.Unknown -> "An error occurred: ${error.message}"
+        }
+
+        val notificationManager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
+        notificationManager.notify(2, getErrorNotification(this, message))
+
+        dataTransferTool.errorFlow.value = Event(error)
+    }
+
+    private suspend fun getPhotosToDownload(): List<PhotoFile>? {
+        val savedPhotos = repository.getSavedPhotos().getOrNull().orEmpty()
+        val savedMovies = repository.getSavedMovies().getOrNull().orEmpty()
+        val savedMedia = (savedPhotos.map { it.name } + savedMovies).distinct()
+        val availablePhotosResult = repository.getCameraPhotoList()
+
+        if (availablePhotosResult.isFailure) {
+            val throwable = availablePhotosResult.exceptionOrNull()
+            val domainError = (throwable as? DomainException)?.domainError ?: DomainError.Unknown(throwable?.message)
+            handleError(domainError)
+            return null
+        }
+
+        return availablePhotosResult.getOrNull()
+            .orEmpty()
+            .filter {
+                val nameWithoutExtension = it.name.split(".")[0]
+                !savedMedia.contains(nameWithoutExtension)
+            }
+    }
+
+    private suspend fun getOnlyRecentPhotos(availableMediaToDownload: List<PhotoFile>): List<PhotoFile> {
+        val latestDownloadedPhotos = repository.getLatestDownloadedPhotos().getOrNull().orEmpty().groupBy { it.directory }
+        val latestDownloadedDirectories = latestDownloadedPhotos.keys
+
+        if (latestDownloadedPhotos.isEmpty()) {
+            return availableMediaToDownload
+        }
+
+        return availableMediaToDownload.filter { currentFile ->
+            currentFile.directory in latestDownloadedDirectories &&
+                    currentFile.name !in latestDownloadedPhotos[currentFile.directory].orEmpty().map { it.name }
         }
     }
 
@@ -128,20 +281,28 @@ class PhotoDownloadService : Service(), KoinComponent {
 
                             val domainError = (throwable as? DomainException)?.domainError
                                 ?: DomainError.Unknown(throwable.message)
-                            dataTransferTool.errorFlow.value = Event(domainError)
+                            handleError(domainError)
                         }
                     )
                 }
 
-                if (isError) break
+                if (isError || !continueDownload) break
             }
 
-            if (!isError) {
+            if (!isError && continueDownload) {
+                updateLatestDownloadedPhotos(photosToDownload.map { PhotoFile(it.directory, it.name) })
                 dataTransferTool.downloadFinishedFlow.value = Event(Unit)
             }
 
             disconnect()
         }
+    }
+
+    private suspend fun updateLatestDownloadedPhotos(downloadedPhotos: List<PhotoFile>) {
+        val lastFiles = downloadedPhotos.groupBy { it.directory }
+            .mapValues { entry -> entry.value.maxBy { it.name } }
+
+        repository.saveLatestDownloadedPhotos(lastFiles.values.toList())
     }
 
     private fun updateNotification(currentImage: Int, totalImages: Int) {
@@ -182,10 +343,11 @@ class PhotoDownloadService : Service(), KoinComponent {
     }
 
     enum class Actions {
-        START, STOP
+        START, CONNECT_AND_DOWNLOAD, STOP
     }
 
     companion object {
         const val PHOTOS_LIST_EXTRA = "photos_list_extra"
+        const val WIFI_DETAILS_EXTRA = "wifi_details_extra"
     }
 }

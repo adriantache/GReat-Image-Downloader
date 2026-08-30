@@ -9,10 +9,16 @@ class DataTransferTool {
     val imageFlow = MutableStateFlow<PhotoDownloadInfo?>(null)
     val errorFlow = MutableStateFlow<Event<DomainError>?>(null)
     val downloadFinishedFlow = MutableStateFlow<Event<Unit>?>(null)
+    val serviceStateFlow = MutableStateFlow(ServiceState.IDLE)
 
     fun reset() {
         imageFlow.value = null
         errorFlow.value = null
         downloadFinishedFlow.value = null
+        serviceStateFlow.value = ServiceState.IDLE
+    }
+
+    enum class ServiceState {
+        IDLE, CONNECTING, FETCHING, DOWNLOADING, STOPPING
     }
 }

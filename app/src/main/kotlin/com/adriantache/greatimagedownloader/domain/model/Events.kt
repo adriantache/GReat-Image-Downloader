@@ -18,6 +18,12 @@ sealed interface Events {
         val photosToDownload: List<PhotoFile>,
     ) : Events
 
+    data class ConnectWithService(
+        val ssid: String,
+        val password: String,
+        val bssid: String?,
+    ) : Events
+
     data object StopDownload : Events
 
     data class ErrorDialog(
