@@ -26,4 +26,4 @@ jobs:
 
       # 3. Run the Gradle Dependency Submission action
       - name: Submit Dependencies
-        uses: gradle/actions/dependency-submission@v4
+        uses: gradle/actions/dependency-submission@v6
