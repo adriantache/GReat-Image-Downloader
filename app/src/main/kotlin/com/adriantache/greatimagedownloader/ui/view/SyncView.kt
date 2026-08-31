@@ -59,13 +59,12 @@ fun SyncView() {
             contentAlignment = Alignment.Center,
         ) {
             WifiDecorator {
-                Box(modifier = Modifier.rotate(rotation)) {
-                    ActionButton(
-                        bgColor = bgColor,
-                        iconPainter = painterResource(id = R.drawable.sync),
-                        text = "Synchronizing...",
-                    )
-                }
+                ActionButton(
+                    bgColor = bgColor,
+                    iconPainter = painterResource(id = R.drawable.sync),
+                    iconModifier = Modifier.rotate(rotation),
+                    text = "Synchronizing...",
+                )
             }
         }
     }

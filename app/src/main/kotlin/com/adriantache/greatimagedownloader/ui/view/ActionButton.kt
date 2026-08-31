@@ -31,13 +31,15 @@ import com.adriantache.greatimagedownloader.ui.util.conditional
 
 @Composable
 fun ActionButton(
+    modifier: Modifier = Modifier,
     bgColor: Color = MaterialTheme.colorScheme.primary,
     iconPainter: Painter,
+    iconModifier: Modifier = Modifier,
     text: String,
     onClick: (() -> Unit)? = null,
 ) {
     Box(
-        modifier = Modifier
+        modifier = modifier
             .requiredSize(200.dp)
             .clip(CircleShape)
             .conditional(onClick != null) {
@@ -73,8 +75,9 @@ fun ActionButton(
             verticalArrangement = Arrangement.Center,
         ) {
             Icon(
-                iconPainter,
+                painter = iconPainter,
                 contentDescription = null,
+                modifier = iconModifier,
                 tint = Color.White
             )
 
