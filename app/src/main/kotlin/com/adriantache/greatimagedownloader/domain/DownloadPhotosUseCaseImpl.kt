@@ -389,7 +389,7 @@ class DownloadPhotosUseCaseImpl(
 
         updateLatestDownloadedPhotos(photosToDownload, downloadedPhotoUris)
 
-        state.value = Init(::onInit)
+        connectToWifi()
 
         if (!wasStopping) {
             event.value = Event(

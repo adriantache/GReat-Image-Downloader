@@ -255,13 +255,13 @@ class DownloadPhotosUseCaseImplTest {
     }
 
     @Test
-    fun `onDownloadFinished transitions to Init and emits SuccessfulDownload`() = runTest {
+    fun `onDownloadFinished transitions to ConnectWifi and emits SuccessfulDownload`() = runTest {
         // Act
         dataTransferTool.downloadFinishedFlow.value = Event(Unit)
         advanceUntilIdle()
 
         // Assert
-        assertThat(useCase.state.value).isInstanceOf(States.Init::class.java)
+        assertThat(useCase.state.value).isInstanceOf(States.ConnectWifi::class.java)
         assertThat(useCase.event.value?.value).isInstanceOf(Events.SuccessfulDownload::class.java)
     }
 
