@@ -66,7 +66,10 @@ fun SelectFoldersView(
             }
         }
 
-        Button(onClick = { onFoldersSelect(selectedFolders.toList()) }) {
+        Button(
+            onClick = { onFoldersSelect(selectedFolders.toList()) },
+            enabled = selectedFolders.isNotEmpty(),
+        ) {
             Text("Confirm")
         }
     }

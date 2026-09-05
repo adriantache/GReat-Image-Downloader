@@ -50,7 +50,10 @@ fun WifiInputView(
     LaunchedEffect(triggerWifiSuggestion) {
         if (!triggerWifiSuggestion) return@LaunchedEffect
 
-        wifiName = onSuggestWifiName()
+        val suggested = onSuggestWifiName()
+        if (suggested != "ERROR") {
+            wifiName = suggested
+        }
         triggerWifiSuggestion = false
     }
 

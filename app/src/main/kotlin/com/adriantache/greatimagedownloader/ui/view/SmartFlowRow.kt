@@ -1,7 +1,6 @@
 package com.adriantache.greatimagedownloader.ui.view
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.gestures.animateScrollBy
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -46,8 +45,8 @@ fun SmartFlowRow(
     }.value
 
     LaunchedEffect(latestFinishedImage) {
-        if (latestRememberedFinishedImage != latestFinishedImage) {
-            state.animateScrollBy(9999f)
+        if (latestRememberedFinishedImage != latestFinishedImage && photoDownloadInfo.isNotEmpty()) {
+            state.animateScrollToItem((photoDownloadInfo.size - 1).coerceAtLeast(0))
             latestRememberedFinishedImage = latestFinishedImage
         }
     }
@@ -61,7 +60,7 @@ fun SmartFlowRow(
     ) {
         items(
             items = photoDownloadInfo,
-            key = { it.uri },
+            key = { "${it.name}_${it.uri}" },
             span = { info ->
                 val isLandscape = info.isFinished && info.isImage && info.isLandscape
                 GridItemSpan(if (isLandscape) 2 else 1)

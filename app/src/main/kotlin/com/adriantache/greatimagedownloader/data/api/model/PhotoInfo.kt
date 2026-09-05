@@ -5,15 +5,15 @@ import kotlinx.serialization.Serializable
 
 @Serializable
 data class PhotoInfo(
-    val errCode: Float?,
-    val errMsg: String?,
-    val dirs: List<Dir>,
+    val errCode: Float? = null,
+    val errMsg: String? = null,
+    val dirs: List<Dir> = emptyList(),
 )
 
 @Serializable
 data class Dir(
-    val name: String,
-    val files: List<String>,
+    val name: String = "",
+    val files: List<String> = emptyList(),
 ) {
     fun toPhotoInfoList(): List<PhotoFile> {
         return files.map { fileName ->
