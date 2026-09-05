@@ -115,6 +115,20 @@ class DownloadPhotosUseCaseImplTest {
     }
 
     @Test
+    fun `error during download deletes partially downloaded files`() = runTest {
+        // Arrange: Emit a partially downloaded photo info
+        dataTransferTool.imageFlow.value = PhotoDownloadInfo("photo1.jpg", "content://media/1", 50, Kbps(1.0))
+        advanceUntilIdle()
+
+        // Act: Emit error via dataTransferTool
+        dataTransferTool.errorFlow.value = Event(DomainError.NetworkError as DomainError)
+        advanceUntilIdle()
+
+        // Assert
+        assertThat(repository.deletedMediaUris).contains("content://media/1")
+    }
+
+    @Test
     fun `retry in error dialog re-attempts connection`() = runTest {
         // Arrange
         repository.wifiDetails = WifiDetails("SSID", "PASSWORD", null)

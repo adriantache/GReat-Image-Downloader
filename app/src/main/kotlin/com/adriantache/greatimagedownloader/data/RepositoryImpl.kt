@@ -55,7 +55,7 @@ class RepositoryImpl(
     override fun saveWifiDetails(wifiDetails: WifiDetails): Result<Unit> {
         return wifiStorage.saveWifiSsid(requireNotNull(wifiDetails.ssid))
             .onSuccess { wifiStorage.saveWifiPassword(requireNotNull(wifiDetails.password)) }
-            .onSuccess { wifiDetails.bssid?.let { bssid -> wifiStorage.saveWifiBssid(bssid) } }
+            .onSuccess { wifiStorage.saveWifiBssid(wifiDetails.bssid) }
             .mapDomainError()
     }
 

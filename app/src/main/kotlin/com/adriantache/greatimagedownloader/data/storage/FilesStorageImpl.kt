@@ -9,7 +9,6 @@ import android.net.Uri
 import android.os.Environment
 import android.provider.MediaStore
 import android.provider.OpenableColumns
-import androidx.core.app.ActivityCompat.startIntentSenderForResult
 import androidx.core.net.toUri
 import androidx.exifinterface.media.ExifInterface
 import com.adriantache.greatimagedownloader.data.storage.error.FilesStorageException
@@ -329,9 +328,8 @@ class FilesStorageImpl(
         contentResolver: ContentResolver,
         uri: Uri,
     ) {
-        val activity = context.findActivity() ?: return
-
-        val pendingIntent = MediaStore.createDeleteRequest(contentResolver, listOf(uri))
-        startIntentSenderForResult(activity, pendingIntent.intentSender, 1, null, 0, 0, 0, null)
+        runCatching {
+            contentResolver.delete(uri, null, null)
+        }
     }
 }

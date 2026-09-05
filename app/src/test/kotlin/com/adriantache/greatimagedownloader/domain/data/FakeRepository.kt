@@ -16,6 +16,7 @@ class FakeRepository : Repository {
     var cameraPhotoListResult: Result<List<PhotoFile>> = Result.success(emptyList())
     var settings = Settings()
     var latestDownloadedPhotos = mutableListOf<PhotoFile>()
+    val deletedMediaUris = mutableListOf<String>()
     
     var shutdownCalled = false
     val downloadFlow = MutableSharedFlow<Result<PhotoDownloadInfo>>()
@@ -32,6 +33,7 @@ class FakeRepository : Repository {
     override fun getSavedMovies(): Result<List<String>> = Result.success(savedMovies)
 
     override fun deleteMedia(uri: String): Result<Unit> {
+        deletedMediaUris.add(uri)
         savedPhotos.removeAll { it.uri == uri }
         return Result.success(Unit)
     }

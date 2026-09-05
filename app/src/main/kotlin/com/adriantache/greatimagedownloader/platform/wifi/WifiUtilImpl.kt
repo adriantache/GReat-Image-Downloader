@@ -168,11 +168,11 @@ class WifiUtilImpl(
     private fun isLikelyRicohCamera(scanResult: ScanResult): Boolean {
         val ssid = extractSsid(scanResult) ?: return false
         return when {
-            ssid.startsWith("RICOH_GRIII", ignoreCase = true) -> true
-            ssid.startsWith("GRIII_", ignoreCase = true) -> true
-            ssid.startsWith("GR_", ignoreCase = true) -> true
+            ssid.startsWith("RICOH", ignoreCase = true) -> true
+            ssid.startsWith("GR", ignoreCase = true) -> true
+            ssid.startsWith("PENTAX", ignoreCase = true) -> true
             ssid.contains("ricoh", ignoreCase = true) -> true
-            scanResult.capabilities.contains("WPA2-PSK") -> true
+            ssid.contains("pentax", ignoreCase = true) -> true
             else -> false
         }
     }
@@ -210,11 +210,12 @@ class WifiUtilImpl(
     }
 
     private fun extractSsid(scanResult: ScanResult): String? {
-        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+        val rawSsid = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             scanResult.wifiSsid?.toString()
         } else {
             @Suppress("DEPRECATION")
-            scanResult.SSID?.removeSurrounding("\"")
+            scanResult.SSID
         }
+        return rawSsid?.removeSurrounding("\"")
     }
 }

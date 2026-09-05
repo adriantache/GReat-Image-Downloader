@@ -93,4 +93,52 @@ class WifiUtilImplTest {
         advanceUntilIdle()
         resultJob.cancel()
     }
+
+    @Test
+    fun `suggestNetwork returns RICOH SSID without quotes when SSID is enclosed in quotes`() = runTest {
+        // Arrange
+        val scanResult = ScanResult()
+        @Suppress("DEPRECATION")
+        scanResult.SSID = "\"RICOH_GRIII_654321\""
+        scanResult.capabilities = "[WPA2-PSK-CCMP][ESS]"
+        scanResult.level = -40
+
+        shadowWifiManager.setScanResults(listOf(scanResult))
+        shadowWifiManager.setStartScanSucceeds(true)
+
+        // Act
+        val resultJob = launch {
+            val result = wifiUtil.suggestNetwork()
+            assertThat(result).isEqualTo("RICOH_GRIII_654321")
+        }
+
+        // Trigger the broadcast
+        context.sendBroadcast(Intent(WifiManager.SCAN_RESULTS_AVAILABLE_ACTION))
+        advanceUntilIdle()
+        resultJob.cancel()
+    }
+
+    @Test
+    fun `suggestNetwork returns ERROR when no camera SSID is found`() = runTest {
+        // Arrange
+        val scanResult = ScanResult()
+        @Suppress("DEPRECATION")
+        scanResult.SSID = "MyHomeRouter"
+        scanResult.capabilities = "[WPA2-PSK-CCMP][ESS]"
+        scanResult.level = -30
+
+        shadowWifiManager.setScanResults(listOf(scanResult))
+        shadowWifiManager.setStartScanSucceeds(true)
+
+        // Act
+        val resultJob = launch {
+            val result = wifiUtil.suggestNetwork()
+            assertThat(result).isEqualTo("ERROR")
+        }
+
+        // Trigger the broadcast
+        context.sendBroadcast(Intent(WifiManager.SCAN_RESULTS_AVAILABLE_ACTION))
+        advanceUntilIdle()
+        resultJob.cancel()
+    }
 }

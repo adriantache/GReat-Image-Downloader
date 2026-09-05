@@ -94,4 +94,46 @@ class FilesStorageImplTest {
         // We can't easily verify the actual file writing logic deep in Okio/ContentResolver in a simple unit test,
         // but we verified that the flow emits success.
     }
+
+    @Test
+    fun `deleteMedia removes item from MediaStore`() {
+        val values = ContentValues().apply {
+            put(MediaStore.MediaColumns.DISPLAY_NAME, "test.jpg")
+            put(MediaStore.MediaColumns.TITLE, "test")
+            put(MediaStore.MediaColumns.RELATIVE_PATH, "Pictures/Image Sync/100RICOH/")
+            put(MediaStore.MediaColumns.SIZE, 1000)
+        }
+        val uri = context.contentResolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values)
+
+        val result = filesStorage.deleteMedia(uri.toString())
+
+        assertThat(result.isSuccess).isTrue
+        val savedPhotos = filesStorage.getSavedPhotos().getOrNull()
+        assertThat(savedPhotos).isEmpty()
+    }
+
+    @Test
+    fun `deleteAll removes all saved photos and movies`() = runTest {
+        val photoValues = ContentValues().apply {
+            put(MediaStore.MediaColumns.DISPLAY_NAME, "test.jpg")
+            put(MediaStore.MediaColumns.TITLE, "test")
+            put(MediaStore.MediaColumns.RELATIVE_PATH, "Pictures/Image Sync/100RICOH/")
+            put(MediaStore.MediaColumns.SIZE, 1000)
+        }
+        context.contentResolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, photoValues)
+
+        val movieValues = ContentValues().apply {
+            put(MediaStore.MediaColumns.DISPLAY_NAME, "test.mp4")
+            put(MediaStore.MediaColumns.TITLE, "test")
+            put(MediaStore.MediaColumns.RELATIVE_PATH, "Movies/Image Sync/100RICOH/")
+            put(MediaStore.MediaColumns.SIZE, 1000)
+        }
+        context.contentResolver.insert(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, movieValues)
+
+        val result = filesStorage.deleteAll()
+
+        assertThat(result.isSuccess).isTrue
+        assertThat(filesStorage.getSavedPhotos().getOrNull()).isEmpty()
+        assertThat(filesStorage.getSavedMovies().getOrNull()).isEmpty()
+    }
 }

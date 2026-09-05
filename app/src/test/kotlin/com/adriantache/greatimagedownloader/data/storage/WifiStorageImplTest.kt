@@ -64,4 +64,12 @@ class WifiStorageImplTest {
         val result = wifiStorage.getWifiBssid()
         assertThat(result.getOrNull()).isEqualTo("TestBSSID")
     }
+
+    @Test
+    fun `saveWifiBssid with null clears previously saved BSSID`() {
+        wifiStorage.saveWifiBssid("TestBSSID")
+        wifiStorage.saveWifiBssid(null)
+        val result = wifiStorage.getWifiBssid()
+        assertThat(result.getOrNull()).isNull()
+    }
 }

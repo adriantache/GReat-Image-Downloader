@@ -29,7 +29,7 @@ class FakeWifiStorage : WifiStorage {
         return savePasswordResult
     }
 
-    override fun saveWifiBssid(bssid: String): Result<Unit> {
+    override fun saveWifiBssid(bssid: String?): Result<Unit> {
         this.bssid = bssid
         return saveBssidResult
     }

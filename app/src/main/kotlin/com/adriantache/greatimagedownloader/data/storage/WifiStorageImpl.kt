@@ -50,9 +50,13 @@ class WifiStorageImpl(
         onFailure = { Result.failure(WifiStorageException.Unknown(it)) }
     )
 
-    override fun saveWifiBssid(bssid: String): Result<Unit> = runCatching {
+    override fun saveWifiBssid(bssid: String?): Result<Unit> = runCatching {
         sharedPreferences.edit {
-            putString(WIFI_BSSID, bssid)
+            if (bssid == null) {
+                remove(WIFI_BSSID)
+            } else {
+                putString(WIFI_BSSID, bssid)
+            }
         }
     }.fold(
         onSuccess = { Result.success(it) },

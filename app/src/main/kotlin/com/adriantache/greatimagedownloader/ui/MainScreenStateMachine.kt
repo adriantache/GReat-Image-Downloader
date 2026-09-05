@@ -1,5 +1,6 @@
 package com.adriantache.greatimagedownloader.ui
 
+import androidx.activity.compose.BackHandler
 import android.content.Context
 import android.content.Intent
 import androidx.compose.foundation.layout.consumeWindowInsets
@@ -14,7 +15,6 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -77,7 +77,19 @@ fun MainScreenStateMachine(
         }
     }
 
-    // TODO: add a BackHandler and implement behaviour
+    val isBackHandlerEnabled = when (stateValue) {
+        is DownloadPhotos, is ChangeSettings, is RequestWifiCredentials -> true
+        else -> false
+    }
+
+    BackHandler(enabled = isBackHandlerEnabled) {
+        when (val state = stateValue) {
+            is DownloadPhotos -> state.onStopDownloading()
+            is ChangeSettings -> state.onExitSettings()
+            is RequestWifiCredentials -> state.onDismiss()
+            else -> Unit
+        }
+    }
 
     Scaffold(
         snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
@@ -148,14 +160,6 @@ private fun HandleEvent(
     snackbarHostState: SnackbarHostState,
 ) {
     val context = LocalContext.current
-
-    DisposableEffect(Unit) {
-        onDispose {
-            val serviceIntent = Intent(context, PhotoDownloadService::class.java)
-            serviceIntent.action = Actions.STOP.name
-            ContextCompat.startForegroundService(context, serviceIntent)
-        }
-    }
 
     val event = events?.value
     LaunchedEffect(event) {

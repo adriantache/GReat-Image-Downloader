@@ -30,7 +30,6 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 import kotlin.time.Duration.Companion.seconds
 
-// TODO: IMPORTANT delete partially downloaded files on error
 // TODO: add tests
 class DownloadPhotosUseCaseImpl(
     private val repository: Repository,
@@ -115,6 +114,11 @@ class DownloadPhotosUseCaseImpl(
     }
 
     private fun onError(error: DomainError) {
+        // Delete partially downloaded files on error
+        downloadedPhotoUris.values
+            .filter { it.downloadProgress < 100 }
+            .forEach { info -> repository.deleteMedia(info.uri) }
+
         event.value = Event(
             Events.ErrorDialog(
                 error = error,
@@ -399,6 +403,8 @@ class DownloadPhotosUseCaseImpl(
     private fun onDownloadFinished() {
         val wasStopping = state.value is States.StoppingDownload
 
+        dataTransferTool.reset()
+
         updateLatestDownloadedPhotos(photosToDownload, downloadedPhotoUris)
 
         connectToWifi()
@@ -408,8 +414,6 @@ class DownloadPhotosUseCaseImpl(
                 SuccessfulDownload(numDownloadedPhotos = downloadedPhotoUris.size)
             )
         }
-
-        dataTransferTool.reset()
     }
 
     private fun updateLatestDownloadedPhotos(
