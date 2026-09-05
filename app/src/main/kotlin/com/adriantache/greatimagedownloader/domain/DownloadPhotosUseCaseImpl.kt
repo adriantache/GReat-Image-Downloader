@@ -317,13 +317,22 @@ class DownloadPhotosUseCaseImpl(
                         return@launch
                     }
 
+                    val savedPhotos = repository.getSavedPhotos().getOrNull().orEmpty()
+                    val savedMovies = repository.getSavedMovies().getOrNull().orEmpty()
+                    val savedMedia = (savedPhotos.map { it.name.substringBefore(".") } + savedMovies.map { it.substringBefore(".") }).distinct()
+
+                    val newPhotos = photos.filter {
+                        val nameWithoutExtension = it.name.substringBefore(".")
+                        !savedMedia.contains(nameWithoutExtension)
+                    }
+
                     val settings = repository.getSettings().getOrNull()
                     val shouldOnlyDownloadRecent = settings?.rememberLastDownloadedPhotos == true
 
                     val photosToProcess = if (shouldOnlyDownloadRecent) {
-                        filterRecentPhotos(photos)
+                        filterRecentPhotos(newPhotos)
                     } else {
-                        photos
+                        newPhotos
                     }
 
                     if (photosToProcess.isEmpty()) {
@@ -351,16 +360,19 @@ class DownloadPhotosUseCaseImpl(
     }
 
     private suspend fun filterRecentPhotos(availableMediaToDownload: List<PhotoFile>): List<PhotoFile> {
-        val latestDownloadedPhotos = repository.getLatestDownloadedPhotos().getOrNull().orEmpty().groupBy { it.directory }
-        val latestDownloadedDirectories = latestDownloadedPhotos.keys
+        val latestDownloadedPhotos = repository.getLatestDownloadedPhotos().getOrNull().orEmpty()
 
         if (latestDownloadedPhotos.isEmpty()) {
             return availableMediaToDownload
         }
 
         return availableMediaToDownload.filter { currentFile ->
-            currentFile.directory in latestDownloadedDirectories &&
-                    currentFile.name !in latestDownloadedPhotos[currentFile.directory].orEmpty().map { it.name }
+            val latestInDir = latestDownloadedPhotos.find { it.directory == currentFile.directory }
+            if (latestInDir == null) {
+                true
+            } else {
+                currentFile.name > latestInDir.name
+            }
         }
     }
 

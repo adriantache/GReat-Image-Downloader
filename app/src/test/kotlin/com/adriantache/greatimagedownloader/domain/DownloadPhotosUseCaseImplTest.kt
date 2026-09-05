@@ -255,6 +255,75 @@ class DownloadPhotosUseCaseImplTest {
     }
 
     @Test
+    fun `remember last downloaded photos allows new folders`() = runTest {
+        // Arrange
+        repository.settings = Settings(rememberLastDownloadedPhotos = true)
+        repository.latestDownloadedPhotos = mutableListOf(PhotoFile("folder1", "photo1.jpg"))
+        
+        val availablePhotos = listOf(
+            PhotoFile("folder1", "photo1.jpg"),
+            PhotoFile("folder2", "photo1.jpg") // New folder
+        )
+        repository.cameraPhotoListResult = Result.success(availablePhotos)
+
+        // Act: trigger flow
+        (useCase.state.value as States.Init).onInit()
+        advanceUntilIdle()
+        (useCase.state.value as States.RequestPermissions).onPermissionsGranted()
+        advanceUntilIdle()
+        
+        repository.wifiDetails = WifiDetails("SSID", "PASS", "BSSID")
+        (useCase.state.value as States.ConnectWifi).onConnect()
+        advanceUntilIdle()
+        
+        // Simulate Service connected
+        dataTransferTool.serviceStateFlow.value = DataTransferTool.ServiceState.FETCHING
+        advanceUntilIdle()
+
+        // Assert
+        val event = useCase.event.value?.value
+        assertThat(event).isInstanceOf(Events.DownloadPhotosWithService::class.java)
+        val downloadEvent = event as Events.DownloadPhotosWithService
+        assertThat(downloadEvent.photosToDownload).hasSize(1)
+        assertThat(downloadEvent.photosToDownload.first().directory).isEqualTo("folder2")
+        assertThat(downloadEvent.photosToDownload.first().name).isEqualTo("photo1.jpg")
+    }
+
+    @Test
+    fun `saved photos filter excludes files already on device regardless of setting`() = runTest {
+        // Arrange
+        repository.settings = Settings(rememberLastDownloadedPhotos = false)
+        repository.savedPhotos = mutableListOf(PhotoDownloadInfo("photo1.jpg", "", 100, Kbps(0.0)))
+        
+        val availablePhotos = listOf(
+            PhotoFile("folder1", "photo1.jpg"),
+            PhotoFile("folder1", "photo2.jpg")
+        )
+        repository.cameraPhotoListResult = Result.success(availablePhotos)
+
+        // Act: trigger flow
+        (useCase.state.value as States.Init).onInit()
+        advanceUntilIdle()
+        (useCase.state.value as States.RequestPermissions).onPermissionsGranted()
+        advanceUntilIdle()
+        
+        repository.wifiDetails = WifiDetails("SSID", "PASS", "BSSID")
+        (useCase.state.value as States.ConnectWifi).onConnect()
+        advanceUntilIdle()
+        
+        // Simulate Service connected
+        dataTransferTool.serviceStateFlow.value = DataTransferTool.ServiceState.FETCHING
+        advanceUntilIdle()
+
+        // Assert
+        val event = useCase.event.value?.value
+        assertThat(event).isInstanceOf(Events.DownloadPhotosWithService::class.java)
+        val downloadEvent = event as Events.DownloadPhotosWithService
+        assertThat(downloadEvent.photosToDownload).hasSize(1)
+        assertThat(downloadEvent.photosToDownload.first().name).isEqualTo("photo2.jpg")
+    }
+
+    @Test
     fun `onDownloadFinished transitions to ConnectWifi and emits SuccessfulDownload`() = runTest {
         // Act
         dataTransferTool.downloadFinishedFlow.value = Event(Unit)
