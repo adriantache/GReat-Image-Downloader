@@ -235,6 +235,39 @@ class DownloadPhotosUseCaseImplTest {
     }
 
     @Test
+    fun `selecting empty folder list shuts down camera and returns to ConnectWifi`() = runTest {
+        // Arrange
+        repository.wifiDetails = WifiDetails("SSID", "PASSWORD", null)
+        wifiUtil.connectResult = Pair(true, "BSSID")
+        val photos = listOf(
+            PhotoFile("folder1", "photo1.jpg"),
+            PhotoFile("folder2", "photo2.jpg")
+        )
+        repository.cameraPhotoListResult = Result.success(photos)
+
+        (useCase.state.value as States.Init).onInit()
+        advanceUntilIdle()
+        (useCase.state.value as States.RequestPermissions).onPermissionsGranted()
+        advanceUntilIdle()
+        (useCase.state.value as States.ConnectWifi).onConnect()
+        advanceUntilIdle()
+
+        // Simulate Service connected
+        dataTransferTool.serviceStateFlow.value = DataTransferTool.ServiceState.FETCHING
+        advanceUntilIdle()
+
+        val selectFolders = useCase.state.value as States.SelectFolders
+        
+        // Act: Select empty list (cancel)
+        selectFolders.onFoldersSelect(emptyList())
+        advanceUntilIdle()
+
+        // Assert
+        assertThat(repository.shutdownCalled).isTrue
+        assertThat(useCase.state.value).isInstanceOf(States.ConnectWifi::class.java)
+    }
+
+    @Test
     fun `remember last downloaded photos setting filters available media`() = runTest {
         // Arrange
         repository.settings = Settings(rememberLastDownloadedPhotos = true)

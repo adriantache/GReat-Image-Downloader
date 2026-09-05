@@ -348,7 +348,12 @@ class DownloadPhotosUseCaseImpl(
                         state.value = States.SelectFolders(
                             folderInfo = FolderInfo(photosToProcess),
                             onFoldersSelect = { selectedFolders ->
-                                downloadPhotos(photosToProcess.filter { it.directory in selectedFolders })
+                                if (selectedFolders.isEmpty()) {
+                                    scope.launch { repository.shutDownCamera() }
+                                    connectToWifi()
+                                } else {
+                                    downloadPhotos(photosToProcess.filter { it.directory in selectedFolders })
+                                }
                             }
                         )
                     } else {

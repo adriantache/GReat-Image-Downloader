@@ -38,6 +38,8 @@ fun SelectFoldersView(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterVertically),
     ) {
+        CloseIcon { onFoldersSelect(emptyList()) }
+
         Text("Multiple image folders found. Please select desired folders to download from:")
 
         LazyColumn {
@@ -68,9 +70,8 @@ fun SelectFoldersView(
 
         Button(
             onClick = { onFoldersSelect(selectedFolders.toList()) },
-            enabled = selectedFolders.isNotEmpty(),
         ) {
-            Text("Confirm")
+            Text(if (selectedFolders.isEmpty()) "Cancel & Disconnect" else "Confirm")
         }
     }
 }
