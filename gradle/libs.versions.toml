@@ -19,7 +19,7 @@ espressoCore = "3.7.0"
 exifinterface = "1.4.2"
 mockk = "1.14.11"
 kotlinxCoroutinesTest = "1.11.0"
-robolectric = "4.16.1"
+robolectric = "4.17"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
