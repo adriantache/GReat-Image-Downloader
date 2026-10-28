@@ -38,18 +38,22 @@ import kotlin.time.Duration.Companion.seconds
 /**
  * Implements Ricoh GR III / GR IIIx Bluetooth Low Energy (BLE) wake-up and WLAN AP control.
  *
- * GATT UUIDs based on reverse-engineered Ricoh Image Sync protocol (`def_ble.decrypted.yaml`):
+ * GATT UUIDs based on reverse-engineered Ricoh protocol (`def_ble.decrypted.yaml` & hardware verification):
  * - Bluetooth Control Service: 0F291746-0C80-4726-87A7-3C501FD3B4B6
  *   - BLE Enable Condition: D8676C92-DC4E-4D9E-ACCE-B9E251DDCC0C (sint8: 0 = Disable, 1 = Enable anytime, 2 = Enable power on)
  *   - Paired Device Name: FE3A32F8-A189-42DE-A391-BC81AE4DAA76 (utf8s, Write)
  * - Camera Service: 4B445988-CAA0-4DD3-941D-37B4F52ACA86
  *   - Camera Service Notification: FAA0AEAF-1654-4842-A139-F4E1C1E722AC (Read, Notify)
  *   - Camera Power: B58CE84C-0666-4DE9-BEC8-2D27B27B3211 (sint8: 0 = Off, 1 = On, 2 = Sleep)
- *   - Operation Mode: 1452335A-EC7F-4877-B8AB-0F72E18BB295 (sint8: 0 = Capture, 1 = Playback, 2 = BLE Startup, 4 = PowerOffTransfer)
+ *   - Operation Mode: 1452335A-EC7F-4877-B8AB-0F72E18BB295 (sint8: 0 = Capture, 1 = Playback, 2 = BLE Startup, 3 = Other, 4 = PowerOffTransfer)
  * - WLAN Control Service: F37F568F-9071-445D-A938-5441F2E82399
  *   - Network Type: 9111CDD0-9F01-45C4-A2D4-E09E8FB0424D (sint8: 0 = OFF, 1 = AP mode)
  *   - SSID: 90638E5A-E77D-409D-B550-78F7E1CA5AB4 (utf8s)
  *   - Passphrase: 0F38279C-FE9E-461B-8596-81287E8C9A81 (utf8s)
+ *
+ * Hardware verification note: Writing Network Type = 1 (AP) on Ricoh GR III is rejected with 0x80 while the
+ * camera is in BLE_STARTUP (0x02) or POWER_OFF_TRANSFER (0x04). Once Operation Mode transitions to CAPTURE (0x00),
+ * PLAYBACK (0x01), or OTHER (0x03), writing Network Type = 1 succeeds and raises the camera's Wi-Fi AP.
  */
 class BleUtilImpl(
     private val context: Context,
@@ -79,28 +83,32 @@ class BleUtilImpl(
         var details: WifiDetails? = null
 
         for (bonded in bondedCandidates) {
-            details = withTimeoutOrNull(5.seconds) {
+            Log.d(TAG, "Attempting connection to bonded camera: ${bonded.name} (${bonded.address})")
+            details = withTimeoutOrNull(12.seconds) {
                 connectAndEnableAp(bonded)
             }
             if (details != null || activeGatt != null) break
         }
 
         if (details == null && activeGatt == null) {
+            Log.d(TAG, "No bonded connection established, starting active BLE scan...")
             val scannedDevice = scanForRicohBleDevice(
                 adapter = adapter,
                 bondedAddresses = bondedCandidates.mapNotNull { it.address }.toSet(),
             )
             if (scannedDevice != null) {
-                details = withTimeoutOrNull(8.seconds) {
+                Log.d(TAG, "Scanned Ricoh camera found: ${scannedDevice.name} (${scannedDevice.address})")
+                details = withTimeoutOrNull(12.seconds) {
                     connectAndEnableAp(scannedDevice)
                 }
             }
         }
 
-        // Give the camera's Wi-Fi Access Point a moment to boot after BLE activation
-        // while keeping the BLE GATT link open so the camera does not abort Wi-Fi startup.
+        // Give the camera Wi-Fi AP 2.5 seconds to boot and broadcast beacons
+        // while holding the BLE GATT link open so the camera does not abort Wi-Fi startup.
         if (details != null || activeGatt != null) {
-            delay(1500.milliseconds)
+            Log.d(TAG, "Waiting 2500ms for camera Wi-Fi AP beacons to start broadcasting...")
+            delay(2500.milliseconds)
         }
 
         details
@@ -110,6 +118,7 @@ class BleUtilImpl(
         val gatt = activeGatt
         activeGatt = null
         if (gatt != null) {
+            Log.d(TAG, "Closing active BLE GATT session")
             runCatching { gatt.disconnect() }
             runCatching { gatt.close() }
         }
@@ -206,7 +215,8 @@ class BleUtilImpl(
             var gattRef: BluetoothGatt? = null
             var discoveredSsid: String? = null
             var discoveredPassphrase: String? = null
-            var retriedNetworkTypeAfterModeSwitch = false
+            var opModePollRetries = 0
+            var netTypeWriteRetries = 0
 
             val operationQueue = ArrayDeque<GattAction>()
 
@@ -223,9 +233,8 @@ class BleUtilImpl(
             fun processNext(gatt: BluetoothGatt) {
                 val next = operationQueue.removeFirstOrNull()
                 if (next == null) {
-                    // Keep GATT connected in activeGatt while Wi-Fi connects so the camera
-                    // does not abort its BLE-to-Wi-Fi handoff.
                     activeGatt = gatt
+                    Log.d(TAG, "All GATT setup operations finished. Keeping BLE connection alive for Wi-Fi handoff.")
                     if (continuation.isActive) {
                         continuation.resume(buildWifiDetails())
                     }
@@ -286,9 +295,12 @@ class BleUtilImpl(
 
             val callback = object : BluetoothGattCallback() {
                 override fun onConnectionStateChange(gatt: BluetoothGatt, status: Int, newState: Int) {
+                    Log.d(TAG, "GATT onConnectionStateChange status=$status newState=$newState")
                     if (newState == BluetoothProfile.STATE_CONNECTED) {
+                        Log.d(TAG, "Connected to GATT server, discovering services...")
                         gatt.discoverServices()
                     } else if (newState == BluetoothProfile.STATE_DISCONNECTED) {
+                        Log.d(TAG, "Disconnected from GATT server")
                         if (activeGatt === gatt) {
                             activeGatt = null
                         }
@@ -300,6 +312,7 @@ class BleUtilImpl(
                 }
 
                 override fun onServicesDiscovered(gatt: BluetoothGatt, status: Int) {
+                    Log.d(TAG, "onServicesDiscovered status=$status")
                     if (status != BluetoothGatt.GATT_SUCCESS) {
                         runCatching { gatt.disconnect() }
                         runCatching { gatt.close() }
@@ -309,7 +322,7 @@ class BleUtilImpl(
                         return
                     }
 
-                    // 1. Bluetooth Control Service: register Paired Device Name & enable BLE anytime
+                    // 1. Bluetooth Control Service: register paired device name & enable BLE anytime
                     val btControlService = gatt.getService(BLUETOOTH_CONTROL_SERVICE_UUID)
                     val pairedNameChar = btControlService?.getCharacteristic(PAIRED_DEVICE_NAME_CHAR_UUID)
                     if (pairedNameChar != null) {
@@ -323,30 +336,32 @@ class BleUtilImpl(
                         operationQueue.add(GattAction.Write(bleEnableChar, byteArrayOf(BLE_ENABLE_ANYTIME)))
                     }
 
-                    // 2. Camera Service: subscribe to notifications & power on camera if sleeping/off
+                    // 2. Camera Service: wake camera by writing Power = 1
                     val cameraService = gatt.getService(CAMERA_SERVICE_UUID)
-                    val cameraNotifyChar = cameraService?.getCharacteristic(CAMERA_SERVICE_NOTIFICATION_CHAR_UUID)
-                    if (cameraNotifyChar != null) {
-                        operationQueue.add(GattAction.EnableNotification(cameraNotifyChar))
-                    }
                     val powerChar = cameraService?.getCharacteristic(CAMERA_POWER_CHAR_UUID)
                     if (powerChar != null) {
-                        operationQueue.add(GattAction.EnableNotification(powerChar))
                         operationQueue.add(GattAction.Write(powerChar, byteArrayOf(POWER_ON)))
-                        operationQueue.add(GattAction.Delay(400L))
                     }
 
-                    // 3. WLAN Control Service: read SSID & Passphrase, subscribe & enable AP mode
+                    // 3. WLAN Service: read SSID and Passphrase
                     val wlanService = gatt.getService(WLAN_SERVICE_UUID)
                     val ssidChar = wlanService?.getCharacteristic(WLAN_SSID_CHAR_UUID)
                     val passChar = wlanService?.getCharacteristic(WLAN_PASSPHRASE_CHAR_UUID)
-                    val netTypeChar = wlanService?.getCharacteristic(WLAN_NETWORK_TYPE_CHAR_UUID)
-
                     if (ssidChar != null) operationQueue.add(GattAction.Read(ssidChar))
                     if (passChar != null) operationQueue.add(GattAction.Read(passChar))
-                    if (netTypeChar != null) {
-                        operationQueue.add(GattAction.EnableNotification(netTypeChar))
-                        operationQueue.add(GattAction.Write(netTypeChar, byteArrayOf(NETWORK_TYPE_AP)))
+
+                    // 4. Poll Operation Mode until camera leaves BLE_STARTUP / POWER_OFF_TRANSFER
+                    val opModeChar = cameraService?.getCharacteristic(OPERATION_MODE_CHAR_UUID)
+                    if (opModeChar != null) {
+                        operationQueue.add(GattAction.Delay(500L))
+                        operationQueue.add(GattAction.Read(opModeChar))
+                    } else {
+                        // Fallback if Operation Mode characteristic not exposed: wait 3s then write Network Type
+                        val netTypeChar = wlanService?.getCharacteristic(WLAN_NETWORK_TYPE_CHAR_UUID)
+                        if (netTypeChar != null) {
+                            operationQueue.add(GattAction.Delay(3000L))
+                            operationQueue.add(GattAction.Write(netTypeChar, byteArrayOf(NETWORK_TYPE_AP)))
+                        }
                     }
 
                     processNext(gatt)
@@ -366,14 +381,7 @@ class BleUtilImpl(
                     value: ByteArray,
                     status: Int,
                 ) {
-                    if (status == BluetoothGatt.GATT_SUCCESS) {
-                        val parsed = value.toString(Charsets.UTF_8).trimEnd('\u0000').trim()
-                        when (characteristic.uuid) {
-                            WLAN_SSID_CHAR_UUID -> discoveredSsid = parsed
-                            WLAN_PASSPHRASE_CHAR_UUID -> discoveredPassphrase = parsed
-                        }
-                    }
-                    processNext(gatt)
+                    handleCharacteristicRead(gatt, characteristic.uuid, value, status)
                 }
 
                 @Deprecated("Deprecated in Java")
@@ -382,11 +390,49 @@ class BleUtilImpl(
                     characteristic: BluetoothGattCharacteristic,
                     status: Int,
                 ) {
+                    val value = characteristic.value ?: ByteArray(0)
+                    handleCharacteristicRead(gatt, characteristic.uuid, value, status)
+                }
+
+                private fun handleCharacteristicRead(
+                    gatt: BluetoothGatt,
+                    uuid: UUID,
+                    value: ByteArray,
+                    status: Int,
+                ) {
                     if (status == BluetoothGatt.GATT_SUCCESS) {
-                        val value = characteristic.value?.toString(Charsets.UTF_8)?.trimEnd('\u0000')?.trim()
-                        when (characteristic.uuid) {
-                            WLAN_SSID_CHAR_UUID -> discoveredSsid = value
-                            WLAN_PASSPHRASE_CHAR_UUID -> discoveredPassphrase = value
+                        when (uuid) {
+                            WLAN_SSID_CHAR_UUID -> {
+                                discoveredSsid = value.toString(Charsets.UTF_8).trimEnd('\u0000').trim()
+                                Log.d(TAG, "Read WLAN SSID from camera BLE: '$discoveredSsid'")
+                            }
+
+                            WLAN_PASSPHRASE_CHAR_UUID -> {
+                                discoveredPassphrase = value.toString(Charsets.UTF_8).trimEnd('\u0000').trim()
+                                Log.d(TAG, "Read WLAN Passphrase from camera BLE")
+                            }
+
+                            OPERATION_MODE_CHAR_UUID -> {
+                                val mode = if (value.isNotEmpty()) value[0].toInt() else -1
+                                Log.d(TAG, "Read Operation Mode from camera BLE: 0x%02X".format(mode))
+
+                                val isStandby = mode == OPERATION_MODE_BLE_STARTUP.toInt() ||
+                                    mode == OPERATION_MODE_POWER_OFF_TRANSFER.toInt()
+
+                                if (isStandby && opModePollRetries < 10) {
+                                    opModePollRetries++
+                                    Log.d(TAG, "Camera is still in standby/boot mode (0x%02X). Waiting and retrying poll $opModePollRetries/10...".format(mode))
+                                    operationQueue.addFirst(GattAction.Read(gatt.getService(CAMERA_SERVICE_UUID)!!.getCharacteristic(OPERATION_MODE_CHAR_UUID)))
+                                    operationQueue.addFirst(GattAction.Delay(500L))
+                                } else {
+                                    Log.d(TAG, "Camera is ready to raise Wi-Fi AP (Operation Mode: 0x%02X). Queueing Network Type = 1 (AP mode).".format(mode))
+                                    val wlanService = gatt.getService(WLAN_SERVICE_UUID)
+                                    val netTypeChar = wlanService?.getCharacteristic(WLAN_NETWORK_TYPE_CHAR_UUID)
+                                    if (netTypeChar != null) {
+                                        operationQueue.addFirst(GattAction.Write(netTypeChar, byteArrayOf(NETWORK_TYPE_AP)))
+                                    }
+                                }
+                            }
                         }
                     }
                     processNext(gatt)
@@ -397,19 +443,15 @@ class BleUtilImpl(
                     characteristic: BluetoothGattCharacteristic,
                     status: Int,
                 ) {
-                    if (characteristic.uuid == WLAN_NETWORK_TYPE_CHAR_UUID &&
-                        status != BluetoothGatt.GATT_SUCCESS &&
-                        !retriedNetworkTypeAfterModeSwitch
-                    ) {
-                        retriedNetworkTypeAfterModeSwitch = true
-                        Log.d("BleUtil", "Network Type write returned status=$status; switching Operation Mode and retrying")
-                        val cameraService = gatt.getService(CAMERA_SERVICE_UUID)
-                        val opModeChar = cameraService?.getCharacteristic(OPERATION_MODE_CHAR_UUID)
-                        if (opModeChar != null) {
-                            operationQueue.add(GattAction.Write(opModeChar, byteArrayOf(OPERATION_MODE_POWER_OFF_TRANSFER)))
-                            operationQueue.add(GattAction.Write(opModeChar, byteArrayOf(OPERATION_MODE_PLAYBACK)))
-                            operationQueue.add(GattAction.Delay(300L))
-                            operationQueue.add(GattAction.Write(characteristic, byteArrayOf(NETWORK_TYPE_AP)))
+                    Log.d(TAG, "onCharacteristicWrite uuid=${characteristic.uuid} status=$status")
+                    if (characteristic.uuid == WLAN_NETWORK_TYPE_CHAR_UUID) {
+                        if (status == BluetoothGatt.GATT_SUCCESS) {
+                            Log.d(TAG, "BLE WLAN activation: Camera accepted Network Type = 1 (AP mode)! Wi-Fi is spinning up.")
+                        } else if (netTypeWriteRetries < 3) {
+                            netTypeWriteRetries++
+                            Log.d(TAG, "Network Type write rejected with status=$status; retrying write $netTypeWriteRetries/3 after 600ms delay...")
+                            operationQueue.addFirst(GattAction.Write(characteristic, byteArrayOf(NETWORK_TYPE_AP)))
+                            operationQueue.addFirst(GattAction.Delay(600L))
                         }
                     }
                     processNext(gatt)
@@ -434,6 +476,7 @@ class BleUtilImpl(
     }
 
     companion object {
+        private const val TAG = "BleUtil"
         const val RICOH_COMPANY_ID: Int = 0x065F
 
         val INFO_SERVICE_UUID: UUID = UUID.fromString("9A5ED1C5-74CC-4C50-B5B6-66A48E7CCFF1")
@@ -465,7 +508,7 @@ class BleUtilImpl(
 
         private const val BLE_ENABLE_ANYTIME: Byte = 1
         private const val POWER_ON: Byte = 1
-        private const val OPERATION_MODE_PLAYBACK: Byte = 1
+        private const val OPERATION_MODE_BLE_STARTUP: Byte = 2
         private const val OPERATION_MODE_POWER_OFF_TRANSFER: Byte = 4
         private const val NETWORK_TYPE_AP: Byte = 1
     }
