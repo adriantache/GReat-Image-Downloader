@@ -130,6 +130,7 @@ fun MainScreenStateMachine(
                     onConnect = state.onConnect,
                     onChangeWifiDetails = state.onChangeWifiDetails,
                     onAdjustSettings = state.onAdjustSettings,
+                    autoStartConnection = state.autoStartConnection,
                 )
 
                 GetPhotos -> SyncView()

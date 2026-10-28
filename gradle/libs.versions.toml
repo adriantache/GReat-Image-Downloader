@@ -7,6 +7,7 @@ activityCompose = "1.13.0"
 composeBom = "2026.08.00"
 koin = "4.2.2"
 accompanist = "0.37.3"
+glance = "1.1.1"
 coil = "3.6.2"
 retrofit = "3.0.0"
 kotlinxSerialization = "1.11.0"
@@ -40,6 +41,8 @@ androidx-exifinterface = { group = "androidx.exifinterface", name = "exifinterfa
 koin-android = { group = "io.insert-koin", name = "koin-android", version.ref = "koin" }
 koin-androidx-compose = { group = "io.insert-koin", name = "koin-androidx-compose", version.ref = "koin" }
 accompanist-permissions = { group = "com.google.accompanist", name = "accompanist-permissions", version.ref = "accompanist" }
+androidx-glance-appwidget = { group = "androidx.glance", name = "glance-appwidget", version.ref = "glance" }
+androidx-glance-material3 = { group = "androidx.glance", name = "glance-material3", version.ref = "glance" }
 coil-compose = { group = "io.coil-kt.coil3", name = "coil-compose", version.ref = "coil" }
 retrofit = { group = "com.squareup.retrofit2", name = "retrofit", version.ref = "retrofit" }
 retrofit-kotlinx-serialization = { group = "com.squareup.retrofit2", name = "converter-kotlinx-serialization", version.ref = "retrofit" }

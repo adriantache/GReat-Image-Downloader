@@ -8,4 +8,6 @@ import kotlinx.coroutines.flow.StateFlow
 interface DownloadPhotosUseCase {
     val state: StateFlow<States>
     val event: StateFlow<Event<Events>?>
+
+    fun triggerAutoConnect() {}
 }

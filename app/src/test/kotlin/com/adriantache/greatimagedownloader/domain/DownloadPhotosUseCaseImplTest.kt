@@ -583,6 +583,43 @@ class DownloadPhotosUseCaseImplTest {
         val eventValue = useCase.event.value?.value
         assertThat(eventValue).isInstanceOf(Events.ConfirmDeleteAllPhotos::class.java)
     }
+
+    @Test
+    fun `triggerAutoConnect starts wifi connection automatically once permissions are granted`() = runTest {
+        // Arrange
+        repository.wifiDetails = WifiDetails("SSID", "PASSWORD", "BSSID")
+        wifiUtil.connectResult = Pair(true, "BSSID")
+
+        // Act: Widget triggers auto-connect on cold start before permissions check completes
+        useCase.triggerAutoConnect()
+        (useCase.state.value as States.Init).onInit()
+        advanceUntilIdle()
+        (useCase.state.value as States.RequestPermissions).onPermissionsGranted()
+        advanceUntilIdle()
+
+        // Assert: Connection started automatically without requiring a manual onConnect() tap
+        assertThat(wifiUtil.connectCalledCount).isEqualTo(1)
+    }
+
+    @Test
+    fun `triggerAutoConnect starts wifi connection immediately when already in ConnectWifi state`() = runTest {
+        // Arrange
+        repository.wifiDetails = WifiDetails("SSID", "PASSWORD", "BSSID")
+        wifiUtil.connectResult = Pair(true, "BSSID")
+
+        (useCase.state.value as States.Init).onInit()
+        advanceUntilIdle()
+        (useCase.state.value as States.RequestPermissions).onPermissionsGranted()
+        advanceUntilIdle()
+        assertThat(useCase.state.value).isInstanceOf(States.ConnectWifi::class.java)
+
+        // Act: Widget tapped while app is already sitting on ConnectWifi screen
+        useCase.triggerAutoConnect()
+        advanceUntilIdle()
+
+        // Assert
+        assertThat(wifiUtil.connectCalledCount).isEqualTo(1)
+    }
     
     private fun openSettings() {
         val method = useCase.javaClass.getDeclaredMethod("openSettings")

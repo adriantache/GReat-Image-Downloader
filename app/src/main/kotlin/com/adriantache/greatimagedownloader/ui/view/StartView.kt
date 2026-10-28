@@ -55,10 +55,11 @@ fun StartView(
     onConnect: () -> Unit,
     onChangeWifiDetails: () -> Unit,
     onAdjustSettings: () -> Unit,
+    autoStartConnection: Boolean = false,
 ) {
     val context = LocalContext.current
 
-    var isLoading by remember { mutableStateOf(false) }
+    var isLoading by remember(autoStartConnection) { mutableStateOf(autoStartConnection) }
     var isWifiDisabled by remember { mutableStateOf(false) }
 
     LifecycleResumeEffect(onCheckWifiDisabled) {

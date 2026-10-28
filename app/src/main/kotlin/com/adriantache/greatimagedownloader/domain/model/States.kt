@@ -24,6 +24,7 @@ sealed interface States {
         val onChangeWifiDetails: () -> Unit,
         // TODO: this shouldn't be here
         val onAdjustSettings: () -> Unit,
+        val autoStartConnection: Boolean = false,
     ) : States
 
     data object GetPhotos : States

@@ -55,6 +55,7 @@ class DownloadPhotosUseCaseImpl(
     private val downloadedPhotoUris = mutableMapOf<String, PhotoDownloadInfo>()
     private var keepAliveJob: Job? = null
     private var currentCameraStatus: CameraStatus? = null
+    private var autoConnectRequested = false
 
     init {
         scope.launch {
@@ -167,6 +168,17 @@ class DownloadPhotosUseCaseImpl(
     }
 
 
+    override fun triggerAutoConnect() {
+        val currentState = state.value
+        if (currentState is ConnectWifi) {
+            autoConnectRequested = false
+            state.value = currentState.copy(autoStartConnection = true)
+            currentState.onConnect()
+        } else {
+            autoConnectRequested = true
+        }
+    }
+
     private fun onInit() {
         state.value = RequestPermissions(::onPermissionsGranted)
     }
@@ -190,6 +202,9 @@ class DownloadPhotosUseCaseImpl(
             return
         }
 
+        val shouldAutoStart = autoConnectRequested && !isHardTimeout && !wifiUtil.isWifiDisabled
+        autoConnectRequested = false
+
         state.value = ConnectWifi(
             isHardTimeout = isHardTimeout,
             onCheckWifiDisabled = { wifiUtil.isWifiDisabled },
@@ -203,7 +218,12 @@ class DownloadPhotosUseCaseImpl(
                 )
             },
             onAdjustSettings = ::openSettings,
+            autoStartConnection = shouldAutoStart,
         )
+
+        if (shouldAutoStart) {
+            startWifiConnection(wifiDetails)
+        }
     }
 
     private fun startWifiConnection(wifiDetails: WifiDetailsEntity) {
