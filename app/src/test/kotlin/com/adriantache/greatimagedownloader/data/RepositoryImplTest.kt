@@ -141,6 +141,24 @@ class RepositoryImplTest {
         val result = flow.first()
         assertThat(result.isSuccess).isTrue
         assertThat(result.getOrNull()).isEqualTo(photoInfo)
+        assertThat(ricohApi.lastRequestedPhotoSize).isNull()
+        job.cancel()
+    }
+
+    @Test
+    fun `downloadMediaToStorage requests view size when fastPreviewDownload is enabled`() = runTest {
+        preferencesStorage.settings = Settings(fastPreviewDownload = true)
+        val photo = PhotoFile("100RICOH", "R0001234.JPG")
+        val photoInfo = PhotoDownloadInfo("R0001234.JPG", "uri", 100, Kbps(100.0))
+
+        val flow = repository.downloadMediaToStorage(photo)
+        val job = launch {
+            filesStorage.savePhotoFlow.emit(Result.success(photoInfo))
+        }
+
+        val result = flow.first()
+        assertThat(result.isSuccess).isTrue
+        assertThat(ricohApi.lastRequestedPhotoSize).isEqualTo("view")
         job.cancel()
     }
 

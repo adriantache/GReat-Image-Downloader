@@ -43,6 +43,33 @@ fun ChangeSettingsScreen(state: States.ChangeSettings) {
         }
 
         item {
+            SettingsRow(
+                primaryText = "Download RAW (.DNG) files",
+                secondaryText = "Enable this to include RAW (.DNG) files when downloading from the camera.",
+                initialValue = state.settings.downloadRawFiles,
+                onSelect = state.onToggleDownloadRawFiles,
+            )
+        }
+
+        item {
+            SettingsRow(
+                primaryText = "Download videos",
+                secondaryText = "Enable this to include movie files (.MOV/.MP4) when downloading from the camera.",
+                initialValue = state.settings.downloadVideos,
+                onSelect = state.onToggleDownloadVideos,
+            )
+        }
+
+        item {
+            SettingsRow(
+                primaryText = "Fast preview mode (reduced size)",
+                secondaryText = "Download lighter preview JPEGs (size=view) instead of full-resolution files for faster transfers.",
+                initialValue = state.settings.fastPreviewDownload,
+                onSelect = state.onToggleFastPreviewDownload,
+            )
+        }
+
+        item {
             Text(
                 modifier = Modifier
                     .fillMaxWidth()

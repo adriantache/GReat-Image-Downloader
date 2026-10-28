@@ -373,9 +373,9 @@ class DownloadPhotosUseCaseImplTest {
     }
 
     @Test
-    fun `saved JPEG does not prevent downloading matching RAW DNG file`() = runTest {
+    fun `saved JPEG does not prevent downloading matching RAW DNG file when RAW setting enabled`() = runTest {
         // Arrange
-        repository.settings = Settings(rememberLastDownloadedPhotos = false)
+        repository.settings = Settings(rememberLastDownloadedPhotos = false, downloadRawFiles = true)
         repository.savedPhotos = mutableListOf(PhotoDownloadInfo("R0001234.JPG", "", 100, Kbps(0.0)))
 
         val availablePhotos = listOf(
@@ -389,7 +389,7 @@ class DownloadPhotosUseCaseImplTest {
         advanceUntilIdle()
         (useCase.state.value as States.RequestPermissions).onPermissionsGranted()
         advanceUntilIdle()
-        repository.wifiDetails = WifiDetails("SSID", "PASS", "BSSID")
+        repository.wifiDetails = WifiDetails("SSID", "PASSWORD", "BSSID")
         (useCase.state.value as States.ConnectWifi).onConnect()
         advanceUntilIdle()
         dataTransferTool.serviceStateFlow.value = DataTransferTool.ServiceState.FETCHING
@@ -398,6 +398,58 @@ class DownloadPhotosUseCaseImplTest {
         // Assert
         val event = useCase.event.value?.value as Events.DownloadPhotosWithService
         assertThat(event.photosToDownload).containsExactly(PhotoFile("100RICOH", "R0001234.DNG"))
+    }
+
+    @Test
+    fun `RAW DNG files are skipped by default when downloadRawFiles setting is false`() = runTest {
+        // Arrange
+        repository.settings = Settings(rememberLastDownloadedPhotos = false, downloadRawFiles = false)
+        val availablePhotos = listOf(
+            PhotoFile("100RICOH", "R0001234.JPG"),
+            PhotoFile("100RICOH", "R0001234.DNG"),
+        )
+        repository.cameraPhotoListResult = Result.success(availablePhotos)
+
+        // Act
+        (useCase.state.value as States.Init).onInit()
+        advanceUntilIdle()
+        (useCase.state.value as States.RequestPermissions).onPermissionsGranted()
+        advanceUntilIdle()
+        repository.wifiDetails = WifiDetails("SSID", "PASSWORD", "BSSID")
+        (useCase.state.value as States.ConnectWifi).onConnect()
+        advanceUntilIdle()
+        dataTransferTool.serviceStateFlow.value = DataTransferTool.ServiceState.FETCHING
+        advanceUntilIdle()
+
+        // Assert
+        val event = useCase.event.value?.value as Events.DownloadPhotosWithService
+        assertThat(event.photosToDownload).containsExactly(PhotoFile("100RICOH", "R0001234.JPG"))
+    }
+
+    @Test
+    fun `video files are skipped when downloadVideos setting is false`() = runTest {
+        // Arrange
+        repository.settings = Settings(rememberLastDownloadedPhotos = false, downloadVideos = false)
+        val availablePhotos = listOf(
+            PhotoFile("100RICOH", "R0001234.JPG"),
+            PhotoFile("100RICOH", "R0001235.MOV"),
+        )
+        repository.cameraPhotoListResult = Result.success(availablePhotos)
+
+        // Act
+        (useCase.state.value as States.Init).onInit()
+        advanceUntilIdle()
+        (useCase.state.value as States.RequestPermissions).onPermissionsGranted()
+        advanceUntilIdle()
+        repository.wifiDetails = WifiDetails("SSID", "PASSWORD", "BSSID")
+        (useCase.state.value as States.ConnectWifi).onConnect()
+        advanceUntilIdle()
+        dataTransferTool.serviceStateFlow.value = DataTransferTool.ServiceState.FETCHING
+        advanceUntilIdle()
+
+        // Assert
+        val event = useCase.event.value?.value as Events.DownloadPhotosWithService
+        assertThat(event.photosToDownload).containsExactly(PhotoFile("100RICOH", "R0001234.JPG"))
     }
 
     @Test

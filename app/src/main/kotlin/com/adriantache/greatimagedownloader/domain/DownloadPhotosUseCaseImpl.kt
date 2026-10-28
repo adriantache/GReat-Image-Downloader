@@ -282,6 +282,27 @@ class DownloadPhotosUseCaseImpl(
                         openSettings()
                     }
                 },
+                onToggleDownloadRawFiles = {
+                    scope.launch {
+                        val currentSettings = repository.getSettings().getOrNull() ?: return@launch
+                        repository.saveSettings(currentSettings.copy(downloadRawFiles = !currentSettings.downloadRawFiles))
+                        openSettings()
+                    }
+                },
+                onToggleDownloadVideos = {
+                    scope.launch {
+                        val currentSettings = repository.getSettings().getOrNull() ?: return@launch
+                        repository.saveSettings(currentSettings.copy(downloadVideos = !currentSettings.downloadVideos))
+                        openSettings()
+                    }
+                },
+                onToggleFastPreviewDownload = {
+                    scope.launch {
+                        val currentSettings = repository.getSettings().getOrNull() ?: return@launch
+                        repository.saveSettings(currentSettings.copy(fastPreviewDownload = !currentSettings.fastPreviewDownload))
+                        openSettings()
+                    }
+                },
                 onDeleteAllPhotos = ::deleteAllPhotos,
                 onExitSettings = ::connectToWifi,
             )
@@ -340,12 +361,19 @@ class DownloadPhotosUseCaseImpl(
                     }
 
                     val settings = repository.getSettings().getOrNull()
+                    val includeRaw = settings?.downloadRawFiles == true
+                    val includeVideos = settings?.downloadVideos != false
+
+                    val filteredByType = newPhotos.filter { photo ->
+                        (!photo.isRawFile || includeRaw) && (!photo.isVideoFile || includeVideos)
+                    }
+
                     val shouldOnlyDownloadRecent = settings?.rememberLastDownloadedPhotos == true
 
                     val photosToProcess = if (shouldOnlyDownloadRecent) {
-                        filterRecentPhotos(newPhotos)
+                        filterRecentPhotos(filteredByType)
                     } else {
-                        newPhotos
+                        filteredByType
                     }
 
                     if (photosToProcess.isEmpty()) {

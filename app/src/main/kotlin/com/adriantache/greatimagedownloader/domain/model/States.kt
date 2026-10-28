@@ -45,6 +45,9 @@ sealed interface States {
     data class ChangeSettings(
         val settings: Settings,
         val onRememberLastDownloadedPhotos: () -> Unit,
+        val onToggleDownloadRawFiles: () -> Unit = {},
+        val onToggleDownloadVideos: () -> Unit = {},
+        val onToggleFastPreviewDownload: () -> Unit = {},
         val onDeleteAllPhotos: () -> Unit,
         val onExitSettings: () -> Unit,
     ) : States

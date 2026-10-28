@@ -131,9 +131,13 @@ class RepositoryImpl(
     override fun downloadMediaToStorage(photo: PhotoFile): Flow<Result<PhotoDownloadInfo>> {
         return flow {
             try {
+                val useFastPreview = preferencesStorage.getSettings().getOrNull()?.fastPreviewDownload == true
+                val requestedSize = if (useFastPreview && !photo.isVideoFile) "view" else null
+
                 val imageResponse = ricohApi.getPhoto(
                     directory = photo.directory,
-                    file = photo.name
+                    file = photo.name,
+                    size = requestedSize,
                 )
 
                 filesStorage.savePhoto(
