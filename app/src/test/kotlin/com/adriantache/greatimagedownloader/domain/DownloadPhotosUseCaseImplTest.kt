@@ -1,6 +1,8 @@
 package com.adriantache.greatimagedownloader.domain
 
 import android.util.Log
+import com.adriantache.greatimagedownloader.domain.ble.FakeBleUtil
+import com.adriantache.greatimagedownloader.domain.data.FakeRepository
 import com.adriantache.greatimagedownloader.domain.data.model.PhotoDownloadInfo
 import com.adriantache.greatimagedownloader.domain.data.model.PhotoFile
 import com.adriantache.greatimagedownloader.domain.data.model.WifiDetails
@@ -12,12 +14,8 @@ import com.adriantache.greatimagedownloader.domain.model.Settings
 import com.adriantache.greatimagedownloader.domain.model.States
 import com.adriantache.greatimagedownloader.domain.utils.model.Event
 import com.adriantache.greatimagedownloader.domain.utils.model.Kbps
-import com.adriantache.greatimagedownloader.domain.ble.FakeBleUtil
-import com.adriantache.greatimagedownloader.domain.data.FakeRepository
 import com.adriantache.greatimagedownloader.domain.wifi.FakeWifiUtil
 import com.adriantache.greatimagedownloader.service.DataTransferTool
-import io.mockk.coEvery
-import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockkStatic
 import io.mockk.unmockkAll
@@ -133,6 +131,22 @@ class DownloadPhotosUseCaseImplTest {
     }
 
     @Test
+    fun `rapid consecutive emitImageProgress calls do not conflate or lose 100 percent completion`() = runTest {
+        // Arrange: Emit photo1 50%, photo1 100%, and photo2 10% synchronously before dispatcher runs
+        dataTransferTool.emitImageProgress(PhotoDownloadInfo("photo1.jpg", "content://media/1", 50, Kbps(100.0)))
+        dataTransferTool.emitImageProgress(PhotoDownloadInfo("photo1.jpg", "content://media/1", 100, Kbps(100.0), isLandscape = true))
+        dataTransferTool.emitImageProgress(PhotoDownloadInfo("photo2.jpg", "content://media/2", 10, Kbps(100.0)))
+        advanceUntilIdle()
+
+        // Act: Emit error while photo2 is at 10%
+        dataTransferTool.errorFlow.value = Event(DomainError.NetworkError as DomainError)
+        advanceUntilIdle()
+
+        // Assert: Only incomplete photo2 is deleted; completed photo1 is preserved
+        assertThat(repository.deletedMediaUris).containsExactly("content://media/2")
+    }
+
+    @Test
     fun `retry in error dialog re-attempts connection`() = runTest {
         // Arrange
         repository.wifiDetails = WifiDetails("SSID", "PASSWORD", null)
@@ -229,7 +243,7 @@ class DownloadPhotosUseCaseImplTest {
     }
 
     @Test
-    fun `selecting folders triggers download event`() = runTest {
+    fun `selecting folders triggers download event and populates pendingPhotosToDownload`() = runTest {
         // Arrange
         repository.wifiDetails = WifiDetails("SSID", "PASSWORD", null)
         wifiUtil.connectResult = Pair(true, "BSSID")
@@ -262,6 +276,7 @@ class DownloadPhotosUseCaseImplTest {
         val downloadEvent = eventValue as Events.DownloadPhotosWithService
         assertThat(downloadEvent.photosToDownload).hasSize(1)
         assertThat(downloadEvent.photosToDownload.first().directory).isEqualTo("folder1")
+        assertThat(dataTransferTool.pendingPhotosToDownload).containsExactly(PhotoFile("folder1", "photo1.jpg"))
     }
 
     @Test

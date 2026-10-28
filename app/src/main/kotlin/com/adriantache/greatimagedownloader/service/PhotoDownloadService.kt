@@ -15,13 +15,14 @@ import com.adriantache.greatimagedownloader.domain.model.DomainException
 import com.adriantache.greatimagedownloader.domain.utils.model.Event
 import com.adriantache.greatimagedownloader.service.DataTransferTool.ServiceState
 import com.adriantache.greatimagedownloader.service.model.PhotoFileItem
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.inject
-
 
 class PhotoDownloadService : Service(), KoinComponent {
     private val scope = CoroutineScope(Dispatchers.IO)
@@ -30,8 +31,10 @@ class PhotoDownloadService : Service(), KoinComponent {
 
     private var wifiLock: WifiManager.WifiLock? = null
     private var wakeLock: PowerManager.WakeLock? = null
+    private var downloadJob: Job? = null
 
     // Used to interrupt download without corrupting current file.
+    @Volatile
     private var continueDownload = false
 
     override fun onBind(p0: Intent?): IBinder? = null
@@ -51,13 +54,19 @@ class PhotoDownloadService : Service(), KoinComponent {
         when (intent?.action) {
             Actions.START.name -> {
                 Log.d("PhotoDownloadService", "onStartCommand: START")
-                val photosToDownload = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                    intent.extras?.getParcelableArrayList(PHOTOS_LIST_EXTRA, PhotoFileItem::class.java)
+                val inMemoryPhotos = dataTransferTool.consumePendingPhotos()
+                val photosToDownload = if (inMemoryPhotos.isNotEmpty()) {
+                    inMemoryPhotos
                 } else {
-                    @Suppress("DEPRECATION")
-                    intent.extras?.getParcelableArrayList(PHOTOS_LIST_EXTRA)
+                    val parcelablePhotos = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                        intent.extras?.getParcelableArrayList(PHOTOS_LIST_EXTRA, PhotoFileItem::class.java)
+                    } else {
+                        @Suppress("DEPRECATION")
+                        intent.extras?.getParcelableArrayList(PHOTOS_LIST_EXTRA)
+                    }
+                    parcelablePhotos?.map { PhotoFile(it.directory, it.name) }
                 }
-                start(photosToDownload?.toList())
+                start(photosToDownload)
             }
 
             Actions.CONNECT.name -> {
@@ -79,7 +88,7 @@ class PhotoDownloadService : Service(), KoinComponent {
         scope.cancel()
     }
 
-    private fun start(photosToDownload: List<PhotoFileItem>?) {
+    private fun start(photosToDownload: List<PhotoFile>?) {
         if (photosToDownload.isNullOrEmpty()) {
             Log.e(this::class.java.simpleName, "Photos list is null!")
             scope.launch { disconnect() }
@@ -87,8 +96,9 @@ class PhotoDownloadService : Service(), KoinComponent {
         }
 
         continueDownload = true
+        downloadJob?.cancel()
 
-        scope.launch {
+        downloadJob = scope.launch {
             dataTransferTool.serviceStateFlow.value = ServiceState.DOWNLOADING
             downloadPhotos(photosToDownload)
         }
@@ -108,35 +118,38 @@ class PhotoDownloadService : Service(), KoinComponent {
         dataTransferTool.errorFlow.value = Event(error)
     }
 
-    private fun downloadPhotos(photosToDownload: List<PhotoFileItem>) {
-        scope.launch {
-            var isError = false
-            for (index in photosToDownload.indices) {
-                updateNotification(index + 1, photosToDownload.size)
+    private suspend fun downloadPhotos(photosToDownload: List<PhotoFile>) {
+        var isError = false
+        val completedPhotos = mutableListOf<PhotoFile>()
 
-                val photoItem = photosToDownload[index]
-                val photo = PhotoFile(
-                    directory = photoItem.directory,
-                    name = photoItem.name,
-                )
+        for (index in photosToDownload.indices) {
+            if (!continueDownload) {
+                break
+            }
 
-                if (!continueDownload) {
-                    break
-                }
+            updateNotification(index + 1, photosToDownload.size)
 
-                var lastUri: String? = null
-                var lastProgress = 0
+            val photo = photosToDownload[index]
+            var lastUri: String? = null
+            var lastProgress = 0
 
+            try {
                 repository.downloadMediaToStorage(photo).collect { result ->
+                    if (!continueDownload) {
+                        throw CancellationException("Download stopped by user")
+                    }
+
                     result.fold(
                         onSuccess = { info ->
                             lastUri = info.uri
                             lastProgress = info.downloadProgress
-                            dataTransferTool.imageFlow.value = info
+                            dataTransferTool.emitImageProgress(info)
+                            if (info.downloadProgress == 100) {
+                                completedPhotos.add(photo)
+                            }
                         },
                         onFailure = { throwable ->
                             isError = true
-                            // Cleanup partial download
                             lastUri?.let { uri ->
                                 if (lastProgress < 100) {
                                     repository.deleteMedia(uri)
@@ -149,19 +162,27 @@ class PhotoDownloadService : Service(), KoinComponent {
                         }
                     )
                 }
-
-                if (isError || !continueDownload) break
+            } catch (_: CancellationException) {
+                lastUri?.let { uri ->
+                    if (lastProgress < 100) {
+                        repository.deleteMedia(uri)
+                    }
+                }
+                break
             }
 
-            if (!isError && continueDownload) {
-                updateLatestDownloadedPhotos(photosToDownload.map { PhotoFile(it.directory, it.name) })
-                dataTransferTool.downloadFinishedFlow.value = Event(Unit)
-            } else if (!continueDownload) {
-                dataTransferTool.downloadFinishedFlow.value = Event(Unit)
-            }
-
-            disconnect()
+            if (isError || !continueDownload) break
         }
+
+        if (completedPhotos.isNotEmpty()) {
+            updateLatestDownloadedPhotos(completedPhotos)
+        }
+
+        if (!isError) {
+            dataTransferTool.downloadFinishedFlow.value = Event(Unit)
+        }
+
+        disconnect()
     }
 
     private suspend fun updateLatestDownloadedPhotos(downloadedPhotos: List<PhotoFile>) {
@@ -202,8 +223,7 @@ class PhotoDownloadService : Service(), KoinComponent {
 
     private fun acquireLocks() {
         val wifiManager = applicationContext.getSystemService(WIFI_SERVICE) as WifiManager
-        val lockType =
-            WifiManager.WIFI_MODE_FULL_LOW_LATENCY
+        val lockType = WifiManager.WIFI_MODE_FULL_LOW_LATENCY
         wifiLock = wifiManager.createWifiLock(lockType, "PhotoDownloadService:WifiLock")
         wifiLock?.acquire()
 

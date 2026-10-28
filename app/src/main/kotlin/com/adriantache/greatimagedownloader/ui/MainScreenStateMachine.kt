@@ -1,8 +1,8 @@
 package com.adriantache.greatimagedownloader.ui
 
-import androidx.activity.compose.BackHandler
 import android.content.Context
 import android.content.Intent
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -60,6 +60,7 @@ import com.adriantache.greatimagedownloader.ui.view.SyncView
 import com.adriantache.greatimagedownloader.ui.view.WifiInputView
 import org.koin.androidx.compose.koinViewModel
 
+private const val MAX_INTENT_PHOTOS_EXTRA = 200
 
 @Composable
 fun MainScreenStateMachine(
@@ -242,15 +243,18 @@ fun downloadPhotos(
     context: Context,
     photosToDownload: List<PhotoFile>,
 ) {
-    val photos = photosToDownload.map {
-        PhotoFileItem(
-            directory = it.directory,
-            name = it.name,
-        )
-    }
-
     val serviceIntent = Intent(context, PhotoDownloadService::class.java)
-    serviceIntent.putParcelableArrayListExtra(PHOTOS_LIST_EXTRA, ArrayList(photos))
+    // Avoid Binder TransactionTooLargeException when downloading hundreds or thousands of files;
+    // the full list is already held in memory in DataTransferTool.pendingPhotosToDownload.
+    if (photosToDownload.size <= MAX_INTENT_PHOTOS_EXTRA) {
+        val photos = photosToDownload.map {
+            PhotoFileItem(
+                directory = it.directory,
+                name = it.name,
+            )
+        }
+        serviceIntent.putParcelableArrayListExtra(PHOTOS_LIST_EXTRA, ArrayList(photos))
+    }
     serviceIntent.action = Actions.START.name
 
     ContextCompat.startForegroundService(context, serviceIntent)

@@ -14,9 +14,9 @@ import androidx.exifinterface.media.ExifInterface
 import com.adriantache.greatimagedownloader.data.storage.error.FilesStorageException
 import com.adriantache.greatimagedownloader.data.utils.speedCalculator.SpeedCalculator
 import com.adriantache.greatimagedownloader.data.utils.speedCalculator.SpeedCalculatorImpl
+import com.adriantache.greatimagedownloader.domain.data.model.PhotoDownloadInfo
 import com.adriantache.greatimagedownloader.domain.data.model.PhotoFile
 import com.adriantache.greatimagedownloader.domain.utils.model.Kbps
-import com.adriantache.greatimagedownloader.ui.util.findActivity
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
@@ -46,9 +46,9 @@ class FilesStorageImpl(
     private val context: Context,
     private val speedCalculator: SpeedCalculator = SpeedCalculatorImpl(),
 ) : FilesStorage {
-    override fun getSavedPhotos(): Result<List<com.adriantache.greatimagedownloader.domain.data.model.PhotoDownloadInfo>> = runCatching {
+    override fun getSavedPhotos(): Result<List<PhotoDownloadInfo>> = runCatching {
         getSavedPhotoFiles().map {
-            com.adriantache.greatimagedownloader.domain.data.model.PhotoDownloadInfo(
+            PhotoDownloadInfo(
                 name = it.name,
                 uri = ContentUris.withAppendedId(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, it.id).toString(),
                 downloadProgress = 100,
@@ -134,8 +134,6 @@ class FilesStorageImpl(
             MediaStore.MediaColumns._ID,
             MediaStore.MediaColumns.TITLE,
             OpenableColumns.SIZE,
-            MediaStore.Video.VideoColumns.WIDTH,
-            MediaStore.Video.VideoColumns.HEIGHT,
             MediaStore.MediaColumns.DISPLAY_NAME,
         )
 
@@ -154,16 +152,14 @@ class FilesStorageImpl(
                 val id = cursor.getLong(0)
                 val title = cursor.getString(1)
                 val size = cursor.getLong(2)
-                val width = cursor.getInt(3)
-                val height = cursor.getInt(4)
-                val displayName = cursor.getString(5)
+                val displayName = cursor.getString(3)
 
                 if (size > MIN_SIZE_BYTES) {
                     results.add(
                         DownloadedFile(
                             id = id,
                             name = displayName?.takeIf { it.isNotBlank() } ?: title,
-                            isLandscape = width > height
+                            isLandscape = false
                         )
                     )
                 }
@@ -176,7 +172,7 @@ class FilesStorageImpl(
     override fun savePhoto(
         responseBody: ResponseBody,
         file: PhotoFile,
-    ): Flow<Result<com.adriantache.greatimagedownloader.domain.data.model.PhotoDownloadInfo>> {
+    ): Flow<Result<PhotoDownloadInfo>> {
         return flow {
             val fileSize = responseBody.contentLength()
 
@@ -194,23 +190,31 @@ class FilesStorageImpl(
             }
 
             try {
+                val imageUriString = imageUri.toString()
+
                 responseBody.use { body ->
                     body.source().use { source ->
                         outputStream.sink().buffer().use { destination ->
                             var totalBytesRead = 0L
+                            var bytesSinceLastReport = 0L
                             var lastProgressReportTime = 0L
 
                             while (true) {
                                 val bytesRead = source.read(destination.buffer, OKIO_BUFFER_SIZE)
                                 if (bytesRead == -1L) break
 
-                                destination.emit()
+                                if (destination.buffer.size >= OKIO_BUFFER_SIZE) {
+                                    destination.emitCompleteSegments()
+                                }
 
                                 totalBytesRead += bytesRead
-                                speedCalculator.registerData(bytesRead)
+                                bytesSinceLastReport += bytesRead
 
                                 val currentTime = System.currentTimeMillis()
                                 if (currentTime - lastProgressReportTime > LAST_PROGRESS_TIME) {
+                                    speedCalculator.registerData(bytesSinceLastReport, currentTime)
+                                    bytesSinceLastReport = 0L
+
                                     val progress = if (fileSize <= 0L) {
                                         0
                                     } else {
@@ -219,8 +223,8 @@ class FilesStorageImpl(
 
                                     emit(
                                         Result.success(
-                                            com.adriantache.greatimagedownloader.domain.data.model.PhotoDownloadInfo(
-                                                uri = imageUri.toString(),
+                                            PhotoDownloadInfo(
+                                                uri = imageUriString,
                                                 downloadProgress = progress,
                                                 name = file.name,
                                                 downloadSpeed = Kbps(speedCalculator.getAverageSpeedKbps(currentTime)),
@@ -231,19 +235,28 @@ class FilesStorageImpl(
                                     lastProgressReportTime = currentTime
                                 }
                             }
+
+                            if (bytesSinceLastReport > 0L) {
+                                speedCalculator.registerData(bytesSinceLastReport)
+                            }
+                            destination.flush()
                         }
                     }
                 }
 
                 markFileComplete(contentResolver, imageUri)
 
-                // Get image dimensions after download completes and stream is flushed/closed
-                val isLandscape = isLandscape(contentResolver, imageUri)
+                // Skip EXIF/bitmap dimension inspection for video files
+                val isLandscape = if (file.isVideoFile) {
+                    false
+                } else {
+                    isLandscape(contentResolver, imageUri)
+                }
 
                 emit(
                     Result.success(
-                        com.adriantache.greatimagedownloader.domain.data.model.PhotoDownloadInfo(
-                            uri = imageUri.toString(),
+                        PhotoDownloadInfo(
+                            uri = imageUriString,
                             downloadProgress = 100,
                             name = file.name,
                             downloadSpeed = Kbps(speedCalculator.getAverageSpeedKbps()),
@@ -265,18 +278,32 @@ class FilesStorageImpl(
 
     private fun isLandscape(resolver: ContentResolver, uri: Uri): Boolean {
         return try {
-            val options = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-            resolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, options) }
-
             var orientation = ExifInterface.ORIENTATION_NORMAL
-            resolver.openInputStream(uri)?.use {
-                orientation = ExifInterface(it).getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL)
+            var width = 0
+            var height = 0
+
+            resolver.openInputStream(uri)?.use { stream ->
+                val exif = ExifInterface(stream)
+                orientation = exif.getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL)
+                width = exif.getAttributeInt(ExifInterface.TAG_IMAGE_WIDTH, 0)
+                    .takeIf { it > 0 }
+                    ?: exif.getAttributeInt(ExifInterface.TAG_PIXEL_X_DIMENSION, 0)
+                height = exif.getAttributeInt(ExifInterface.TAG_IMAGE_LENGTH, 0)
+                    .takeIf { it > 0 }
+                    ?: exif.getAttributeInt(ExifInterface.TAG_PIXEL_Y_DIMENSION, 0)
+            }
+
+            if (width <= 0 || height <= 0) {
+                val options = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                resolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, options) }
+                width = options.outWidth
+                height = options.outHeight
             }
 
             if (orientation == ExifInterface.ORIENTATION_ROTATE_90 || orientation == ExifInterface.ORIENTATION_ROTATE_270) {
-                options.outHeight > options.outWidth
+                height > width
             } else {
-                options.outWidth > options.outHeight
+                width > height
             }
         } catch (_: Exception) {
             false

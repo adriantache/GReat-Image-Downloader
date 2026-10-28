@@ -52,18 +52,21 @@ class DownloadPhotosUseCaseImpl(
     private val scope = CoroutineScope(dispatcher)
 
     private var photosToDownload: List<PhotoFile> = emptyList()
-    private val downloadedPhotoUris = mutableMapOf<String, PhotoDownloadInfo>()
+    private val downloadedPhotoUris = LinkedHashMap<String, PhotoDownloadInfo>()
     private var keepAliveJob: Job? = null
     private var currentCameraStatus: CameraStatus? = null
     private var autoConnectRequested = false
 
     init {
         scope.launch {
+            dataTransferTool.imageUpdatesFlow.collect { info ->
+                handleImageProgress(info)
+            }
+        }
+
+        scope.launch {
             dataTransferTool.imageFlow.collect { info ->
-                info?.let {
-                    downloadedPhotoUris[it.name] = it
-                    onDownloadPhotoInfo(it)
-                }
+                info?.let { handleImageProgress(it) }
             }
         }
 
@@ -87,6 +90,16 @@ class DownloadPhotosUseCaseImpl(
                 onServiceStateChanged(serviceState)
             }
         }
+    }
+
+    @Synchronized
+    private fun handleImageProgress(info: PhotoDownloadInfo) {
+        val existing = downloadedPhotoUris[info.name]
+        if (existing == info) return
+        if (existing?.downloadProgress == 100 && info.downloadProgress < 100) return
+
+        downloadedPhotoUris[info.name] = info
+        onDownloadPhotoInfo(info)
     }
 
     private fun onServiceStateChanged(serviceState: ServiceState) {
@@ -471,6 +484,7 @@ class DownloadPhotosUseCaseImpl(
     private fun downloadPhotos(photos: List<PhotoFile>) {
         photosToDownload = photos
         downloadedPhotoUris.clear()
+        dataTransferTool.pendingPhotosToDownload = photos
 
         event.value = Event(Events.DownloadPhotosWithService(photos))
     }
@@ -492,17 +506,22 @@ class DownloadPhotosUseCaseImpl(
     private fun onDownloadFinished() {
         stopKeepAlive()
         val wasStopping = state.value is States.StoppingDownload
+        val numDownloaded = downloadedPhotoUris.size
+        val photosSnapshot = photosToDownload
+        val urisSnapshot = downloadedPhotoUris.toMap()
 
+        photosToDownload = emptyList()
+        downloadedPhotoUris.clear()
         dataTransferTool.reset()
         wifiUtil.cleanup()
 
-        updateLatestDownloadedPhotos(photosToDownload, downloadedPhotoUris)
+        updateLatestDownloadedPhotos(photosSnapshot, urisSnapshot)
 
         connectToWifi()
 
         if (!wasStopping) {
             event.value = Event(
-                SuccessfulDownload(numDownloadedPhotos = downloadedPhotoUris.size)
+                SuccessfulDownload(numDownloadedPhotos = numDownloaded)
             )
         }
     }

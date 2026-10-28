@@ -2,7 +2,6 @@ package com.adriantache.greatimagedownloader.domain.data.model
 
 import com.adriantache.greatimagedownloader.domain.utils.model.Kbps
 
-
 data class PhotoDownloadInfo(
     val name: String,
     val uri: String,
@@ -10,7 +9,8 @@ data class PhotoDownloadInfo(
     val downloadSpeed: Kbps,
     val isLandscape: Boolean = false,
 ) {
-    val isImage: Boolean = name.split(".").last().lowercase() == "jpg"
+    val isImage: Boolean = name.endsWith(".jpg", ignoreCase = true) ||
+        name.endsWith(".jpeg", ignoreCase = true)
 
-    val isFinished = downloadProgress == 100
+    val isFinished: Boolean = downloadProgress == 100
 }

@@ -30,6 +30,9 @@ class RepositoryImpl(
     private val ricohApi: RicohApi,
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
 ) : Repository {
+    @Volatile
+    private var cachedSettings: Settings? = null
+
     override fun getWifiDetails(): Result<WifiDetails> {
         val ssidResult = wifiStorage.getWifiSsid()
         val passwordResult = wifiStorage.getWifiPassword()
@@ -162,7 +165,10 @@ class RepositoryImpl(
     override fun downloadMediaToStorage(photo: PhotoFile): Flow<Result<PhotoDownloadInfo>> {
         return flow {
             try {
-                val useFastPreview = preferencesStorage.getSettings().getOrNull()?.fastPreviewDownload == true
+                val settings = cachedSettings ?: preferencesStorage.getSettings().getOrNull()?.also {
+                    cachedSettings = it
+                }
+                val useFastPreview = settings?.fastPreviewDownload == true
                 val requestedSize = if (useFastPreview && !photo.isVideoFile) "view" else null
 
                 val imageResponse = ricohApi.getPhoto(
@@ -211,10 +217,14 @@ class RepositoryImpl(
     }
 
     override suspend fun saveSettings(settings: Settings): Result<Unit> = withContext(ioDispatcher) {
-        preferencesStorage.saveSettings(settings).mapDomainError()
+        preferencesStorage.saveSettings(settings)
+            .onSuccess { cachedSettings = settings }
+            .mapDomainError()
     }
 
     override suspend fun getSettings(): Result<Settings> = withContext(ioDispatcher) {
-        preferencesStorage.getSettings().mapDomainError()
+        preferencesStorage.getSettings()
+            .onSuccess { cachedSettings = it }
+            .mapDomainError()
     }
 }

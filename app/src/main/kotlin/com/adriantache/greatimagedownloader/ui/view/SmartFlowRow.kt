@@ -17,7 +17,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
@@ -26,11 +25,19 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
+import coil3.request.ImageRequest
+import coil3.request.crossfade
+import coil3.size.Precision
 import com.adriantache.greatimagedownloader.R
 import com.adriantache.greatimagedownloader.domain.data.model.PhotoDownloadInfo
+
+private const val THUMBNAIL_LANDSCAPE_WIDTH_PX = 800
+private const val THUMBNAIL_PORTRAIT_WIDTH_PX = 400
+private const val THUMBNAIL_HEIGHT_PX = 533
 
 @Composable
 fun SmartFlowRow(
@@ -39,10 +46,8 @@ fun SmartFlowRow(
 ) {
     val state = rememberLazyGridState()
 
-    var latestRememberedFinishedImage by remember { mutableIntStateOf(0) }
-    val latestFinishedImage = remember(photoDownloadInfo) {
-        derivedStateOf { photoDownloadInfo.indexOfLast { it.isFinished } }
-    }.value
+    var latestRememberedFinishedImage by remember { mutableIntStateOf(-1) }
+    val latestFinishedImage = photoDownloadInfo.indexOfLast { it.isFinished }
 
     LaunchedEffect(latestFinishedImage) {
         if (latestRememberedFinishedImage != latestFinishedImage && photoDownloadInfo.isNotEmpty()) {
@@ -76,6 +81,7 @@ fun SmartFlowRowItem(
     mediaInfo: PhotoDownloadInfo,
 ) {
     val boxShape = RoundedCornerShape(8.dp)
+    val context = LocalContext.current
 
     Box(
         modifier = Modifier
@@ -92,15 +98,31 @@ fun SmartFlowRowItem(
                 )
             }
 
-            mediaInfo.isImage -> AsyncImage(
-                model = mediaInfo.uri,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(boxShape),
-                contentDescription = null,
-                contentScale = ContentScale.FillWidth,
-                placeholder = painterResource(R.drawable.baseline_landscape_24),
-            )
+            mediaInfo.isImage -> {
+                val imageRequest = remember(mediaInfo.uri, mediaInfo.isLandscape) {
+                    val targetWidth = if (mediaInfo.isLandscape) {
+                        THUMBNAIL_LANDSCAPE_WIDTH_PX
+                    } else {
+                        THUMBNAIL_PORTRAIT_WIDTH_PX
+                    }
+                    ImageRequest.Builder(context)
+                        .data(mediaInfo.uri)
+                        .size(targetWidth, THUMBNAIL_HEIGHT_PX)
+                        .precision(Precision.INEXACT)
+                        .crossfade(true)
+                        .build()
+                }
+
+                AsyncImage(
+                    model = imageRequest,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(boxShape),
+                    contentDescription = null,
+                    contentScale = ContentScale.FillWidth,
+                    placeholder = painterResource(R.drawable.baseline_landscape_24),
+                )
+            }
 
             else -> Box(
                 modifier = Modifier.background(MaterialTheme.colorScheme.primary, boxShape),

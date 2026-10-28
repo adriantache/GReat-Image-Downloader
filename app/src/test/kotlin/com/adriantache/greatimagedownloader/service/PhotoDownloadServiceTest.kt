@@ -3,8 +3,6 @@ package com.adriantache.greatimagedownloader.service
 import android.app.NotificationManager
 import android.content.Context
 import android.content.Intent
-import android.net.wifi.WifiManager
-import android.os.PowerManager
 import androidx.test.core.app.ApplicationProvider
 import com.adriantache.greatimagedownloader.domain.data.FakeRepository
 import com.adriantache.greatimagedownloader.domain.data.Repository
@@ -15,13 +13,12 @@ import com.adriantache.greatimagedownloader.domain.model.DomainException
 import com.adriantache.greatimagedownloader.domain.utils.model.Kbps
 import com.adriantache.greatimagedownloader.service.DataTransferTool.ServiceState
 import com.adriantache.greatimagedownloader.service.model.PhotoFileItem
-import io.mockk.every
 import io.mockk.coEvery
+import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
-import kotlinx.coroutines.test.StandardTestDispatcher
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.After
 import org.junit.Before
@@ -126,6 +123,40 @@ class PhotoDownloadServiceTest {
         assertThat(dataTransferTool.serviceStateFlow.value).isEqualTo(ServiceState.IDLE)
         val shadowService = shadowOf(service)
         assertThat(shadowService.isStoppedBySelf).isTrue
+    }
+
+    @Test
+    fun `START action downloads photos from DataTransferTool pending list without Intent extras`() {
+        val mockRepo = mockk<Repository>(relaxed = true)
+        val photoInfo = PhotoDownloadInfo("photo1.jpg", "content://media/1", 100, Kbps(500.0))
+        every { mockRepo.downloadMediaToStorage(any()) } returns flowOf(Result.success(photoInfo))
+        coEvery { mockRepo.shutDownCamera() } returns Result.success(Unit)
+
+        stopKoin()
+        startKoin {
+            modules(
+                module {
+                    single<Repository> { mockRepo }
+                    single { dataTransferTool }
+                }
+            )
+        }
+
+        dataTransferTool.pendingPhotosToDownload = listOf(PhotoFile("100RICOH", "photo1.jpg"))
+
+        val service = serviceController.create().get()
+        val intent = Intent(context, PhotoDownloadService::class.java).apply {
+            action = PhotoDownloadService.Actions.START.name
+        }
+
+        service.onStartCommand(intent, 0, 1)
+
+        Thread.sleep(200)
+
+        assertThat(dataTransferTool.imageFlow.value).isEqualTo(photoInfo)
+        assertThat(dataTransferTool.pendingPhotosToDownload).isEmpty()
+        assertThat(dataTransferTool.downloadFinishedFlow.value?.value).isEqualTo(Unit)
+        assertThat(dataTransferTool.serviceStateFlow.value).isEqualTo(ServiceState.IDLE)
     }
 
     @Test
@@ -246,7 +277,7 @@ class PhotoDownloadServiceTest {
 
     @Test
     fun `destroying service cleans up resources`() {
-        val service = serviceController.create().get()
+        serviceController.create().get()
         serviceController.destroy()
         
         // Verifies no crashes during destroy and wakeLock/wifiLock release
