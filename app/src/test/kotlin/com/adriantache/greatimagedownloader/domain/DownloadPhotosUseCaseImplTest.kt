@@ -12,6 +12,7 @@ import com.adriantache.greatimagedownloader.domain.model.Settings
 import com.adriantache.greatimagedownloader.domain.model.States
 import com.adriantache.greatimagedownloader.domain.utils.model.Event
 import com.adriantache.greatimagedownloader.domain.utils.model.Kbps
+import com.adriantache.greatimagedownloader.domain.ble.FakeBleUtil
 import com.adriantache.greatimagedownloader.domain.data.FakeRepository
 import com.adriantache.greatimagedownloader.domain.wifi.FakeWifiUtil
 import com.adriantache.greatimagedownloader.service.DataTransferTool
@@ -36,6 +37,7 @@ import org.junit.Test
 class DownloadPhotosUseCaseImplTest {
     private val repository = FakeRepository()
     private val wifiUtil = FakeWifiUtil()
+    private val bleUtil = FakeBleUtil()
     private val dataTransferTool = DataTransferTool()
     private val testDispatcher = StandardTestDispatcher()
 
@@ -51,6 +53,7 @@ class DownloadPhotosUseCaseImplTest {
             repository = repository,
             wifiUtil = wifiUtil,
             dataTransferTool = dataTransferTool,
+            bleUtil = bleUtil,
             dispatcher = testDispatcher
         )
     }
@@ -222,6 +225,7 @@ class DownloadPhotosUseCaseImplTest {
 
         // Assert
         assertThat(repository.wifiDetails.bssid).isEqualTo("11:22:33:44:55:66")
+        assertThat(bleUtil.wakeCalledCount).isGreaterThan(0)
     }
 
     @Test

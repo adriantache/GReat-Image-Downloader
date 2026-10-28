@@ -1,6 +1,7 @@
 package com.adriantache.greatimagedownloader.domain
 
 import android.util.Log
+import com.adriantache.greatimagedownloader.domain.ble.BleUtil
 import com.adriantache.greatimagedownloader.domain.data.Repository
 import com.adriantache.greatimagedownloader.domain.data.model.PhotoDownloadInfo
 import com.adriantache.greatimagedownloader.domain.data.model.PhotoFile
@@ -38,6 +39,7 @@ class DownloadPhotosUseCaseImpl(
     private val repository: Repository,
     private val wifiUtil: WifiUtil,
     private val dataTransferTool: DataTransferTool,
+    private val bleUtil: BleUtil? = null,
     dispatcher: CoroutineDispatcher = Dispatchers.IO,
 ) : DownloadPhotosUseCase {
     @Suppress("kotlin:S6305")
@@ -99,6 +101,7 @@ class DownloadPhotosUseCaseImpl(
                             state.value = RequestWifiCredentials(
                                 onWifiCredentialsInput = { onWifiCredentialsInput(it.toEntity()) },
                                 onSuggestWifiName = { wifiUtil.suggestNetwork() },
+                                onSuggestWifiCredentials = { bleUtil?.wakeAndEnableCameraWifi() },
                                 onDismiss = { connectToWifi() }
                             )
                         },
@@ -180,6 +183,7 @@ class DownloadPhotosUseCaseImpl(
             state.value = RequestWifiCredentials(
                 onWifiCredentialsInput = { onWifiCredentialsInput(it.toEntity()) },
                 onSuggestWifiName = { wifiUtil.suggestNetwork() },
+                onSuggestWifiCredentials = { bleUtil?.wakeAndEnableCameraWifi() },
                 onDismiss = {},
             )
 
@@ -194,6 +198,7 @@ class DownloadPhotosUseCaseImpl(
                 state.value = RequestWifiCredentials(
                     onWifiCredentialsInput = { onWifiCredentialsInput(it.toEntity()) },
                     onSuggestWifiName = { wifiUtil.suggestNetwork() },
+                    onSuggestWifiCredentials = { bleUtil?.wakeAndEnableCameraWifi() },
                     onDismiss = { connectToWifi() }
                 )
             },
@@ -208,6 +213,9 @@ class DownloadPhotosUseCaseImpl(
             var isConnected = false
             var newBssid: String? = null
             val maxRetries = 5
+
+            // Attempt to wake the camera and enable its Wi-Fi Access Point via BLE if paired
+            bleUtil?.wakeAndEnableCameraWifi()
 
             for (attempt in 1..maxRetries) {
                 // Notify Service/UI that we are attempting connection

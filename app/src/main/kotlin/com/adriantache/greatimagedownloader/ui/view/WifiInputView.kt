@@ -38,6 +38,7 @@ import com.adriantache.greatimagedownloader.domain.ui.model.WifiDetails
 fun WifiInputView(
     onWifiCredentialsInput: (WifiDetails) -> Unit,
     onSuggestWifiName: suspend () -> String,
+    onSuggestWifiCredentials: (suspend () -> WifiDetails?)? = null,
     onDismiss: () -> Unit,
 ) {
     val focusManager = LocalFocusManager.current
@@ -50,9 +51,18 @@ fun WifiInputView(
     LaunchedEffect(triggerWifiSuggestion) {
         if (!triggerWifiSuggestion) return@LaunchedEffect
 
-        val suggested = onSuggestWifiName()
-        if (suggested != "ERROR") {
-            wifiName = suggested
+        // First try BLE auto-discovery (which can read both SSID and passphrase and turn on the camera's Wi-Fi AP)
+        val bleCredentials = onSuggestWifiCredentials?.invoke()
+        if (!bleCredentials?.ssid.isNullOrBlank()) {
+            wifiName = bleCredentials.ssid
+            if (!bleCredentials.password.isNullOrBlank()) {
+                wifiPass = bleCredentials.password
+            }
+        } else {
+            val suggested = onSuggestWifiName()
+            if (suggested != "ERROR") {
+                wifiName = suggested
+            }
         }
         triggerWifiSuggestion = false
     }
@@ -127,5 +137,9 @@ fun WifiInputView(
 @Preview(showBackground = true)
 @Composable
 private fun WifiInputViewPreview() {
-    WifiInputView({}, { "" }, {})
+    WifiInputView(
+        onWifiCredentialsInput = {},
+        onSuggestWifiName = { "" },
+        onDismiss = {},
+    )
 }

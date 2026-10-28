@@ -120,6 +120,7 @@ fun MainScreenStateMachine(
                 is RequestWifiCredentials -> WifiInputView(
                     onWifiCredentialsInput = state.onWifiCredentialsInput,
                     onSuggestWifiName = state.onSuggestWifiName,
+                    onSuggestWifiCredentials = state.onSuggestWifiCredentials,
                     onDismiss = state.onDismiss,
                 )
 
