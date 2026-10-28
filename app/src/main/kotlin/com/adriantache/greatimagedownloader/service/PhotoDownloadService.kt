@@ -168,7 +168,22 @@ class PhotoDownloadService : Service(), KoinComponent {
         val lastFiles = downloadedPhotos.groupBy { it.directory }
             .mapValues { entry -> entry.value.maxBy { it.name } }
 
-        repository.saveLatestDownloadedPhotos(lastFiles.values.toList())
+        if (lastFiles.isEmpty()) return
+
+        val existingByDir = runCatching { repository.getLatestDownloadedPhotos().getOrNull() }
+            .getOrNull()
+            .orEmpty()
+            .associateBy { it.directory }
+            .toMutableMap()
+
+        for ((dir, newFile) in lastFiles) {
+            val existing = existingByDir[dir]
+            if (existing == null || newFile.name >= existing.name) {
+                existingByDir[dir] = newFile
+            }
+        }
+
+        repository.saveLatestDownloadedPhotos(existingByDir.values.toList())
     }
 
     private fun updateNotification(currentImage: Int, totalImages: Int) {

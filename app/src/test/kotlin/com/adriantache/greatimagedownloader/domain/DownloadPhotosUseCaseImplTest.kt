@@ -373,6 +373,34 @@ class DownloadPhotosUseCaseImplTest {
     }
 
     @Test
+    fun `saved JPEG does not prevent downloading matching RAW DNG file`() = runTest {
+        // Arrange
+        repository.settings = Settings(rememberLastDownloadedPhotos = false)
+        repository.savedPhotos = mutableListOf(PhotoDownloadInfo("R0001234.JPG", "", 100, Kbps(0.0)))
+
+        val availablePhotos = listOf(
+            PhotoFile("100RICOH", "R0001234.JPG"),
+            PhotoFile("100RICOH", "R0001234.DNG"),
+        )
+        repository.cameraPhotoListResult = Result.success(availablePhotos)
+
+        // Act
+        (useCase.state.value as States.Init).onInit()
+        advanceUntilIdle()
+        (useCase.state.value as States.RequestPermissions).onPermissionsGranted()
+        advanceUntilIdle()
+        repository.wifiDetails = WifiDetails("SSID", "PASS", "BSSID")
+        (useCase.state.value as States.ConnectWifi).onConnect()
+        advanceUntilIdle()
+        dataTransferTool.serviceStateFlow.value = DataTransferTool.ServiceState.FETCHING
+        advanceUntilIdle()
+
+        // Assert
+        val event = useCase.event.value?.value as Events.DownloadPhotosWithService
+        assertThat(event.photosToDownload).containsExactly(PhotoFile("100RICOH", "R0001234.DNG"))
+    }
+
+    @Test
     fun `onDownloadFinished transitions to ConnectWifi and emits SuccessfulDownload`() = runTest {
         // Act
         dataTransferTool.downloadFinishedFlow.value = Event(Unit)
@@ -382,6 +410,38 @@ class DownloadPhotosUseCaseImplTest {
         assertThat(wifiUtil.cleanupCalledCount).isGreaterThan(0)
         assertThat(useCase.state.value).isInstanceOf(States.ConnectWifi::class.java)
         assertThat(useCase.event.value?.value).isInstanceOf(Events.SuccessfulDownload::class.java)
+    }
+
+    @Test
+    fun `onDownloadFinished merges latest downloaded photos across directories`() = runTest {
+        // Arrange: folder1 already has a saved latest photo marker
+        repository.latestDownloadedPhotos = mutableListOf(PhotoFile("100RICOH", "R0000100.JPG"))
+        repository.settings = Settings(rememberLastDownloadedPhotos = false)
+        repository.wifiDetails = WifiDetails("SSID", "PASSWORD", "BSSID")
+        repository.cameraPhotoListResult = Result.success(
+            listOf(PhotoFile("101RICOH", "R0000200.JPG"))
+        )
+
+        (useCase.state.value as States.Init).onInit()
+        advanceUntilIdle()
+        (useCase.state.value as States.RequestPermissions).onPermissionsGranted()
+        advanceUntilIdle()
+        (useCase.state.value as States.ConnectWifi).onConnect()
+        advanceUntilIdle()
+        dataTransferTool.serviceStateFlow.value = DataTransferTool.ServiceState.FETCHING
+        advanceUntilIdle()
+
+        // Emit completed download for 101RICOH
+        dataTransferTool.imageFlow.value = PhotoDownloadInfo("R0000200.JPG", "content://media/200", 100, Kbps(500.0))
+        advanceUntilIdle()
+        dataTransferTool.downloadFinishedFlow.value = Event(Unit)
+        advanceUntilIdle()
+
+        // Assert both 100RICOH and 101RICOH markers are preserved
+        assertThat(repository.latestDownloadedPhotos).containsExactlyInAnyOrder(
+            PhotoFile("100RICOH", "R0000100.JPG"),
+            PhotoFile("101RICOH", "R0000200.JPG"),
+        )
     }
 
     @Test

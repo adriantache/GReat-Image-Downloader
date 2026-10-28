@@ -56,7 +56,7 @@ class FilesStorageImplTest {
         assertThat(result.isSuccess).isTrue
         val photos = result.getOrNull()
         assertThat(photos).hasSize(1)
-        assertThat(photos?.first()?.name).isEqualTo("test")
+        assertThat(photos?.first()?.name).isEqualTo("test.jpg")
     }
 
     @Test
@@ -77,7 +77,17 @@ class FilesStorageImplTest {
         assertThat(result.isSuccess).isTrue
         val movies = result.getOrNull()
         assertThat(movies).hasSize(1)
-        assertThat(movies?.first()).isEqualTo("test")
+        assertThat(movies?.first()).isEqualTo("test.mp4")
+    }
+
+    @Test
+    fun `resolveMimeType infers DNG and video MIME types when contentType is octet-stream`() {
+        val octetStream = "application/octet-stream".toMediaType()
+
+        assertThat(filesStorage.resolveMimeType("R0001234.DNG", octetStream)).isEqualTo("image/x-adobe-dng")
+        assertThat(filesStorage.resolveMimeType("R0001234.JPG", octetStream)).isEqualTo("image/jpeg")
+        assertThat(filesStorage.resolveMimeType("R0001234.MOV", octetStream)).isEqualTo("video/quicktime")
+        assertThat(filesStorage.resolveMimeType("R0001234.MP4", null)).isEqualTo("video/mp4")
     }
 
     @Test

@@ -30,7 +30,7 @@ import kotlin.math.roundToInt
 
 private val RICOH_PHOTOS_PATH = Environment.DIRECTORY_PICTURES + "/Image Sync"
 private val RICOH_MOVIES_PATH = Environment.DIRECTORY_MOVIES + "/Image Sync"
-private const val DEFAULT_MIME_TYPE = "image/jpg"
+private const val DEFAULT_MIME_TYPE = "image/jpeg"
 private const val MIME_TYPE_VIDEO = "video"
 private const val MIN_SIZE_BYTES = 100
 private const val OKIO_BUFFER_SIZE = 256 * 1024L // 256KB buffer for optimized I/O
@@ -73,6 +73,7 @@ class FilesStorageImpl(
             MediaStore.Images.ImageColumns.WIDTH,
             MediaStore.Images.ImageColumns.HEIGHT,
             MediaStore.Images.ImageColumns.ORIENTATION,
+            MediaStore.MediaColumns.DISPLAY_NAME,
         )
 
         val results = mutableListOf<DownloadedFile>()
@@ -93,6 +94,7 @@ class FilesStorageImpl(
                 val width = cursor.getInt(3)
                 val height = cursor.getInt(4)
                 val orientation = cursor.getInt(5)
+                val displayName = cursor.getString(6)
 
                 if (size > MIN_SIZE_BYTES) {
                     // Check if EXIF orientation swaps width and height
@@ -105,7 +107,7 @@ class FilesStorageImpl(
                     results.add(
                         DownloadedFile(
                             id = id,
-                            name = title,
+                            name = displayName?.takeIf { it.isNotBlank() } ?: title,
                             isLandscape = isActuallyLandscape
                         )
                     )
@@ -134,6 +136,7 @@ class FilesStorageImpl(
             OpenableColumns.SIZE,
             MediaStore.Video.VideoColumns.WIDTH,
             MediaStore.Video.VideoColumns.HEIGHT,
+            MediaStore.MediaColumns.DISPLAY_NAME,
         )
 
         val results = mutableListOf<DownloadedFile>()
@@ -153,12 +156,13 @@ class FilesStorageImpl(
                 val size = cursor.getLong(2)
                 val width = cursor.getInt(3)
                 val height = cursor.getInt(4)
+                val displayName = cursor.getString(5)
 
                 if (size > MIN_SIZE_BYTES) {
                     results.add(
                         DownloadedFile(
                             id = id,
-                            name = title,
+                            name = displayName?.takeIf { it.isNotBlank() } ?: title,
                             isLandscape = width > height
                         )
                     )
@@ -178,80 +182,84 @@ class FilesStorageImpl(
 
             val contentResolver = context.contentResolver
             val imageUri = getFileUri(contentResolver, file, responseBody.contentType()) ?: run {
+                responseBody.close()
                 emit(Result.failure(FilesStorageException.FileCreationError))
                 return@flow
             }
             val outputStream = contentResolver.openOutputStream(imageUri) ?: run {
+                deleteInvalidFile(contentResolver, imageUri)
+                responseBody.close()
                 emit(Result.failure(FilesStorageException.FileCreationError))
                 return@flow
             }
 
-            responseBody.source().use { source ->
-                outputStream.sink().buffer().use { destination ->
-                    try {
-                        var totalBytesRead = 0L
-                        var lastProgressReportTime = 0L
+            try {
+                responseBody.use { body ->
+                    body.source().use { source ->
+                        outputStream.sink().buffer().use { destination ->
+                            var totalBytesRead = 0L
+                            var lastProgressReportTime = 0L
 
-                        while (true) {
-                            val bytesRead = source.read(destination.buffer, OKIO_BUFFER_SIZE)
-                            if (bytesRead == -1L) break
+                            while (true) {
+                                val bytesRead = source.read(destination.buffer, OKIO_BUFFER_SIZE)
+                                if (bytesRead == -1L) break
 
-                            destination.emit()
+                                destination.emit()
 
-                            totalBytesRead += bytesRead
-                            speedCalculator.registerData(bytesRead)
+                                totalBytesRead += bytesRead
+                                speedCalculator.registerData(bytesRead)
 
-                            val currentTime = System.currentTimeMillis()
-                            if (currentTime - lastProgressReportTime > LAST_PROGRESS_TIME) {
-                                val progress = if (fileSize <= 0L) {
-                                    0
-                                } else {
-                                    (totalBytesRead.toFloat() / fileSize * 100).roundToInt().coerceAtMost(99)
-                                }
+                                val currentTime = System.currentTimeMillis()
+                                if (currentTime - lastProgressReportTime > LAST_PROGRESS_TIME) {
+                                    val progress = if (fileSize <= 0L) {
+                                        0
+                                    } else {
+                                        (totalBytesRead.toFloat() / fileSize * 100).roundToInt().coerceAtMost(99)
+                                    }
 
-                                emit(
-                                    Result.success(
-                                        com.adriantache.greatimagedownloader.domain.data.model.PhotoDownloadInfo(
-                                            uri = imageUri.toString(),
-                                            downloadProgress = progress,
-                                            name = file.name,
-                                            downloadSpeed = Kbps(speedCalculator.getAverageSpeedKbps(currentTime)),
+                                    emit(
+                                        Result.success(
+                                            com.adriantache.greatimagedownloader.domain.data.model.PhotoDownloadInfo(
+                                                uri = imageUri.toString(),
+                                                downloadProgress = progress,
+                                                name = file.name,
+                                                downloadSpeed = Kbps(speedCalculator.getAverageSpeedKbps(currentTime)),
+                                            )
                                         )
                                     )
-                                )
 
-                                lastProgressReportTime = currentTime
+                                    lastProgressReportTime = currentTime
+                                }
                             }
                         }
-
-                        // Get image dimensions after download completes
-                        val isLandscape = isLandscape(contentResolver, imageUri)
-
-                        emit(
-                            Result.success(
-                                com.adriantache.greatimagedownloader.domain.data.model.PhotoDownloadInfo(
-                                    uri = imageUri.toString(),
-                                    downloadProgress = 100,
-                                    name = file.name,
-                                    downloadSpeed = Kbps(speedCalculator.getAverageSpeedKbps()),
-                                    isLandscape = isLandscape,
-                                )
-                            )
-                        )
-                    } catch (e: IOException) {
-                        deleteInvalidFile(contentResolver, imageUri)
-                        val error = if (e.message?.contains("No space left on device", ignoreCase = true) == true) {
-                            FilesStorageException.StorageFull
-                        } else {
-                            FilesStorageException.Unknown(e)
-                        }
-                        emit(Result.failure(error))
                     }
                 }
-            }
 
-            outputStream.close()
-            responseBody.close()
+                markFileComplete(contentResolver, imageUri)
+
+                // Get image dimensions after download completes and stream is flushed/closed
+                val isLandscape = isLandscape(contentResolver, imageUri)
+
+                emit(
+                    Result.success(
+                        com.adriantache.greatimagedownloader.domain.data.model.PhotoDownloadInfo(
+                            uri = imageUri.toString(),
+                            downloadProgress = 100,
+                            name = file.name,
+                            downloadSpeed = Kbps(speedCalculator.getAverageSpeedKbps()),
+                            isLandscape = isLandscape,
+                        )
+                    )
+                )
+            } catch (e: IOException) {
+                deleteInvalidFile(contentResolver, imageUri)
+                val error = if (e.message?.contains("No space left on device", ignoreCase = true) == true) {
+                    FilesStorageException.StorageFull
+                } else {
+                    FilesStorageException.Unknown(e)
+                }
+                emit(Result.failure(error))
+            }
         }.flowOn(Dispatchers.IO)
     }
 
@@ -308,8 +316,8 @@ class FilesStorageImpl(
         file: PhotoFile,
         contentType: MediaType?,
     ): Uri? {
-        val mediaTypeString = contentType?.let { "${it.type}/${it.subtype}" } ?: DEFAULT_MIME_TYPE
-        val isVideo = contentType?.type == MIME_TYPE_VIDEO
+        val mediaTypeString = resolveMimeType(file.name, contentType)
+        val isVideo = mediaTypeString.startsWith("$MIME_TYPE_VIDEO/")
         val rootFolder = if (isVideo) RICOH_MOVIES_PATH else RICOH_PHOTOS_PATH
         val fullPath = rootFolder + "/" + file.directory
 
@@ -317,11 +325,41 @@ class FilesStorageImpl(
             put(MediaStore.MediaColumns.DISPLAY_NAME, file.name)
             put(MediaStore.MediaColumns.MIME_TYPE, mediaTypeString)
             put(MediaStore.MediaColumns.RELATIVE_PATH, fullPath)
+            put(MediaStore.MediaColumns.IS_PENDING, 1)
         }
 
         val contentUri = if (isVideo) MediaStore.Video.Media.EXTERNAL_CONTENT_URI else MediaStore.Images.Media.EXTERNAL_CONTENT_URI
 
         return contentResolver.insert(contentUri, contentValues)
+    }
+
+    private fun markFileComplete(
+        contentResolver: ContentResolver,
+        uri: Uri,
+    ) {
+        runCatching {
+            val values = ContentValues().apply {
+                put(MediaStore.MediaColumns.IS_PENDING, 0)
+            }
+            contentResolver.update(uri, values, null, null)
+        }
+    }
+
+    internal fun resolveMimeType(fileName: String, contentType: MediaType?): String {
+        val reported = contentType?.let { "${it.type}/${it.subtype}".lowercase() }
+        if (reported != null && reported != "application/octet-stream") {
+            return if (reported == "image/jpg") DEFAULT_MIME_TYPE else reported
+        }
+
+        return when (fileName.substringAfterLast('.', "").lowercase()) {
+            "dng" -> "image/x-adobe-dng"
+            "raw" -> "image/x-raw"
+            "jpg", "jpeg" -> DEFAULT_MIME_TYPE
+            "mov" -> "video/quicktime"
+            "mp4" -> "video/mp4"
+            "avi" -> "video/x-msvideo"
+            else -> DEFAULT_MIME_TYPE
+        }
     }
 
     private fun deleteInvalidFile(

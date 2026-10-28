@@ -329,11 +329,14 @@ class DownloadPhotosUseCaseImpl(
 
                     val savedPhotos = repository.getSavedPhotos().getOrNull().orEmpty()
                     val savedMovies = repository.getSavedMovies().getOrNull().orEmpty()
-                    val savedMedia = (savedPhotos.map { it.name.substringBefore(".") } + savedMovies.map { it.substringBefore(".") }).distinct()
+                    val savedMedia = (savedPhotos.map { it.name } + savedMovies).distinct()
+                    val savedFullNames = savedMedia.filter { it.contains(".") }.map { it.lowercase() }.toSet()
+                    val savedBaseNames = savedMedia.filter { !it.contains(".") }.map { it.lowercase() }.toSet()
 
                     val newPhotos = photos.filter {
-                        val nameWithoutExtension = it.name.substringBefore(".")
-                        !savedMedia.contains(nameWithoutExtension)
+                        val lowerName = it.name.lowercase()
+                        val baseName = lowerName.substringBefore(".")
+                        lowerName !in savedFullNames && baseName !in savedBaseNames
                     }
 
                     val settings = repository.getSettings().getOrNull()
@@ -444,8 +447,21 @@ class DownloadPhotosUseCaseImpl(
         val lastFiles = completedFiles.groupBy { it.directory }
             .mapValues { entry -> entry.value.maxBy { it.name } }
 
+        if (lastFiles.isEmpty()) return
+
         scope.launch {
-            repository.saveLatestDownloadedPhotos(lastFiles.values.toList())
+            val existingByDir = repository.getLatestDownloadedPhotos().getOrNull().orEmpty()
+                .associateBy { it.directory }
+                .toMutableMap()
+
+            for ((dir, newFile) in lastFiles) {
+                val existing = existingByDir[dir]
+                if (existing == null || newFile.name >= existing.name) {
+                    existingByDir[dir] = newFile
+                }
+            }
+
+            repository.saveLatestDownloadedPhotos(existingByDir.values.toList())
         }
     }
 
