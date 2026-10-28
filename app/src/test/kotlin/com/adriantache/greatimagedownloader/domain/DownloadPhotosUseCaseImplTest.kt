@@ -4,6 +4,7 @@ import android.util.Log
 import com.adriantache.greatimagedownloader.domain.data.model.PhotoDownloadInfo
 import com.adriantache.greatimagedownloader.domain.data.model.PhotoFile
 import com.adriantache.greatimagedownloader.domain.data.model.WifiDetails
+import com.adriantache.greatimagedownloader.domain.model.CameraStatus
 import com.adriantache.greatimagedownloader.domain.model.DomainError
 import com.adriantache.greatimagedownloader.domain.model.DomainException
 import com.adriantache.greatimagedownloader.domain.model.Events
@@ -197,6 +198,30 @@ class DownloadPhotosUseCaseImplTest {
         // Assert
         assertThat(useCase.state.value).isInstanceOf(States.SelectFolders::class.java)
         assertThat(repository.pingCalledCount).isGreaterThan(0)
+    }
+
+    @Test
+    fun `camera status macAddress is saved as fallback BSSID when wifi BSSID is null`() = runTest {
+        // Arrange
+        repository.wifiDetails = WifiDetails("SSID", "PASSWORD", null)
+        wifiUtil.connectResult = Pair(true, null) // Android redacted BSSID
+        repository.cameraStatusResult = Result.success(
+            CameraStatus(model = "RICOH GR III", batteryLevel = 80, macAddress = "11:22:33:44:55:66")
+        )
+        repository.cameraPhotoListResult = Result.success(
+            listOf(PhotoFile("100RICOH", "R0001234.JPG"))
+        )
+
+        // Act
+        (useCase.state.value as States.Init).onInit()
+        advanceUntilIdle()
+        (useCase.state.value as States.RequestPermissions).onPermissionsGranted()
+        advanceUntilIdle()
+        (useCase.state.value as States.ConnectWifi).onConnect()
+        advanceUntilIdle()
+
+        // Assert
+        assertThat(repository.wifiDetails.bssid).isEqualTo("11:22:33:44:55:66")
     }
 
     @Test

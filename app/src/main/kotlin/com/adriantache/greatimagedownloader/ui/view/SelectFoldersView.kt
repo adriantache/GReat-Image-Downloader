@@ -22,11 +22,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import com.adriantache.greatimagedownloader.domain.model.CameraStatus
 import com.adriantache.greatimagedownloader.domain.model.FolderInfo
 
 @Composable
 fun SelectFoldersView(
     folderInfo: FolderInfo,
+    cameraStatus: CameraStatus? = null,
     onFoldersSelect: (List<String>) -> Unit,
 ) {
     var selectedFolders by remember { mutableStateOf(folderInfo.folders.keys) }
@@ -39,6 +41,15 @@ fun SelectFoldersView(
         verticalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterVertically),
     ) {
         CloseIcon { onFoldersSelect(emptyList()) }
+
+        if (cameraStatus?.batteryLevel != null || cameraStatus?.isHot == true) {
+            val statusParts = buildList {
+                cameraStatus.model?.let { add(it) }
+                cameraStatus.batteryLevel?.let { add("Battery: $it%") }
+                if (cameraStatus.isHot) add("Camera is warm!")
+            }
+            Text(text = statusParts.joinToString(" • "))
+        }
 
         Text("Multiple image folders found. Please select desired folders to download from:")
 

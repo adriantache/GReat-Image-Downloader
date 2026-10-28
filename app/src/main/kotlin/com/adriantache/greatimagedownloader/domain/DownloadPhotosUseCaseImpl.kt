@@ -4,6 +4,7 @@ import android.util.Log
 import com.adriantache.greatimagedownloader.domain.data.Repository
 import com.adriantache.greatimagedownloader.domain.data.model.PhotoDownloadInfo
 import com.adriantache.greatimagedownloader.domain.data.model.PhotoFile
+import com.adriantache.greatimagedownloader.domain.model.CameraStatus
 import com.adriantache.greatimagedownloader.domain.model.DomainError
 import com.adriantache.greatimagedownloader.domain.model.DomainException
 import com.adriantache.greatimagedownloader.domain.model.Events
@@ -51,6 +52,7 @@ class DownloadPhotosUseCaseImpl(
     private var photosToDownload: List<PhotoFile> = emptyList()
     private val downloadedPhotoUris = mutableMapOf<String, PhotoDownloadInfo>()
     private var keepAliveJob: Job? = null
+    private var currentCameraStatus: CameraStatus? = null
 
     init {
         scope.launch {
@@ -338,6 +340,18 @@ class DownloadPhotosUseCaseImpl(
 
     private fun fetchPhotosFromCamera() {
         scope.launch {
+            currentCameraStatus = repository.getCameraStatus().getOrNull()
+
+            // If Android redacted the Wi-Fi BSSID, fall back to the MAC address reported by the camera API
+            val cameraMac = currentCameraStatus?.macAddress
+            if (!cameraMac.isNullOrBlank()) {
+                repository.getWifiDetails().getOrNull()?.let { currentDetails ->
+                    if (currentDetails.bssid.isNullOrBlank()) {
+                        repository.saveWifiDetails(currentDetails.copy(bssid = cameraMac))
+                    }
+                }
+            }
+
             Log.d("DownloadPhotosUseCase", "fetchPhotosFromCamera: Calling repository.getCameraPhotoList()")
             val result = repository.getCameraPhotoList()
             Log.d("DownloadPhotosUseCase", "fetchPhotosFromCamera: Result isSuccess: ${result.isSuccess}")
@@ -384,6 +398,7 @@ class DownloadPhotosUseCaseImpl(
                     if (photosToProcess.groupBy { it.directory }.size > 1) {
                         state.value = States.SelectFolders(
                             folderInfo = FolderInfo(photosToProcess),
+                            cameraStatus = currentCameraStatus,
                             onFoldersSelect = { selectedFolders ->
                                 stopKeepAlive()
                                 if (selectedFolders.isEmpty()) {
@@ -440,6 +455,7 @@ class DownloadPhotosUseCaseImpl(
                 totalPhotos = photosToDownload.size,
                 downloadedPhotos = downloadedPhotoUris.values.toList(),
                 downloadSpeed = info.downloadSpeed,
+                cameraStatus = currentCameraStatus,
                 onStopDownloading = ::onStopDownloading,
             )
         }

@@ -3,6 +3,7 @@ package com.adriantache.greatimagedownloader.domain.data
 import com.adriantache.greatimagedownloader.domain.data.model.PhotoDownloadInfo
 import com.adriantache.greatimagedownloader.domain.data.model.PhotoFile
 import com.adriantache.greatimagedownloader.domain.data.model.WifiDetails
+import com.adriantache.greatimagedownloader.domain.model.CameraStatus
 import com.adriantache.greatimagedownloader.domain.model.Settings
 import kotlinx.coroutines.flow.Flow
 
@@ -19,6 +20,7 @@ interface Repository {
 
     // Camera operations
     suspend fun pingCamera(): Result<Unit>
+    suspend fun getCameraStatus(): Result<CameraStatus>
     suspend fun getCameraPhotoList(): Result<List<PhotoFile>>
     fun downloadMediaToStorage(photo: PhotoFile): Flow<Result<PhotoDownloadInfo>>
     suspend fun shutDownCamera(): Result<Unit>

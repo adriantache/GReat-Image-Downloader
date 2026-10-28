@@ -37,6 +37,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.adriantache.greatimagedownloader.domain.data.model.PhotoDownloadInfo
+import com.adriantache.greatimagedownloader.domain.model.CameraStatus
 import com.adriantache.greatimagedownloader.domain.utils.model.Kbps
 import kotlinx.coroutines.delay
 
@@ -48,6 +49,7 @@ fun DownloadingView(
     totalPhotos: Int,
     photoDownloadInfo: List<PhotoDownloadInfo>,
     downloadSpeed: Kbps,
+    cameraStatus: CameraStatus? = null,
     onClose: () -> Unit,
 ) {
     val scrollState = rememberScrollState()
@@ -72,7 +74,8 @@ fun DownloadingView(
         DownloadDashboard(
             currentPhoto = currentPhoto,
             totalPhotos = totalPhotos,
-            speedKbps = downloadSpeed.value
+            speedKbps = downloadSpeed.value,
+            cameraStatus = cameraStatus,
         )
 
         Spacer(Modifier.height(24.dp))
@@ -89,6 +92,7 @@ private fun DownloadDashboard(
     currentPhoto: Int,
     totalPhotos: Int,
     speedKbps: Double,
+    cameraStatus: CameraStatus? = null,
 ) {
     val speedMbps = speedKbps / 1024
     val progress = if (totalPhotos == 0) 0f else currentPhoto.toFloat() / totalPhotos
@@ -198,6 +202,30 @@ private fun DownloadDashboard(
                         fontWeight = FontWeight.Black,
                         color = statusColor
                     )
+                }
+
+                if (cameraStatus?.batteryLevel != null || cameraStatus?.isHot == true) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        cameraStatus.batteryLevel?.let { battery ->
+                            Text(
+                                text = "Camera battery: $battery%",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = if (battery <= 20) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                        if (cameraStatus.isHot) {
+                            Text(
+                                text = "Camera warm (high temp)",
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.error,
+                            )
+                        }
+                    }
                 }
             }
         }

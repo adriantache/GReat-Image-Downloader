@@ -11,6 +11,7 @@ import com.adriantache.greatimagedownloader.domain.data.Repository
 import com.adriantache.greatimagedownloader.domain.data.model.PhotoDownloadInfo
 import com.adriantache.greatimagedownloader.domain.data.model.PhotoFile
 import com.adriantache.greatimagedownloader.domain.data.model.WifiDetails
+import com.adriantache.greatimagedownloader.domain.model.CameraStatus
 import com.adriantache.greatimagedownloader.domain.model.Settings
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
@@ -79,6 +80,36 @@ class RepositoryImpl(
             val response = ricohApi.ping()
             if (response.isSuccessful) {
                 Result.success(Unit)
+            } else {
+                val exception = CameraException.Unknown(response.errorBody()?.string())
+                Result.failure(exception.toDomainException())
+            }
+        } catch (e: Exception) {
+            val exception = when (e) {
+                is SocketTimeoutException -> CameraException.CameraDisconnected
+                is IOException -> CameraException.NetworkError(e)
+                else -> CameraException.Unknown(e.message)
+            }
+            Result.failure(exception.toDomainException())
+        }
+    }
+
+    override suspend fun getCameraStatus(): Result<CameraStatus> = withContext(ioDispatcher) {
+        try {
+            val response = ricohApi.getConfig()
+            if (response.isSuccessful) {
+                val body = response.body()
+                val activeStorage = body?.storages?.firstOrNull { it.available == true }?.name
+                Result.success(
+                    CameraStatus(
+                        model = body?.model,
+                        firmware = body?.firmware,
+                        batteryLevel = body?.battery?.toInt(),
+                        isHot = body?.hot == true,
+                        macAddress = body?.macAddress?.takeIf { it.isNotBlank() && it != "02:00:00:00:00:00" },
+                        activeStorage = activeStorage,
+                    )
+                )
             } else {
                 val exception = CameraException.Unknown(response.errorBody()?.string())
                 Result.failure(exception.toDomainException())

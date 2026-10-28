@@ -4,6 +4,7 @@ import com.adriantache.greatimagedownloader.domain.data.Repository
 import com.adriantache.greatimagedownloader.domain.data.model.PhotoDownloadInfo
 import com.adriantache.greatimagedownloader.domain.data.model.PhotoFile
 import com.adriantache.greatimagedownloader.domain.data.model.WifiDetails
+import com.adriantache.greatimagedownloader.domain.model.CameraStatus
 import com.adriantache.greatimagedownloader.domain.model.Settings
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -21,6 +22,7 @@ class FakeRepository : Repository {
     var shutdownCalled = false
     var pingCalledCount = 0
     var pingResult: Result<Unit> = Result.success(Unit)
+    var cameraStatusResult: Result<CameraStatus> = Result.success(CameraStatus())
     val downloadFlow = MutableSharedFlow<Result<PhotoDownloadInfo>>()
 
     override fun getWifiDetails(): Result<WifiDetails> = Result.success(wifiDetails)
@@ -50,6 +52,8 @@ class FakeRepository : Repository {
         pingCalledCount++
         return pingResult
     }
+
+    override suspend fun getCameraStatus(): Result<CameraStatus> = cameraStatusResult
 
     override suspend fun getCameraPhotoList(): Result<List<PhotoFile>> = cameraPhotoListResult
 

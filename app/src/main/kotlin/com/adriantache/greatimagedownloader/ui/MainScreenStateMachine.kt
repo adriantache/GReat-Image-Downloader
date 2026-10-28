@@ -135,6 +135,7 @@ fun MainScreenStateMachine(
 
                 is States.SelectFolders -> SelectFoldersView(
                     folderInfo = state.folderInfo,
+                    cameraStatus = state.cameraStatus,
                     onFoldersSelect = state.onFoldersSelect,
                 )
 
@@ -143,6 +144,7 @@ fun MainScreenStateMachine(
                     totalPhotos = state.totalPhotos,
                     photoDownloadInfo = state.downloadedPhotos,
                     downloadSpeed = state.downloadSpeed,
+                    cameraStatus = state.cameraStatus,
                     onClose = state.onStopDownloading,
                 )
 

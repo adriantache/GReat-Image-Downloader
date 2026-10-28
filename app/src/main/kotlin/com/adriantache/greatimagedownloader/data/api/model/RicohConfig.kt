@@ -4,18 +4,36 @@ import kotlinx.serialization.Serializable
 
 @Serializable
 data class RicohConfig(
-    val errCode: Float?,
-    val errMsg: String?,
-    val manufacturer: String?,
-    val model: String?,
-    val serialNo: String?,
-    val firmware: String?,
-    val macAddress: String?,
-    val channelList: List<Float>?,
-    val hot: Boolean?,
-    val battery: Float?,
-    val operationModeList: List<String>?, //capture, playback
-    val stillFormatList: List<String>?, //jpeg, dng, rawdng
+    val errCode: Float? = null,
+    val errMsg: String? = null,
+    val manufacturer: String? = null,
+    val model: String? = null,
+    val serialNo: String? = null,
+    val firmware: String? = null,
+    val macAddress: String? = null,
+    val channelList: List<Float>? = null,
+    val hot: Boolean? = null,
+    val battery: Float? = null,
+    val operationModeList: List<String>? = null, //capture, playback
+    val stillFormatList: List<String>? = null, //jpeg, dng, rawdng
+    val storages: List<RicohStorage>? = null,
+    val ssid: String? = null,
+    val key: String? = null,
+    val bdName: String? = null,
+    val datetime: String? = null,
+)
+
+@Serializable
+data class RicohStorage(
+    val name: String? = null,
+    val equipped: Boolean? = null,
+    val available: Boolean? = null,
+    val writable: Boolean? = null,
+    val format: String? = null,
+    val remain: Float? = null,
+    val recordableTime: Float? = null,
+    val numOfPhotos: Float? = null,
+    val numOfMovies: Float? = null,
 )
 
 // TODO: maybe add all these other fields

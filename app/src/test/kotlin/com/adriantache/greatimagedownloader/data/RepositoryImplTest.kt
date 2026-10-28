@@ -4,6 +4,8 @@ import com.adriantache.greatimagedownloader.data.api.FakeRicohApi
 import com.adriantache.greatimagedownloader.data.api.error.CameraException
 import com.adriantache.greatimagedownloader.data.api.model.Dir
 import com.adriantache.greatimagedownloader.data.api.model.PhotoInfo
+import com.adriantache.greatimagedownloader.data.api.model.RicohConfig
+import com.adriantache.greatimagedownloader.data.api.model.RicohStorage
 import com.adriantache.greatimagedownloader.data.storage.FakeFilesStorage
 import com.adriantache.greatimagedownloader.data.storage.FakePreferencesStorage
 import com.adriantache.greatimagedownloader.data.storage.FakeWifiStorage
@@ -244,6 +246,33 @@ class RepositoryImplTest {
 
         assertThat(result.isSuccess).isTrue
         assertThat(ricohApi.pingCalledCount).isEqualTo(1)
+    }
+
+    @Test
+    fun `getCameraStatus parses battery, thermal status, macAddress, and activeStorage`() = runTest {
+        ricohApi.configResponse = Response.success(
+            RicohConfig(
+                model = "RICOH GR III",
+                firmware = "1.91",
+                battery = 66f,
+                hot = true,
+                macAddress = "AA:BB:CC:DD:EE:FF",
+                storages = listOf(
+                    RicohStorage(name = "in", available = false),
+                    RicohStorage(name = "sd1", available = true),
+                ),
+            )
+        )
+
+        val result = repository.getCameraStatus()
+
+        assertThat(result.isSuccess).isTrue
+        val status = result.getOrNull()!!
+        assertThat(status.model).isEqualTo("RICOH GR III")
+        assertThat(status.batteryLevel).isEqualTo(66)
+        assertThat(status.isHot).isTrue
+        assertThat(status.macAddress).isEqualTo("AA:BB:CC:DD:EE:FF")
+        assertThat(status.activeStorage).isEqualTo("sd1")
     }
 
     @Test

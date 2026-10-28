@@ -29,6 +29,7 @@ sealed interface States {
 
     data class SelectFolders(
         val folderInfo: FolderInfo,
+        val cameraStatus: CameraStatus? = null,
         val onFoldersSelect: (List<String>) -> Unit,
     ) : States
 
@@ -37,6 +38,7 @@ sealed interface States {
         val currentPhotoNum: Int = 0,
         val totalPhotos: Int,
         val downloadSpeed: Kbps = Kbps(0.0),
+        val cameraStatus: CameraStatus? = null,
         val onStopDownloading: () -> Unit,
     ) : States
 
