@@ -6,19 +6,19 @@ plugins {
 }
 
 android {
-    namespace 'com.adriantache.greatimagedownloader'
-    compileSdk 37
+    namespace = 'com.adriantache.greatimagedownloader'
+    compileSdk = 37
 
     defaultConfig {
-        applicationId "com.adriantache.greatimagedownloader"
-        minSdk 30
-        targetSdk 37
-        versionCode 10200
-        versionName "1.2.0"
+        applicationId = "com.adriantache.greatimagedownloader"
+        minSdk = 30
+        targetSdk = 37
+        versionCode = 10200
+        versionName = "1.2.0"
 
-        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
-            useSupportLibrary true
+            useSupportLibrary = true
         }
     }
 
@@ -29,22 +29,22 @@ android {
     signingConfigs {
         release {
             storeFile = file("../keystore.jks")
-            storePassword localProperties['keystorePassword']
-            keyAlias localProperties['keyAlias']
-            keyPassword localProperties['keyPassword']
+            storePassword = localProperties['keystorePassword']
+            keyAlias = localProperties['keyAlias']
+            keyPassword = localProperties['keyPassword']
         }
     }
 
     buildTypes {
         release {
-            signingConfig signingConfigs.release
-            minifyEnabled false
+            signingConfig = signingConfigs.release
+            minifyEnabled = false
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
     }
     compileOptions {
-        sourceCompatibility JavaVersion.VERSION_17
-        targetCompatibility JavaVersion.VERSION_17
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
     }
 
     kotlin {
@@ -52,10 +52,10 @@ android {
     }
 
     buildFeatures {
-        compose true
+        compose = true
     }
 
-    packagingOptions {
+    packaging {
         resources {
             excludes += '/META-INF/{AL2.0,LGPL2.1}'
         }
