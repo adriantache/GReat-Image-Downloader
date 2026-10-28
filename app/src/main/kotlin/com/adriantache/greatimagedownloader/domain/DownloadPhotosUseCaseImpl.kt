@@ -2,6 +2,7 @@ package com.adriantache.greatimagedownloader.domain
 
 import android.util.Log
 import com.adriantache.greatimagedownloader.domain.ble.BleUtil
+import com.adriantache.greatimagedownloader.domain.ble.ConnectionStage
 import com.adriantache.greatimagedownloader.domain.data.Repository
 import com.adriantache.greatimagedownloader.domain.data.model.PhotoDownloadInfo
 import com.adriantache.greatimagedownloader.domain.data.model.PhotoFile
@@ -114,13 +115,21 @@ class DownloadPhotosUseCaseImpl(
     private fun onServiceStateChanged(serviceState: ServiceState) {
         when (serviceState) {
             ServiceState.CONNECTING -> {
-                dataTransferTool.widgetStateFlow.value = WidgetState.Connecting
+                val currentStage = dataTransferTool.connectionStageFlow.value ?: ConnectionStage.CONNECTING_BLE
+                val stageText = when (currentStage) {
+                    ConnectionStage.CONNECTING_BLE -> "BT…"
+                    ConnectionStage.CAMERA_CONNECTED -> "Wake…"
+                    ConnectionStage.STARTING_WIFI -> "Wi-Fi…"
+                    ConnectionStage.JOINING_WIFI -> "Join…"
+                }
+                dataTransferTool.widgetStateFlow.value = WidgetState.Connecting(stageText)
                 val wifiDetails = repository.getWifiDetails().getOrNull()?.toEntity() ?: WifiDetailsEntity()
                 if (state.value !is ConnectWifi) {
                     state.value = buildConnectWifiState(
                         wifiDetails = wifiDetails,
                         isHardTimeout = false,
                         isConnecting = true,
+                        connectionStage = currentStage,
                     )
                 }
             }
@@ -298,6 +307,8 @@ class DownloadPhotosUseCaseImpl(
         isHardTimeout: Boolean,
         autoStartConnection: Boolean = false,
         isConnecting: Boolean = false,
+        connectionStage: ConnectionStage? = null,
+        connectionAttempt: Int = 1,
     ): ConnectWifi {
         return ConnectWifi(
             isHardTimeout = isHardTimeout,
@@ -314,6 +325,8 @@ class DownloadPhotosUseCaseImpl(
             onAdjustSettings = ::openSettings,
             autoStartConnection = autoStartConnection,
             isConnecting = isConnecting,
+            connectionStage = connectionStage,
+            connectionAttempt = connectionAttempt,
             onCancelConnection = ::cancelConnection,
         )
     }
@@ -325,8 +338,11 @@ class DownloadPhotosUseCaseImpl(
                 wifiDetails = wifiDetails,
                 isHardTimeout = false,
                 isConnecting = true,
+                connectionStage = ConnectionStage.CONNECTING_BLE,
             )
-            dataTransferTool.widgetStateFlow.value = WidgetState.Connecting
+            dataTransferTool.connectionStageFlow.value = ConnectionStage.CONNECTING_BLE
+            dataTransferTool.connectionAttemptFlow.value = 1
+            dataTransferTool.widgetStateFlow.value = WidgetState.Connecting("BT…")
             dataTransferTool.serviceStateFlow.value = ServiceState.CONNECTING
 
             var isConnected = false
@@ -334,7 +350,22 @@ class DownloadPhotosUseCaseImpl(
             val maxRetries = 5
 
             // Attempt to wake the camera and enable its Wi-Fi Access Point via BLE if paired
-            val bleWifiDetails = bleUtil?.wakeAndEnableCameraWifi()
+            val bleWifiDetails = bleUtil?.wakeAndEnableCameraWifi { stage ->
+                state.value = buildConnectWifiState(
+                    wifiDetails = wifiDetails,
+                    isHardTimeout = false,
+                    isConnecting = true,
+                    connectionStage = stage,
+                )
+                dataTransferTool.connectionStageFlow.value = stage
+                val stageText = when (stage) {
+                    ConnectionStage.CONNECTING_BLE -> "BT…"
+                    ConnectionStage.CAMERA_CONNECTED -> "Wake…"
+                    ConnectionStage.STARTING_WIFI -> "Wi-Fi…"
+                    ConnectionStage.JOINING_WIFI -> "Join…"
+                }
+                dataTransferTool.widgetStateFlow.value = WidgetState.Connecting(stageText)
+            }
             if (!isActive) return@launch
 
             val targetSsid = bleWifiDetails?.ssid?.takeIf { it.isNotBlank() } ?: wifiDetails.ssid!!
@@ -342,6 +373,18 @@ class DownloadPhotosUseCaseImpl(
 
             for (attempt in 1..maxRetries) {
                 if (!isActive) return@launch
+
+                state.value = buildConnectWifiState(
+                    wifiDetails = wifiDetails,
+                    isHardTimeout = false,
+                    isConnecting = true,
+                    connectionStage = ConnectionStage.JOINING_WIFI,
+                    connectionAttempt = attempt,
+                )
+                dataTransferTool.connectionStageFlow.value = ConnectionStage.JOINING_WIFI
+                dataTransferTool.connectionAttemptFlow.value = attempt
+                val stageText = if (attempt > 1) "Join $attempt…" else "Join…"
+                dataTransferTool.widgetStateFlow.value = WidgetState.Connecting(stageText)
 
                 // Notify Service/UI that we are attempting connection
                 event.value = Event(

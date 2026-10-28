@@ -144,6 +144,8 @@ fun MainScreenStateMachine(
                     onAdjustSettings = state.onAdjustSettings,
                     autoStartConnection = state.autoStartConnection,
                     isConnecting = state.isConnecting,
+                    connectionStage = state.connectionStage,
+                    connectionAttempt = state.connectionAttempt,
                     onCancelConnection = state.onCancelConnection,
                 )
 

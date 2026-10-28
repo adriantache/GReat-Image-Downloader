@@ -1,5 +1,6 @@
 package com.adriantache.greatimagedownloader.domain.model
 
+import com.adriantache.greatimagedownloader.domain.ble.ConnectionStage
 import com.adriantache.greatimagedownloader.domain.data.model.PhotoDownloadInfo
 import com.adriantache.greatimagedownloader.domain.ui.model.WifiDetails
 import com.adriantache.greatimagedownloader.domain.utils.model.Kbps
@@ -26,6 +27,8 @@ sealed interface States {
         val onAdjustSettings: () -> Unit,
         val autoStartConnection: Boolean = false,
         val isConnecting: Boolean = false,
+        val connectionStage: ConnectionStage? = null,
+        val connectionAttempt: Int = 1,
         val onCancelConnection: () -> Unit = {},
     ) : States
 

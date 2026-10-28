@@ -10,6 +10,7 @@ import android.os.PowerManager
 import android.util.Log
 import androidx.glance.appwidget.updateAll
 import com.adriantache.greatimagedownloader.domain.DownloadPhotosUseCase
+import com.adriantache.greatimagedownloader.domain.ble.ConnectionStage
 import com.adriantache.greatimagedownloader.domain.data.Repository
 import com.adriantache.greatimagedownloader.domain.data.model.PhotoFile
 import com.adriantache.greatimagedownloader.domain.model.DomainError
@@ -24,6 +25,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.inject
@@ -61,9 +63,17 @@ class PhotoDownloadService : Service(), KoinComponent {
                 when (state) {
                     ServiceState.CONNECTING -> {
                         hasEnteredActiveState = true
+                        val stage = dataTransferTool.connectionStageFlow.value
+                        val message = when (stage) {
+                            ConnectionStage.CONNECTING_BLE -> "Connecting via Bluetooth..."
+                            ConnectionStage.CAMERA_CONNECTED -> "Camera connected! Waking..."
+                            ConnectionStage.STARTING_WIFI -> "Starting camera Wi-Fi..."
+                            ConnectionStage.JOINING_WIFI -> "Joining camera Wi-Fi..."
+                            null -> "Establishing Wi-Fi connection"
+                        }
                         updateStatusNotification(
                             title = "Connecting to camera...",
-                            message = "Establishing Wi-Fi connection",
+                            message = message,
                         )
                     }
 
@@ -98,6 +108,34 @@ class PhotoDownloadService : Service(), KoinComponent {
                             stopSelf()
                         }
                     }
+                }
+            }
+        }
+
+        scope.launch {
+            combine(
+                dataTransferTool.connectionStageFlow,
+                dataTransferTool.connectionAttemptFlow,
+            ) { stage, attempt ->
+                stage to attempt
+            }.collect { (stage, attempt) ->
+                if (dataTransferTool.serviceStateFlow.value == ServiceState.CONNECTING && stage != null) {
+                    val message = when (stage) {
+                        ConnectionStage.CONNECTING_BLE -> "Connecting via Bluetooth..."
+                        ConnectionStage.CAMERA_CONNECTED -> "Camera connected! Waking..."
+                        ConnectionStage.STARTING_WIFI -> "Starting camera Wi-Fi..."
+                        ConnectionStage.JOINING_WIFI -> {
+                            if (attempt > 1) {
+                                "Joining camera Wi-Fi (attempt $attempt/5)..."
+                            } else {
+                                "Joining camera Wi-Fi..."
+                            }
+                        }
+                    }
+                    updateStatusNotification(
+                        title = "Connecting to camera...",
+                        message = message,
+                    )
                 }
             }
         }

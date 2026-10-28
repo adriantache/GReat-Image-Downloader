@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.Intent
 import androidx.test.core.app.ApplicationProvider
 import com.adriantache.greatimagedownloader.domain.DownloadPhotosUseCase
+import com.adriantache.greatimagedownloader.domain.ble.ConnectionStage
 import com.adriantache.greatimagedownloader.domain.data.FakeRepository
 import com.adriantache.greatimagedownloader.domain.data.Repository
 import com.adriantache.greatimagedownloader.domain.data.model.PhotoDownloadInfo
@@ -97,6 +98,19 @@ class PhotoDownloadServiceTest {
         service.onStartCommand(intent, 0, 1)
 
         assertThat(dataTransferTool.serviceStateFlow.value).isEqualTo(ServiceState.CONNECTING)
+    }
+
+    @Test
+    fun `connectionStageFlow updates foreground notification during CONNECTING state`() {
+        serviceController.create().get()
+        dataTransferTool.connectionStageFlow.value = ConnectionStage.CAMERA_CONNECTED
+        dataTransferTool.serviceStateFlow.value = ServiceState.CONNECTING
+        Thread.sleep(200)
+
+        val notification = shadowNotificationManager.getNotification(1)
+        assertThat(notification).isNotNull
+        val shadowNotification = shadowOf(notification)
+        assertThat(shadowNotification.contentText.toString()).contains("Waking")
     }
 
     @Test

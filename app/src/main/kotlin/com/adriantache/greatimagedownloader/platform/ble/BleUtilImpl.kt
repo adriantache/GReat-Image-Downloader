@@ -23,6 +23,7 @@ import android.os.Looper
 import android.util.Log
 import androidx.core.content.ContextCompat
 import com.adriantache.greatimagedownloader.domain.ble.BleUtil
+import com.adriantache.greatimagedownloader.domain.ble.ConnectionStage
 import com.adriantache.greatimagedownloader.domain.ui.model.WifiDetails
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
@@ -68,13 +69,16 @@ class BleUtilImpl(
     @Volatile
     private var activeGatt: BluetoothGatt? = null
 
-    override suspend fun wakeAndEnableCameraWifi(): WifiDetails? = withContext(dispatcher) {
+    override suspend fun wakeAndEnableCameraWifi(
+        onProgress: (ConnectionStage) -> Unit,
+    ): WifiDetails? = withContext(dispatcher) {
         if (!hasBluetoothConnectPermission()) return@withContext null
 
         val adapter: BluetoothAdapter = bluetoothManager?.adapter ?: return@withContext null
         if (!adapter.isEnabled) return@withContext null
 
         disconnect()
+        onProgress(ConnectionStage.CONNECTING_BLE)
 
         val bondedCandidates = runCatching {
             adapter.bondedDevices?.filter { isLikelyRicohBleDevice(it.name) }.orEmpty()
@@ -85,7 +89,7 @@ class BleUtilImpl(
         for (bonded in bondedCandidates) {
             Log.d(TAG, "Attempting connection to bonded camera: ${bonded.name} (${bonded.address})")
             details = withTimeoutOrNull(12.seconds) {
-                connectAndEnableAp(bonded)
+                connectAndEnableAp(bonded, onProgress)
             }
             if (details != null || activeGatt != null) break
         }
@@ -99,7 +103,7 @@ class BleUtilImpl(
             if (scannedDevice != null) {
                 Log.d(TAG, "Scanned Ricoh camera found: ${scannedDevice.name} (${scannedDevice.address})")
                 details = withTimeoutOrNull(12.seconds) {
-                    connectAndEnableAp(scannedDevice)
+                    connectAndEnableAp(scannedDevice, onProgress)
                 }
             }
         }
@@ -108,6 +112,7 @@ class BleUtilImpl(
         // while holding the BLE GATT link open so the camera does not abort Wi-Fi startup.
         if (details != null || activeGatt != null) {
             Log.d(TAG, "Waiting 2500ms for camera Wi-Fi AP beacons to start broadcasting...")
+            onProgress(ConnectionStage.JOINING_WIFI)
             delay(2500.milliseconds)
         }
 
@@ -210,7 +215,10 @@ class BleUtilImpl(
     }
 
     @Suppress("DEPRECATION")
-    private suspend fun connectAndEnableAp(device: BluetoothDevice): WifiDetails? =
+    private suspend fun connectAndEnableAp(
+        device: BluetoothDevice,
+        onProgress: (ConnectionStage) -> Unit,
+    ): WifiDetails? =
         suspendCancellableCoroutine { continuation ->
             var gattRef: BluetoothGatt? = null
             var discoveredSsid: String? = null
@@ -298,6 +306,7 @@ class BleUtilImpl(
                     Log.d(TAG, "GATT onConnectionStateChange status=$status newState=$newState")
                     if (newState == BluetoothProfile.STATE_CONNECTED) {
                         Log.d(TAG, "Connected to GATT server, discovering services...")
+                        onProgress(ConnectionStage.CAMERA_CONNECTED)
                         gatt.discoverServices()
                     } else if (newState == BluetoothProfile.STATE_DISCONNECTED) {
                         Log.d(TAG, "Disconnected from GATT server")
@@ -340,6 +349,7 @@ class BleUtilImpl(
                     val cameraService = gatt.getService(CAMERA_SERVICE_UUID)
                     val powerChar = cameraService?.getCharacteristic(CAMERA_POWER_CHAR_UUID)
                     if (powerChar != null) {
+                        onProgress(ConnectionStage.STARTING_WIFI)
                         operationQueue.add(GattAction.Write(powerChar, byteArrayOf(POWER_ON)))
                     }
 

@@ -7,7 +7,9 @@ class FakeBleUtil : BleUtil {
     var wakeCalledCount = 0
     var disconnectCalledCount = 0
 
-    override suspend fun wakeAndEnableCameraWifi(): WifiDetails? {
+    override suspend fun wakeAndEnableCameraWifi(
+        onProgress: (ConnectionStage) -> Unit,
+    ): WifiDetails? {
         wakeCalledCount++
         return wakeAndEnableResult
     }

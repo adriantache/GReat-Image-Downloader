@@ -8,6 +8,11 @@
     <string name="save">Save</string>
     <string name="wifi_is_not_enabled">WiFi is not enabled!</string>
     <string name="connecting_to_camera">Connecting to camera…</string>
+    <string name="stage_connecting_ble">Connecting via Bluetooth…</string>
+    <string name="stage_camera_connected">Camera connected!\nWaking camera…</string>
+    <string name="stage_starting_wifi">Camera awake!\nStarting Wi-Fi…</string>
+    <string name="stage_joining_wifi">Joining camera Wi-Fi…</string>
+    <string name="stage_joining_wifi_retry">Joining Wi-Fi…\n(attempt %1$d/%2$d)</string>
     <string name="wifi_hard_timeout">The system is limiting the amount of WiFi scans we can perform. The app will automatically retry the connection once possible.</string>
     <string name="widget_description">One-tap Ricoh GR photo download</string>
 </resources>

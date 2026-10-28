@@ -5,6 +5,7 @@ import android.content.Intent
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
@@ -20,8 +21,10 @@ import androidx.glance.appwidget.GlanceAppWidget
 import androidx.glance.appwidget.SizeMode
 import androidx.glance.appwidget.action.ActionCallback
 import androidx.glance.appwidget.action.actionRunCallback
+import androidx.glance.appwidget.cornerRadius
 import androidx.glance.appwidget.provideContent
 import androidx.glance.appwidget.updateAll
+import androidx.glance.background
 import androidx.glance.layout.Alignment
 import androidx.glance.layout.Box
 import androidx.glance.layout.Column
@@ -34,6 +37,7 @@ import androidx.glance.text.FontWeight
 import androidx.glance.text.Text
 import androidx.glance.text.TextAlign
 import androidx.glance.text.TextStyle
+import androidx.glance.unit.ColorProvider
 import com.adriantache.greatimagedownloader.MainActivity
 import com.adriantache.greatimagedownloader.R
 import com.adriantache.greatimagedownloader.domain.data.Repository
@@ -65,7 +69,7 @@ class QuickDownloadWidget : GlanceAppWidget(), KoinComponent {
     ) {
         val (iconRes, statusText) = when (widgetState) {
             WidgetState.Idle -> R.drawable.tap_and_play to "Sync"
-            WidgetState.Connecting -> R.drawable.tap_and_play to "Wi-Fi…"
+            is WidgetState.Connecting -> R.drawable.tap_and_play to widgetState.stageText
             WidgetState.Checking -> R.drawable.tap_and_play to "Sync…"
             is WidgetState.Downloading -> R.drawable.ic_stat_gr to "${widgetState.current}/${widgetState.total}"
             WidgetState.Stopping -> R.drawable.ic_stat_gr to "Stop…"
@@ -73,14 +77,16 @@ class QuickDownloadWidget : GlanceAppWidget(), KoinComponent {
             WidgetState.Error -> R.drawable.ic_stat_gr to "Error"
         }
 
-        val tintColor = when (widgetState) {
-            WidgetState.Error -> GlanceTheme.colors.error
-            else -> GlanceTheme.colors.onSurface
+        val contentColor = when (widgetState) {
+            WidgetState.Error -> Color(0xFFBA1A1A)
+            else -> Color(0xFF1C1917)
         }
 
         Box(
             modifier = GlanceModifier
                 .fillMaxSize()
+                .cornerRadius(16.dp)
+                .background(Color(0xD9FFCA28))
                 .clickable(actionRunCallback<QuickDownloadActionCallback>())
                 .padding(4.dp),
             contentAlignment = Alignment.Center,
@@ -92,7 +98,7 @@ class QuickDownloadWidget : GlanceAppWidget(), KoinComponent {
                 Image(
                     provider = ImageProvider(iconRes),
                     contentDescription = context.getString(R.string.connect_and_start_download),
-                    colorFilter = ColorFilter.tint(tintColor),
+                    colorFilter = ColorFilter.tint(ColorProvider(contentColor)),
                     modifier = GlanceModifier.size(24.dp),
                 )
 
@@ -101,7 +107,7 @@ class QuickDownloadWidget : GlanceAppWidget(), KoinComponent {
                 Text(
                     text = statusText,
                     style = TextStyle(
-                        color = tintColor,
+                        color = ColorProvider(contentColor),
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Bold,
                         textAlign = TextAlign.Center,
@@ -148,7 +154,7 @@ class QuickDownloadActionCallback : ActionCallback, KoinComponent {
             return
         }
 
-        dataTransferTool?.widgetStateFlow?.value = WidgetState.Connecting
+        dataTransferTool?.widgetStateFlow?.value = WidgetState.Connecting("BT…")
         QuickDownloadWidget().updateAll(context)
 
         val serviceIntent = Intent(context, PhotoDownloadService::class.java).apply {

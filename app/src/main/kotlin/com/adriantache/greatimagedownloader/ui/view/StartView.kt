@@ -44,6 +44,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import com.adriantache.greatimagedownloader.R
+import com.adriantache.greatimagedownloader.domain.ble.ConnectionStage
 import com.adriantache.greatimagedownloader.ui.util.KeepScreenOn
 
 // TODO: rename this file and split it into a loading view and a start view
@@ -58,6 +59,8 @@ fun StartView(
     onAdjustSettings: () -> Unit,
     autoStartConnection: Boolean = false,
     isConnecting: Boolean = false,
+    connectionStage: ConnectionStage? = null,
+    connectionAttempt: Int = 1,
     onCancelConnection: () -> Unit = {},
 ) {
     val context = LocalContext.current
@@ -129,6 +132,20 @@ fun StartView(
 
             KeepScreenOn()
 
+            val connectionText = when (connectionStage) {
+                ConnectionStage.CONNECTING_BLE -> stringResource(R.string.stage_connecting_ble)
+                ConnectionStage.CAMERA_CONNECTED -> stringResource(R.string.stage_camera_connected)
+                ConnectionStage.STARTING_WIFI -> stringResource(R.string.stage_starting_wifi)
+                ConnectionStage.JOINING_WIFI -> {
+                    if (connectionAttempt > 1) {
+                        stringResource(R.string.stage_joining_wifi_retry, connectionAttempt, 5)
+                    } else {
+                        stringResource(R.string.stage_joining_wifi)
+                    }
+                }
+                null -> stringResource(R.string.connecting_to_camera)
+            }
+
             Box(
                 modifier = Modifier.fillMaxWidth(),
                 contentAlignment = Alignment.Center,
@@ -137,7 +154,7 @@ fun StartView(
                     ActionButton(
                         bgColor = bgColor,
                         iconPainter = painterResource(id = R.drawable.wifi_pending),
-                        text = stringResource(R.string.connecting_to_camera),
+                        text = connectionText,
                         onClick = {
                             isLoading = false
                             onCancelConnection()

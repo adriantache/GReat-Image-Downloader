@@ -1,6 +1,7 @@
 package com.adriantache.greatimagedownloader.domain
 
 import android.util.Log
+import com.adriantache.greatimagedownloader.domain.ble.ConnectionStage
 import com.adriantache.greatimagedownloader.domain.ble.FakeBleUtil
 import com.adriantache.greatimagedownloader.domain.data.FakeRepository
 import com.adriantache.greatimagedownloader.domain.data.model.PhotoDownloadInfo
@@ -725,6 +726,28 @@ class DownloadPhotosUseCaseImplTest {
 
         // Assert
         assertThat(wifiUtil.connectCalledCount).isEqualTo(1)
+    }
+
+    @Test
+    fun `startWifiConnection updates connectionStage and widgetState with granular progress`() = runTest {
+        repository.wifiDetails = WifiDetails("SSID", "PASSWORD", null)
+        wifiUtil.connectResult = Pair(false, null)
+
+        (useCase.state.value as States.Init).onInit()
+        advanceUntilIdle()
+        (useCase.state.value as States.RequestPermissions).onPermissionsGranted()
+        advanceUntilIdle()
+
+        (useCase.state.value as States.ConnectWifi).onConnect()
+        testScheduler.runCurrent()
+
+        // After BLE wake phase completes, stage transitions to JOINING_WIFI with "Join…"
+        val connectingState = useCase.state.value as States.ConnectWifi
+        assertThat(connectingState.connectionStage).isEqualTo(ConnectionStage.JOINING_WIFI)
+        assertThat(dataTransferTool.widgetStateFlow.value).isEqualTo(WidgetState.Connecting("Join…"))
+
+        connectingState.onCancelConnection()
+        advanceUntilIdle()
     }
 
     private fun openSettings() {
