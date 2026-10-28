@@ -1,6 +1,8 @@
 package com.adriantache.greatimagedownloader.ui.permissions
 
 import android.Manifest.permission.ACCESS_FINE_LOCATION
+import android.Manifest.permission.BLUETOOTH_CONNECT
+import android.Manifest.permission.BLUETOOTH_SCAN
 import android.Manifest.permission.POST_NOTIFICATIONS
 import android.Manifest.permission.READ_EXTERNAL_STORAGE
 import android.Manifest.permission.READ_MEDIA_IMAGES
@@ -25,6 +27,7 @@ fun PermissionsRequester(
         isPhotosPermissionGranted: Boolean,
         isNotificationsPermissionGranted: Boolean,
         isLocalNetworkPermissionGranted: Boolean,
+        isBluetoothPermissionGranted: Boolean,
         onRequestPermissions: () -> Unit,
     ) -> Unit,
 ) {
@@ -62,16 +65,38 @@ fun PermissionsRequester(
         }
     }
 
+    val bluetoothConnectPermissionState: PermissionState? = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+        rememberPermissionState(permission = BLUETOOTH_CONNECT) { }
+    } else {
+        null
+    }
+
+    val bluetoothScanPermissionState: PermissionState? = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+        rememberPermissionState(permission = BLUETOOTH_SCAN) { }
+    } else {
+        null
+    }
+
+    val isBluetoothPermissionGranted by remember(bluetoothConnectPermissionState, bluetoothScanPermissionState) {
+        derivedStateOf {
+            Build.VERSION.SDK_INT < Build.VERSION_CODES.S ||
+                (bluetoothConnectPermissionState?.status?.isGranted == true &&
+                    bluetoothScanPermissionState?.status?.isGranted == true)
+        }
+    }
+
     LaunchedEffect(
         locationPermissionState,
         photosPermissionState,
         isNotificationsPermissionGranted,
-        isLocalNetworkPermissionGranted
+        isLocalNetworkPermissionGranted,
+        isBluetoothPermissionGranted,
     ) {
         if (locationPermissionState.status.isGranted &&
             photosPermissionState.status.isGranted &&
             isNotificationsPermissionGranted &&
-            isLocalNetworkPermissionGranted
+            isLocalNetworkPermissionGranted &&
+            isBluetoothPermissionGranted
         ) {
             onPermissionsGranted()
         }
@@ -82,12 +107,15 @@ fun PermissionsRequester(
         /* isPhotosPermissionGranted */ photosPermissionState.status.isGranted,
         /* isNotificationsPermissionGranted */ isNotificationsPermissionGranted,
         /* isLocalNetworkPermissionGranted */ isLocalNetworkPermissionGranted,
+        /* isBluetoothPermissionGranted */ isBluetoothPermissionGranted,
     ) /* onRequestPermissions */ {
         onRequestPermissions(
             photosPermissionState,
             locationPermissionState,
             notificationsPermissionsState,
             localNetworkPermissionState,
+            bluetoothConnectPermissionState,
+            bluetoothScanPermissionState,
             onPermissionsGranted,
         )
     }
@@ -99,6 +127,8 @@ private fun onRequestPermissions(
     locationPermissionState: PermissionState,
     notificationsPermissionState: PermissionState?,
     localNetworkPermissionState: PermissionState?,
+    bluetoothConnectPermissionState: PermissionState?,
+    bluetoothScanPermissionState: PermissionState?,
     onPermissionsGranted: () -> Unit,
 ) {
     when {
@@ -106,6 +136,8 @@ private fun onRequestPermissions(
         !photosPermissionState.status.isGranted -> photosPermissionState.launchPermissionRequest()
         notificationsPermissionState != null && !notificationsPermissionState.status.isGranted -> notificationsPermissionState.launchPermissionRequest()
         localNetworkPermissionState != null && !localNetworkPermissionState.status.isGranted -> localNetworkPermissionState.launchPermissionRequest()
+        bluetoothConnectPermissionState != null && !bluetoothConnectPermissionState.status.isGranted -> bluetoothConnectPermissionState.launchPermissionRequest()
+        bluetoothScanPermissionState != null && !bluetoothScanPermissionState.status.isGranted -> bluetoothScanPermissionState.launchPermissionRequest()
         else -> onPermissionsGranted()
     }
 }

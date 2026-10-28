@@ -16,9 +16,17 @@ fun getNotification(
     context: Context,
     currentImage: Int? = null,
     totalImages: Int? = null,
+    title: String? = null,
+    message: String? = null,
 ): Notification {
-    val content = if (currentImage == null || totalImages == null) {
-        "Starting download"
+    val resolvedTitle = title ?: if (currentImage == null || totalImages == null) {
+        "Connecting to camera..."
+    } else {
+        "Downloading..."
+    }
+
+    val content = message ?: if (currentImage == null || totalImages == null) {
+        "Establishing connection"
     } else {
         "Processing $currentImage/$totalImages"
     }
@@ -45,7 +53,7 @@ fun getNotification(
         .setPriority(NotificationCompat.PRIORITY_LOW)
         .setCategory(Notification.CATEGORY_SERVICE)
         .setSmallIcon(R.drawable.ic_stat_gr)
-        .setContentTitle("Downloading...")
+        .setContentTitle(resolvedTitle)
         .setContentText(content)
         .setContentIntent(pendingIntent)
         .addAction(android.R.drawable.ic_menu_close_clear_cancel, "Stop", stopPendingIntent)

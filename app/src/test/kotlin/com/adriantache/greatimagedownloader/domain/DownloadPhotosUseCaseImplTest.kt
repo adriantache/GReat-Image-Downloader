@@ -16,12 +16,15 @@ import com.adriantache.greatimagedownloader.domain.utils.model.Event
 import com.adriantache.greatimagedownloader.domain.utils.model.Kbps
 import com.adriantache.greatimagedownloader.domain.wifi.FakeWifiUtil
 import com.adriantache.greatimagedownloader.service.DataTransferTool
+import com.adriantache.greatimagedownloader.service.DataTransferTool.ServiceState
+import com.adriantache.greatimagedownloader.service.DataTransferTool.WidgetState
 import io.mockk.every
 import io.mockk.mockkStatic
 import io.mockk.unmockkAll
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
@@ -159,13 +162,13 @@ class DownloadPhotosUseCaseImplTest {
         advanceUntilIdle()
         (useCase.state.value as States.ConnectWifi).onConnect()
         advanceUntilIdle()
-        
+
         // Simulate Service connecting
         dataTransferTool.serviceStateFlow.value = DataTransferTool.ServiceState.FETCHING
         advanceUntilIdle()
 
         val eventValue = useCase.event.value?.value as Events.ErrorDialog
-        
+
         // Reset count
         wifiUtil.connectCalledCount = 0
 
@@ -195,10 +198,12 @@ class DownloadPhotosUseCaseImplTest {
         // Arrange
         repository.wifiDetails = WifiDetails("SSID", "PASSWORD", null)
         wifiUtil.connectResult = Pair(true, "BSSID")
-        repository.cameraPhotoListResult = Result.success(listOf(
-            PhotoFile("folder1", "photo1.jpg"),
-            PhotoFile("folder2", "photo2.jpg")
-        ))
+        repository.cameraPhotoListResult = Result.success(
+            listOf(
+                PhotoFile("folder1", "photo1.jpg"),
+                PhotoFile("folder2", "photo2.jpg")
+            )
+        )
 
         // Act
         (useCase.state.value as States.Init).onInit()
@@ -265,7 +270,7 @@ class DownloadPhotosUseCaseImplTest {
         advanceUntilIdle()
 
         val selectFolders = useCase.state.value as States.SelectFolders
-        
+
         // Act
         selectFolders.onFoldersSelect(listOf("folder1"))
         advanceUntilIdle()
@@ -302,7 +307,7 @@ class DownloadPhotosUseCaseImplTest {
         advanceUntilIdle()
 
         val selectFolders = useCase.state.value as States.SelectFolders
-        
+
         // Act: Select empty list (cancel)
         selectFolders.onFoldersSelect(emptyList())
         advanceUntilIdle()
@@ -314,11 +319,96 @@ class DownloadPhotosUseCaseImplTest {
     }
 
     @Test
+    fun `zero new photos shuts down camera resets service and emits NoNewPhotosToDownload`() = runTest {
+        // Arrange: Camera has only already-saved photos
+        repository.wifiDetails = WifiDetails("SSID", "PASSWORD", "BSSID")
+        wifiUtil.connectResult = Pair(true, "BSSID")
+        repository.savedPhotos = mutableListOf(PhotoDownloadInfo("R0001234.JPG", "", 100, Kbps(0.0)))
+        repository.cameraPhotoListResult = Result.success(
+            listOf(PhotoFile("100RICOH", "R0001234.JPG"))
+        )
+
+        (useCase.state.value as States.Init).onInit()
+        advanceUntilIdle()
+        (useCase.state.value as States.RequestPermissions).onPermissionsGranted()
+        advanceUntilIdle()
+
+        // Act
+        (useCase.state.value as States.ConnectWifi).onConnect()
+        advanceUntilIdle()
+
+        // Assert
+        assertThat(repository.shutdownCalled).isTrue
+        assertThat(bleUtil.disconnectCalledCount).isGreaterThan(0)
+        assertThat(wifiUtil.cleanupCalledCount).isGreaterThan(0)
+        assertThat(dataTransferTool.serviceStateFlow.value).isEqualTo(ServiceState.IDLE)
+        assertThat(dataTransferTool.widgetStateFlow.value).isEqualTo(WidgetState.Done(0))
+        assertThat(useCase.state.value).isInstanceOf(States.ConnectWifi::class.java)
+        assertThat(useCase.event.value?.value).isEqualTo(Events.NoNewPhotosToDownload)
+    }
+
+    @Test
+    fun `cancelConnection during wifi retry loop aborts retries and resets to idle ConnectWifi`() = runTest {
+        // Arrange: Wi-Fi fails so retry loop stays active
+        repository.wifiDetails = WifiDetails("SSID", "PASSWORD", null)
+        wifiUtil.connectResult = Pair(false, null)
+
+        (useCase.state.value as States.Init).onInit()
+        advanceUntilIdle()
+        (useCase.state.value as States.RequestPermissions).onPermissionsGranted()
+        advanceUntilIdle()
+
+        // Start connecting (runs first attempt, then delays 3s before attempt 2)
+        (useCase.state.value as States.ConnectWifi).onConnect()
+        advanceTimeBy(1000)
+
+        val connectingState = useCase.state.value as States.ConnectWifi
+        assertThat(connectingState.isConnecting).isTrue
+        assertThat(wifiUtil.connectCalledCount).isEqualTo(1)
+
+        // Act: User presses Back while connecting
+        connectingState.onCancelConnection()
+        advanceUntilIdle()
+
+        // Assert: Retries stopped after 1 attempt, service/widget reset to idle, state is idle ConnectWifi
+        assertThat(wifiUtil.connectCalledCount).isEqualTo(1)
+        assertThat(bleUtil.disconnectCalledCount).isGreaterThan(0)
+        assertThat(wifiUtil.cleanupCalledCount).isGreaterThan(0)
+        assertThat(dataTransferTool.serviceStateFlow.value).isEqualTo(ServiceState.IDLE)
+        assertThat(dataTransferTool.widgetStateFlow.value).isEqualTo(WidgetState.Idle)
+        val finalState = useCase.state.value as States.ConnectWifi
+        assertThat(finalState.isConnecting).isFalse
+        assertThat(finalState.isHardTimeout).isFalse
+    }
+
+    @Test
+    fun `startBackgroundSync skips folder selection and starts download directly`() = runTest {
+        // Arrange: Multiple folders present on camera
+        repository.wifiDetails = WifiDetails("SSID", "PASSWORD", "BSSID")
+        wifiUtil.connectResult = Pair(true, "BSSID")
+        repository.cameraPhotoListResult = Result.success(
+            listOf(
+                PhotoFile("100RICOH", "R0001001.JPG"),
+                PhotoFile("101RICOH", "R0002001.JPG"),
+            )
+        )
+
+        // Act: Trigger headless background sync from widget
+        useCase.startBackgroundSync()
+        advanceUntilIdle()
+
+        // Assert: Bypassed SelectFolders and proceeded straight to DOWNLOADING
+        assertThat(dataTransferTool.serviceStateFlow.value).isEqualTo(ServiceState.DOWNLOADING)
+        assertThat(dataTransferTool.pendingPhotosToDownload).hasSize(2)
+        assertThat(dataTransferTool.widgetStateFlow.value).isEqualTo(WidgetState.Downloading(0, 2))
+    }
+
+    @Test
     fun `remember last downloaded photos setting filters available media`() = runTest {
         // Arrange
         repository.settings = Settings(rememberLastDownloadedPhotos = true)
         repository.latestDownloadedPhotos = mutableListOf(PhotoFile("folder1", "photo1.jpg"))
-        
+
         val availablePhotos = listOf(
             PhotoFile("folder1", "photo1.jpg"),
             PhotoFile("folder1", "photo2.jpg")
@@ -330,11 +420,11 @@ class DownloadPhotosUseCaseImplTest {
         advanceUntilIdle()
         (useCase.state.value as States.RequestPermissions).onPermissionsGranted()
         advanceUntilIdle()
-        
+
         repository.wifiDetails = WifiDetails("SSID", "PASS", "BSSID")
         (useCase.state.value as States.ConnectWifi).onConnect()
         advanceUntilIdle()
-        
+
         // Simulate Service connected
         dataTransferTool.serviceStateFlow.value = DataTransferTool.ServiceState.FETCHING
         advanceUntilIdle()
@@ -352,7 +442,7 @@ class DownloadPhotosUseCaseImplTest {
         // Arrange
         repository.settings = Settings(rememberLastDownloadedPhotos = true)
         repository.latestDownloadedPhotos = mutableListOf(PhotoFile("folder1", "photo1.jpg"))
-        
+
         val availablePhotos = listOf(
             PhotoFile("folder1", "photo1.jpg"),
             PhotoFile("folder2", "photo1.jpg") // New folder
@@ -364,11 +454,11 @@ class DownloadPhotosUseCaseImplTest {
         advanceUntilIdle()
         (useCase.state.value as States.RequestPermissions).onPermissionsGranted()
         advanceUntilIdle()
-        
+
         repository.wifiDetails = WifiDetails("SSID", "PASS", "BSSID")
         (useCase.state.value as States.ConnectWifi).onConnect()
         advanceUntilIdle()
-        
+
         // Simulate Service connected
         dataTransferTool.serviceStateFlow.value = DataTransferTool.ServiceState.FETCHING
         advanceUntilIdle()
@@ -387,7 +477,7 @@ class DownloadPhotosUseCaseImplTest {
         // Arrange
         repository.settings = Settings(rememberLastDownloadedPhotos = false)
         repository.savedPhotos = mutableListOf(PhotoDownloadInfo("photo1.jpg", "", 100, Kbps(0.0)))
-        
+
         val availablePhotos = listOf(
             PhotoFile("folder1", "photo1.jpg"),
             PhotoFile("folder1", "photo2.jpg")
@@ -399,11 +489,11 @@ class DownloadPhotosUseCaseImplTest {
         advanceUntilIdle()
         (useCase.state.value as States.RequestPermissions).onPermissionsGranted()
         advanceUntilIdle()
-        
+
         repository.wifiDetails = WifiDetails("SSID", "PASS", "BSSID")
         (useCase.state.value as States.ConnectWifi).onConnect()
         advanceUntilIdle()
-        
+
         // Simulate Service connected
         dataTransferTool.serviceStateFlow.value = DataTransferTool.ServiceState.FETCHING
         advanceUntilIdle()
@@ -545,19 +635,19 @@ class DownloadPhotosUseCaseImplTest {
         // Arrange
         wifiUtil.connectResult = Pair(false, null)
         repository.wifiDetails = WifiDetails("SSID", "PASSWORD", null)
-        
+
         (useCase.state.value as States.Init).onInit()
         advanceUntilIdle()
         (useCase.state.value as States.RequestPermissions).onPermissionsGranted()
         advanceUntilIdle()
-        
+
         // Ensure we are in ConnectWifi state
         assertThat(useCase.state.value).isInstanceOf(States.ConnectWifi::class.java)
-        
+
         // Act
         (useCase.state.value as States.ConnectWifi).onConnect()
-        
-        // Move time forward for 5 attempts with 20s delay
+
+        // Move time forward for 5 attempts
         advanceUntilIdle()
 
         // Assert
@@ -565,6 +655,7 @@ class DownloadPhotosUseCaseImplTest {
         // Should eventually transition to ConnectWifi with isHardTimeout
         assertThat(useCase.state.value).isInstanceOf(States.ConnectWifi::class.java)
         assertThat((useCase.state.value as States.ConnectWifi).isHardTimeout).isTrue
+        assertThat((useCase.state.value as States.ConnectWifi).isConnecting).isFalse
     }
 
     @Test
@@ -573,7 +664,7 @@ class DownloadPhotosUseCaseImplTest {
         val method = useCase.javaClass.getDeclaredMethod("onStopDownloading")
         method.isAccessible = true
         method.invoke(useCase)
-        
+
         // Assert
         assertThat(useCase.state.value).isInstanceOf(States.StoppingDownload::class.java)
         assertThat(useCase.event.value?.value).isEqualTo(Events.StopDownload)
@@ -583,17 +674,17 @@ class DownloadPhotosUseCaseImplTest {
     fun `settings screen allows deleting all photos`() = runTest {
         // Arrange
         repository.settings = Settings()
-        
+
         // Act: Open settings
-        useCase.state.value = States.ConnectWifi(false, {false}, {}, {}, ::openSettings)
+        useCase.state.value = States.ConnectWifi(false, { false }, {}, {}, ::openSettings)
         val connectWifi = useCase.state.value as States.ConnectWifi
         connectWifi.onAdjustSettings()
         advanceUntilIdle()
-        
+
         val changeSettings = useCase.state.value as States.ChangeSettings
         changeSettings.onDeleteAllPhotos()
         advanceUntilIdle()
-        
+
         // Assert
         val eventValue = useCase.event.value?.value
         assertThat(eventValue).isInstanceOf(Events.ConfirmDeleteAllPhotos::class.java)
@@ -635,7 +726,7 @@ class DownloadPhotosUseCaseImplTest {
         // Assert
         assertThat(wifiUtil.connectCalledCount).isEqualTo(1)
     }
-    
+
     private fun openSettings() {
         val method = useCase.javaClass.getDeclaredMethod("openSettings")
         method.isAccessible = true

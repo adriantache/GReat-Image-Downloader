@@ -10,4 +10,8 @@ interface DownloadPhotosUseCase {
     val event: StateFlow<Event<Events>?>
 
     fun triggerAutoConnect() {}
+
+    fun startBackgroundSync() {}
+
+    fun cancelConnection() {}
 }

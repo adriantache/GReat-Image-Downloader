@@ -19,6 +19,7 @@ fun PermissionsView(
     isPhotosPermissionGranted: Boolean,
     isNotificationsPermissionGranted: Boolean,
     isLocalNetworkPermissionGranted: Boolean,
+    isBluetoothPermissionGranted: Boolean = true,
     onRequestPermissions: () -> Unit,
 ) {
     Column(
@@ -59,6 +60,13 @@ fun PermissionsView(
             isGranted = isNotificationsPermissionGranted,
         )
 
+        Spacer(Modifier.height(8.dp))
+
+        PermissionsRowView(
+            text = "Bluetooth access - for waking the camera and enabling its Wi-Fi",
+            isGranted = isBluetoothPermissionGranted,
+        )
+
         Spacer(Modifier.height(16.dp))
 
         Button(onClick = onRequestPermissions) {
@@ -75,5 +83,6 @@ private fun PermissionsViewPreview() {
         isPhotosPermissionGranted = false,
         isNotificationsPermissionGranted = false,
         isLocalNetworkPermissionGranted = true,
+        isBluetoothPermissionGranted = false,
     ) {}
 }

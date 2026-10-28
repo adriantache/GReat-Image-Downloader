@@ -25,6 +25,8 @@ sealed interface States {
         // TODO: this shouldn't be here
         val onAdjustSettings: () -> Unit,
         val autoStartConnection: Boolean = false,
+        val isConnecting: Boolean = false,
+        val onCancelConnection: () -> Unit = {},
     ) : States
 
     data object GetPhotos : States

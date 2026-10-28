@@ -1,25 +1,27 @@
 package com.adriantache.greatimagedownloader.widget
 
 import android.content.Context
+import android.content.Intent
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.content.ContextCompat
 import androidx.glance.ColorFilter
 import androidx.glance.GlanceId
 import androidx.glance.GlanceModifier
 import androidx.glance.GlanceTheme
 import androidx.glance.Image
 import androidx.glance.ImageProvider
-import androidx.glance.LocalSize
 import androidx.glance.action.ActionParameters
-import androidx.glance.action.actionParametersOf
-import androidx.glance.action.actionStartActivity
 import androidx.glance.action.clickable
 import androidx.glance.appwidget.GlanceAppWidget
 import androidx.glance.appwidget.SizeMode
-import androidx.glance.appwidget.cornerRadius
+import androidx.glance.appwidget.action.ActionCallback
+import androidx.glance.appwidget.action.actionRunCallback
 import androidx.glance.appwidget.provideContent
-import androidx.glance.background
+import androidx.glance.appwidget.updateAll
 import androidx.glance.layout.Alignment
 import androidx.glance.layout.Box
 import androidx.glance.layout.Column
@@ -34,36 +36,53 @@ import androidx.glance.text.TextAlign
 import androidx.glance.text.TextStyle
 import com.adriantache.greatimagedownloader.MainActivity
 import com.adriantache.greatimagedownloader.R
+import com.adriantache.greatimagedownloader.domain.data.Repository
+import com.adriantache.greatimagedownloader.service.DataTransferTool
+import com.adriantache.greatimagedownloader.service.DataTransferTool.WidgetState
+import com.adriantache.greatimagedownloader.service.PhotoDownloadService
+import org.koin.core.component.KoinComponent
 
-class QuickDownloadWidget : GlanceAppWidget() {
+class QuickDownloadWidget : GlanceAppWidget(), KoinComponent {
     override val sizeMode: SizeMode = SizeMode.Exact
 
     override suspend fun provideGlance(context: Context, id: GlanceId) {
+        val dataTransferTool = getKoin().getOrNull<DataTransferTool>()
+
         provideContent {
+            val widgetState by dataTransferTool?.widgetStateFlow?.collectAsState()
+                ?: androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(WidgetState.Idle) }
+
             GlanceTheme {
-                QuickDownloadWidgetContent(context)
+                QuickDownloadWidgetContent(context, widgetState)
             }
         }
     }
 
     @Composable
-    private fun QuickDownloadWidgetContent(context: Context) {
-        val size = LocalSize.current
-        val showLabel = size.height >= 84.dp && size.width >= 84.dp
+    private fun QuickDownloadWidgetContent(
+        context: Context,
+        widgetState: WidgetState,
+    ) {
+        val (iconRes, statusText) = when (widgetState) {
+            WidgetState.Idle -> R.drawable.tap_and_play to "Sync"
+            WidgetState.Connecting -> R.drawable.tap_and_play to "Wi-Fi…"
+            WidgetState.Checking -> R.drawable.tap_and_play to "Sync…"
+            is WidgetState.Downloading -> R.drawable.ic_stat_gr to "${widgetState.current}/${widgetState.total}"
+            WidgetState.Stopping -> R.drawable.ic_stat_gr to "Stop…"
+            is WidgetState.Done -> R.drawable.ic_stat_gr to if (widgetState.count == 0) "0 new" else "Done (${widgetState.count})"
+            WidgetState.Error -> R.drawable.ic_stat_gr to "Error"
+        }
 
-        val launchAction = actionStartActivity<MainActivity>(
-            parameters = actionParametersOf(
-                ActionParameters.Key<Boolean>(MainActivity.EXTRA_AUTO_CONNECT) to true
-            )
-        )
+        val tintColor = when (widgetState) {
+            WidgetState.Error -> GlanceTheme.colors.error
+            else -> GlanceTheme.colors.onSurface
+        }
 
         Box(
             modifier = GlanceModifier
                 .fillMaxSize()
-                .cornerRadius(28.dp)
-                .background(GlanceTheme.colors.primary)
-                .clickable(launchAction)
-                .padding(8.dp),
+                .clickable(actionRunCallback<QuickDownloadActionCallback>())
+                .padding(4.dp),
             contentAlignment = Alignment.Center,
         ) {
             Column(
@@ -71,26 +90,70 @@ class QuickDownloadWidget : GlanceAppWidget() {
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Image(
-                    provider = ImageProvider(R.drawable.tap_and_play),
+                    provider = ImageProvider(iconRes),
                     contentDescription = context.getString(R.string.connect_and_start_download),
-                    colorFilter = ColorFilter.tint(GlanceTheme.colors.onPrimary),
-                    modifier = GlanceModifier.size(28.dp),
+                    colorFilter = ColorFilter.tint(tintColor),
+                    modifier = GlanceModifier.size(24.dp),
                 )
 
-                if (showLabel) {
-                    Spacer(modifier = GlanceModifier.height(4.dp))
-                    Text(
-                        text = "GR Sync",
-                        style = TextStyle(
-                            color = GlanceTheme.colors.onPrimary,
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
-                            textAlign = TextAlign.Center,
-                        ),
-                        maxLines = 1,
-                    )
-                }
+                Spacer(modifier = GlanceModifier.height(2.dp))
+
+                Text(
+                    text = statusText,
+                    style = TextStyle(
+                        color = tintColor,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        textAlign = TextAlign.Center,
+                    ),
+                    maxLines = 1,
+                )
             }
         }
+    }
+}
+
+class QuickDownloadActionCallback : ActionCallback, KoinComponent {
+    override suspend fun onAction(
+        context: Context,
+        glanceId: GlanceId,
+        parameters: ActionParameters,
+    ) {
+        val dataTransferTool = getKoin().getOrNull<DataTransferTool>()
+        val repository = getKoin().getOrNull<Repository>()
+
+        val currentState = dataTransferTool?.widgetStateFlow?.value ?: WidgetState.Idle
+        val isBusy = currentState is WidgetState.Connecting ||
+            currentState is WidgetState.Checking ||
+            currentState is WidgetState.Downloading
+
+        if (isBusy) {
+            dataTransferTool?.widgetStateFlow?.value = WidgetState.Stopping
+            QuickDownloadWidget().updateAll(context)
+            val stopIntent = Intent(context, PhotoDownloadService::class.java).apply {
+                action = PhotoDownloadService.Actions.STOP.name
+            }
+            ContextCompat.startForegroundService(context, stopIntent)
+            return
+        }
+
+        val wifiDetails = repository?.getWifiDetails()?.getOrNull()
+        if (wifiDetails == null || wifiDetails.ssid.isNullOrBlank() || wifiDetails.password.isNullOrBlank()) {
+            // If Wi-Fi credentials have not been set up yet, open MainActivity once for initial setup.
+            val activityIntent = Intent(context, MainActivity::class.java).apply {
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+                putExtra(MainActivity.EXTRA_AUTO_CONNECT, true)
+            }
+            context.startActivity(activityIntent)
+            return
+        }
+
+        dataTransferTool?.widgetStateFlow?.value = WidgetState.Connecting
+        QuickDownloadWidget().updateAll(context)
+
+        val serviceIntent = Intent(context, PhotoDownloadService::class.java).apply {
+            action = PhotoDownloadService.Actions.QUICK_DOWNLOAD.name
+        }
+        ContextCompat.startForegroundService(context, serviceIntent)
     }
 }

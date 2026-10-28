@@ -8,4 +8,9 @@ interface BleUtil {
      * enable its Wi-Fi Access Point mode, and read its Wi-Fi SSID and passphrase.
      */
     suspend fun wakeAndEnableCameraWifi(): WifiDetails?
+
+    /**
+     * Closes any active BLE GATT connection held during Wi-Fi handoff/transfer.
+     */
+    fun disconnect() {}
 }

@@ -8,13 +8,17 @@ import android.os.Build
 import android.os.IBinder
 import android.os.PowerManager
 import android.util.Log
+import androidx.glance.appwidget.updateAll
+import com.adriantache.greatimagedownloader.domain.DownloadPhotosUseCase
 import com.adriantache.greatimagedownloader.domain.data.Repository
 import com.adriantache.greatimagedownloader.domain.data.model.PhotoFile
 import com.adriantache.greatimagedownloader.domain.model.DomainError
 import com.adriantache.greatimagedownloader.domain.model.DomainException
 import com.adriantache.greatimagedownloader.domain.utils.model.Event
 import com.adriantache.greatimagedownloader.service.DataTransferTool.ServiceState
+import com.adriantache.greatimagedownloader.service.DataTransferTool.WidgetState
 import com.adriantache.greatimagedownloader.service.model.PhotoFileItem
+import com.adriantache.greatimagedownloader.widget.QuickDownloadWidget
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -33,6 +37,9 @@ class PhotoDownloadService : Service(), KoinComponent {
     private var wakeLock: PowerManager.WakeLock? = null
     private var downloadJob: Job? = null
 
+    @Volatile
+    private var hasEnteredActiveState = false
+
     // Used to interrupt download without corrupting current file.
     @Volatile
     private var continueDownload = false
@@ -48,12 +55,68 @@ class PhotoDownloadService : Service(), KoinComponent {
         startForeground(1, notification)
 
         acquireLocks()
+
+        scope.launch {
+            dataTransferTool.serviceStateFlow.collect { state ->
+                when (state) {
+                    ServiceState.CONNECTING -> {
+                        hasEnteredActiveState = true
+                        updateStatusNotification(
+                            title = "Connecting to camera...",
+                            message = "Establishing Wi-Fi connection",
+                        )
+                    }
+
+                    ServiceState.FETCHING -> {
+                        hasEnteredActiveState = true
+                        updateStatusNotification(
+                            title = "Checking camera...",
+                            message = "Looking for new photos",
+                        )
+                    }
+
+                    ServiceState.DOWNLOADING -> {
+                        hasEnteredActiveState = true
+                        if (downloadJob?.isActive != true) {
+                            val pending = dataTransferTool.consumePendingPhotos()
+                            if (pending.isNotEmpty()) {
+                                start(pending)
+                            }
+                        }
+                    }
+
+                    ServiceState.STOPPING -> {
+                        updateStatusNotification(
+                            title = "Stopping...",
+                            message = "Disconnecting from camera",
+                        )
+                    }
+
+                    ServiceState.IDLE -> {
+                        if (hasEnteredActiveState && downloadJob?.isActive != true) {
+                            refreshWidget()
+                            stopSelf()
+                        }
+                    }
+                }
+            }
+        }
+
+        scope.launch {
+            dataTransferTool.widgetStateFlow.collect {
+                refreshWidget()
+            }
+        }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
             Actions.START.name -> {
                 Log.d("PhotoDownloadService", "onStartCommand: START")
+                hasEnteredActiveState = true
+                if (downloadJob?.isActive == true) {
+                    return START_STICKY
+                }
                 val inMemoryPhotos = dataTransferTool.consumePendingPhotos()
                 val photosToDownload = if (inMemoryPhotos.isNotEmpty()) {
                     inMemoryPhotos
@@ -71,11 +134,28 @@ class PhotoDownloadService : Service(), KoinComponent {
 
             Actions.CONNECT.name -> {
                 Log.d("PhotoDownloadService", "onStartCommand: CONNECT")
+                hasEnteredActiveState = true
                 dataTransferTool.serviceStateFlow.value = ServiceState.CONNECTING
+            }
+
+            Actions.QUICK_DOWNLOAD.name -> {
+                Log.d("PhotoDownloadService", "onStartCommand: QUICK_DOWNLOAD")
+                hasEnteredActiveState = true
+                val useCase = getKoin().getOrNull<DownloadPhotosUseCase>()
+                if (useCase != null) {
+                    useCase.startBackgroundSync()
+                } else {
+                    dataTransferTool.widgetStateFlow.value = WidgetState.Error
+                    stopSelf()
+                }
             }
 
             Actions.STOP.name -> {
                 continueDownload = false
+                if (downloadJob?.isActive != true) {
+                    getKoin().getOrNull<DownloadPhotosUseCase>()?.cancelConnection()
+                    scope.launch { disconnect() }
+                }
             }
         }
 
@@ -115,6 +195,7 @@ class PhotoDownloadService : Service(), KoinComponent {
         val notificationManager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
         notificationManager.notify(2, getErrorNotification(this, message))
 
+        dataTransferTool.widgetStateFlow.value = WidgetState.Error
         dataTransferTool.errorFlow.value = Event(error)
     }
 
@@ -128,6 +209,7 @@ class PhotoDownloadService : Service(), KoinComponent {
             }
 
             updateNotification(index + 1, photosToDownload.size)
+            dataTransferTool.widgetStateFlow.value = WidgetState.Downloading(index + 1, photosToDownload.size)
 
             val photo = photosToDownload[index]
             var lastUri: String? = null
@@ -178,11 +260,22 @@ class PhotoDownloadService : Service(), KoinComponent {
             updateLatestDownloadedPhotos(completedPhotos)
         }
 
+        // Shut down camera first while process is still bound to the camera Wi-Fi network,
+        // before emitting downloadFinishedFlow (which triggers wifiUtil.cleanup() in the use case).
+        repository.shutDownCamera()
+
         if (!isError) {
+            dataTransferTool.widgetStateFlow.value = if (!continueDownload) {
+                WidgetState.Idle
+            } else {
+                WidgetState.Done(completedPhotos.size)
+            }
+            refreshWidget()
             dataTransferTool.downloadFinishedFlow.value = Event(Unit)
         }
 
-        disconnect()
+        dataTransferTool.serviceStateFlow.value = ServiceState.IDLE
+        stopSelf()
     }
 
     private suspend fun updateLatestDownloadedPhotos(downloadedPhotos: List<PhotoFile>) {
@@ -214,10 +307,23 @@ class PhotoDownloadService : Service(), KoinComponent {
         notificationManager.notify(1, notification)
     }
 
-    private suspend fun disconnect() {
-        dataTransferTool.serviceStateFlow.value = ServiceState.IDLE
-        repository.shutDownCamera()
+    private fun updateStatusNotification(title: String, message: String) {
+        val notificationManager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
 
+        val notification = getNotification(this, title = title, message = message)
+        notificationManager.notify(1, notification)
+    }
+
+    private suspend fun refreshWidget() {
+        runCatching {
+            QuickDownloadWidget().updateAll(applicationContext)
+        }
+    }
+
+    private suspend fun disconnect() {
+        repository.shutDownCamera()
+        dataTransferTool.serviceStateFlow.value = ServiceState.IDLE
+        refreshWidget()
         stopSelf()
     }
 
@@ -245,7 +351,7 @@ class PhotoDownloadService : Service(), KoinComponent {
     }
 
     enum class Actions {
-        START, CONNECT, STOP
+        START, CONNECT, QUICK_DOWNLOAD, STOP
     }
 
     companion object {

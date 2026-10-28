@@ -24,6 +24,7 @@ import com.adriantache.greatimagedownloader.domain.utils.model.Event
 import com.adriantache.greatimagedownloader.domain.wifi.WifiUtil
 import com.adriantache.greatimagedownloader.service.DataTransferTool
 import com.adriantache.greatimagedownloader.service.DataTransferTool.ServiceState
+import com.adriantache.greatimagedownloader.service.DataTransferTool.WidgetState
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -53,9 +54,17 @@ class DownloadPhotosUseCaseImpl(
 
     private var photosToDownload: List<PhotoFile> = emptyList()
     private val downloadedPhotoUris = LinkedHashMap<String, PhotoDownloadInfo>()
+    private var connectionJob: Job? = null
+    private var fetchJob: Job? = null
     private var keepAliveJob: Job? = null
     private var currentCameraStatus: CameraStatus? = null
     private var autoConnectRequested = false
+
+    @Volatile
+    private var isBackgroundSync = false
+
+    @Volatile
+    private var isCancelling = false
 
     init {
         scope.launch {
@@ -105,38 +114,43 @@ class DownloadPhotosUseCaseImpl(
     private fun onServiceStateChanged(serviceState: ServiceState) {
         when (serviceState) {
             ServiceState.CONNECTING -> {
+                dataTransferTool.widgetStateFlow.value = WidgetState.Connecting
                 val wifiDetails = repository.getWifiDetails().getOrNull()?.toEntity() ?: WifiDetailsEntity()
                 if (state.value !is ConnectWifi) {
-                    state.value = ConnectWifi(
+                    state.value = buildConnectWifiState(
+                        wifiDetails = wifiDetails,
                         isHardTimeout = false,
-                        onCheckWifiDisabled = { wifiUtil.isWifiDisabled },
-                        onConnect = { startWifiConnection(wifiDetails) },
-                        onChangeWifiDetails = {
-                            state.value = RequestWifiCredentials(
-                                onWifiCredentialsInput = { onWifiCredentialsInput(it.toEntity()) },
-                                onSuggestWifiName = { wifiUtil.suggestNetwork() },
-                                onSuggestWifiCredentials = { bleUtil?.wakeAndEnableCameraWifi() },
-                                onDismiss = { connectToWifi() }
-                            )
-                        },
-                        onAdjustSettings = ::openSettings,
+                        isConnecting = true,
                     )
                 }
             }
 
             ServiceState.FETCHING -> {
                 Log.d("DownloadPhotosUseCase", "onServiceStateChanged: Service is FETCHING, starting fetchPhotosFromCamera")
+                dataTransferTool.widgetStateFlow.value = WidgetState.Checking
                 state.value = GetPhotos
                 fetchPhotosFromCamera()
             }
+
             ServiceState.DOWNLOADING -> Unit // Handled by imageFlow
             ServiceState.IDLE -> Unit
-            ServiceState.STOPPING -> state.value = States.StoppingDownload
+            ServiceState.STOPPING -> {
+                dataTransferTool.widgetStateFlow.value = WidgetState.Stopping
+                state.value = States.StoppingDownload
+            }
         }
     }
 
     private fun onError(error: DomainError) {
+        connectionJob?.cancel()
+        connectionJob = null
+        fetchJob?.cancel()
+        fetchJob = null
         stopKeepAlive()
+        isBackgroundSync = false
+        bleUtil?.disconnect()
+        dataTransferTool.widgetStateFlow.value = WidgetState.Error
+        dataTransferTool.serviceStateFlow.value = ServiceState.IDLE
 
         // Delete partially downloaded files on error
         downloadedPhotoUris.values
@@ -152,18 +166,10 @@ class DownloadPhotosUseCaseImpl(
                     // For any error, we try to reconnect to the camera automatically on retry.
                     val wifiDetails = repository.getWifiDetails().getOrNull()?.toEntity() ?: WifiDetailsEntity()
                     if (wifiDetails.isValid) {
-                        state.value = ConnectWifi(
+                        state.value = buildConnectWifiState(
+                            wifiDetails = wifiDetails,
                             isHardTimeout = false,
-                            onCheckWifiDisabled = { wifiUtil.isWifiDisabled },
-                            onConnect = { startWifiConnection(wifiDetails) },
-                            onChangeWifiDetails = {
-                                state.value = RequestWifiCredentials(
-                                    onWifiCredentialsInput = { onWifiCredentialsInput(it.toEntity()) },
-                                    onSuggestWifiName = { wifiUtil.suggestNetwork() },
-                                    onDismiss = { connectToWifi() }
-                                )
-                            },
-                            onAdjustSettings = ::openSettings,
+                            isConnecting = true,
                         )
                         startWifiConnection(wifiDetails)
                     } else {
@@ -172,23 +178,80 @@ class DownloadPhotosUseCaseImpl(
                 },
                 onDismiss = {
                     event.value = null
-                    scope.launch { repository.shutDownCamera() }
-                    wifiUtil.cleanup()
-                    onDownloadFinished()
+                    photosToDownload = emptyList()
+                    downloadedPhotoUris.clear()
+                    scope.launch {
+                        repository.shutDownCamera()
+                        bleUtil?.disconnect()
+                        wifiUtil.cleanup()
+                        dataTransferTool.widgetStateFlow.value = WidgetState.Idle
+                        dataTransferTool.reset()
+                        connectToWifi()
+                    }
                 }
             )
         )
     }
 
-
     override fun triggerAutoConnect() {
         val currentState = state.value
         if (currentState is ConnectWifi) {
             autoConnectRequested = false
-            state.value = currentState.copy(autoStartConnection = true)
+            state.value = currentState.copy(autoStartConnection = true, isConnecting = true)
             currentState.onConnect()
         } else {
             autoConnectRequested = true
+        }
+    }
+
+    override fun startBackgroundSync() {
+        val wifiDetails = repository.getWifiDetails().getOrNull()?.toEntity() ?: WifiDetailsEntity()
+        if (!wifiDetails.isValid || wifiUtil.isWifiDisabled) {
+            dataTransferTool.widgetStateFlow.value = WidgetState.Error
+            dataTransferTool.serviceStateFlow.value = ServiceState.IDLE
+            return
+        }
+
+        isBackgroundSync = true
+        startWifiConnection(wifiDetails)
+    }
+
+    override fun cancelConnection() {
+        if (isCancelling) return
+        val hasActiveWork = connectionJob?.isActive == true ||
+            fetchJob?.isActive == true ||
+            keepAliveJob?.isActive == true ||
+            state.value is GetPhotos ||
+            state.value is States.SelectFolders ||
+            (state.value as? ConnectWifi)?.isConnecting == true ||
+            dataTransferTool.serviceStateFlow.value != ServiceState.IDLE
+        if (!hasActiveWork) return
+
+        isCancelling = true
+        val shouldShutDownCamera = state.value is GetPhotos || state.value is States.SelectFolders
+        connectionJob?.cancel()
+        connectionJob = null
+        fetchJob?.cancel()
+        fetchJob = null
+        stopKeepAlive()
+        isBackgroundSync = false
+        photosToDownload = emptyList()
+        downloadedPhotoUris.clear()
+
+        connectToWifi()
+
+        scope.launch {
+            try {
+                if (shouldShutDownCamera) {
+                    repository.shutDownCamera()
+                }
+                bleUtil?.disconnect()
+                wifiUtil.cleanup()
+                dataTransferTool.widgetStateFlow.value = WidgetState.Idle
+                dataTransferTool.reset()
+            } finally {
+                isCancelling = false
+            }
         }
     }
 
@@ -218,7 +281,25 @@ class DownloadPhotosUseCaseImpl(
         val shouldAutoStart = autoConnectRequested && !isHardTimeout && !wifiUtil.isWifiDisabled
         autoConnectRequested = false
 
-        state.value = ConnectWifi(
+        state.value = buildConnectWifiState(
+            wifiDetails = wifiDetails,
+            isHardTimeout = isHardTimeout,
+            autoStartConnection = shouldAutoStart,
+            isConnecting = shouldAutoStart,
+        )
+
+        if (shouldAutoStart) {
+            startWifiConnection(wifiDetails)
+        }
+    }
+
+    private fun buildConnectWifiState(
+        wifiDetails: WifiDetailsEntity,
+        isHardTimeout: Boolean,
+        autoStartConnection: Boolean = false,
+        isConnecting: Boolean = false,
+    ): ConnectWifi {
+        return ConnectWifi(
             isHardTimeout = isHardTimeout,
             onCheckWifiDisabled = { wifiUtil.isWifiDisabled },
             onConnect = { startWifiConnection(wifiDetails) },
@@ -231,16 +312,21 @@ class DownloadPhotosUseCaseImpl(
                 )
             },
             onAdjustSettings = ::openSettings,
-            autoStartConnection = shouldAutoStart,
+            autoStartConnection = autoStartConnection,
+            isConnecting = isConnecting,
+            onCancelConnection = ::cancelConnection,
         )
-
-        if (shouldAutoStart) {
-            startWifiConnection(wifiDetails)
-        }
     }
 
     private fun startWifiConnection(wifiDetails: WifiDetailsEntity) {
-        scope.launch {
+        connectionJob?.cancel()
+        connectionJob = scope.launch {
+            state.value = buildConnectWifiState(
+                wifiDetails = wifiDetails,
+                isHardTimeout = false,
+                isConnecting = true,
+            )
+            dataTransferTool.widgetStateFlow.value = WidgetState.Connecting
             dataTransferTool.serviceStateFlow.value = ServiceState.CONNECTING
 
             var isConnected = false
@@ -248,21 +334,27 @@ class DownloadPhotosUseCaseImpl(
             val maxRetries = 5
 
             // Attempt to wake the camera and enable its Wi-Fi Access Point via BLE if paired
-            bleUtil?.wakeAndEnableCameraWifi()
+            val bleWifiDetails = bleUtil?.wakeAndEnableCameraWifi()
+            if (!isActive) return@launch
+
+            val targetSsid = bleWifiDetails?.ssid?.takeIf { it.isNotBlank() } ?: wifiDetails.ssid!!
+            val targetPassword = bleWifiDetails?.password?.takeIf { it.isNotBlank() } ?: wifiDetails.password!!
 
             for (attempt in 1..maxRetries) {
+                if (!isActive) return@launch
+
                 // Notify Service/UI that we are attempting connection
                 event.value = Event(
                     Events.ConnectWithService(
-                        ssid = wifiDetails.ssid!!,
-                        password = wifiDetails.password!!,
+                        ssid = targetSsid,
+                        password = targetPassword,
                         bssid = if (attempt == 1) wifiDetails.bssid else null, // Only try BSSID on first attempt
                     )
                 )
 
                 val (attemptIsConnected, attemptNewBssid) = wifiUtil.connectToWifi(
-                    ssid = wifiDetails.ssid,
-                    password = wifiDetails.password,
+                    ssid = targetSsid,
+                    password = targetPassword,
                     bssid = if (attempt == 1) wifiDetails.bssid else null,
                 )
 
@@ -275,27 +367,34 @@ class DownloadPhotosUseCaseImpl(
                 if (attempt < maxRetries) delay(3.seconds)
             }
 
+            if (!isActive) return@launch
+
             if (isConnected) {
                 // Save new BSSID
                 repository.getWifiDetails().getOrNull()?.let { currentDetails ->
-                    repository.saveWifiDetails(currentDetails.copy(bssid = newBssid))
+                    repository.saveWifiDetails(
+                        currentDetails.copy(
+                            ssid = targetSsid,
+                            password = targetPassword,
+                            bssid = newBssid,
+                        )
+                    )
                 }
 
+                dataTransferTool.widgetStateFlow.value = WidgetState.Checking
                 dataTransferTool.serviceStateFlow.value = ServiceState.FETCHING
                 // fetchPhotosFromCamera() will be called via serviceStateFlow collector
             } else {
-                state.value = ConnectWifi(
+                isBackgroundSync = false
+                bleUtil?.disconnect()
+                wifiUtil.cleanup()
+                dataTransferTool.widgetStateFlow.value = WidgetState.Error
+                dataTransferTool.serviceStateFlow.value = ServiceState.IDLE
+
+                state.value = buildConnectWifiState(
+                    wifiDetails = wifiDetails,
                     isHardTimeout = true,
-                    onCheckWifiDisabled = { wifiUtil.isWifiDisabled },
-                    onConnect = { startWifiConnection(wifiDetails) },
-                    onChangeWifiDetails = {
-                        state.value = RequestWifiCredentials(
-                            onWifiCredentialsInput = { onWifiCredentialsInput(it.toEntity()) },
-                            onSuggestWifiName = { wifiUtil.suggestNetwork() },
-                            onDismiss = { connectToWifi() }
-                        )
-                    },
-                    onAdjustSettings = ::openSettings,
+                    isConnecting = false,
                 )
             }
         }
@@ -380,7 +479,8 @@ class DownloadPhotosUseCaseImpl(
     }
 
     private fun fetchPhotosFromCamera() {
-        scope.launch {
+        fetchJob?.cancel()
+        fetchJob = scope.launch {
             currentCameraStatus = repository.getCameraStatus().getOrNull()
 
             // If Android redacted the Wi-Fi BSSID, fall back to the MAC address reported by the camera API
@@ -395,11 +495,12 @@ class DownloadPhotosUseCaseImpl(
 
             Log.d("DownloadPhotosUseCase", "fetchPhotosFromCamera: Calling repository.getCameraPhotoList()")
             val result = repository.getCameraPhotoList()
+            if (!isActive) return@launch
             Log.d("DownloadPhotosUseCase", "fetchPhotosFromCamera: Result isSuccess: ${result.isSuccess}")
             result.fold(
                 onSuccess = { photos ->
                     if (photos.isEmpty()) {
-                        onDownloadFinished()
+                        onNoNewPhotosToDownload()
                         return@launch
                     }
 
@@ -432,20 +533,25 @@ class DownloadPhotosUseCaseImpl(
                     }
 
                     if (photosToProcess.isEmpty()) {
-                        onDownloadFinished()
+                        onNoNewPhotosToDownload()
                         return@launch
                     }
 
-                    if (photosToProcess.groupBy { it.directory }.size > 1) {
+                    if (!isBackgroundSync && photosToProcess.groupBy { it.directory }.size > 1) {
                         state.value = States.SelectFolders(
                             folderInfo = FolderInfo(photosToProcess),
                             cameraStatus = currentCameraStatus,
                             onFoldersSelect = { selectedFolders ->
                                 stopKeepAlive()
                                 if (selectedFolders.isEmpty()) {
-                                    scope.launch { repository.shutDownCamera() }
-                                    wifiUtil.cleanup()
-                                    connectToWifi()
+                                    scope.launch {
+                                        repository.shutDownCamera()
+                                        bleUtil?.disconnect()
+                                        wifiUtil.cleanup()
+                                        dataTransferTool.widgetStateFlow.value = WidgetState.Idle
+                                        dataTransferTool.reset()
+                                        connectToWifi()
+                                    }
                                 } else {
                                     downloadPhotos(photosToProcess.filter { it.directory in selectedFolders })
                                 }
@@ -462,6 +568,24 @@ class DownloadPhotosUseCaseImpl(
                 }
             )
         }
+    }
+
+    private suspend fun onNoNewPhotosToDownload() {
+        stopKeepAlive()
+        isBackgroundSync = false
+        photosToDownload = emptyList()
+        downloadedPhotoUris.clear()
+
+        // Shut down the camera while Wi-Fi is still bound to the camera network
+        repository.shutDownCamera()
+        bleUtil?.disconnect()
+        wifiUtil.cleanup()
+
+        dataTransferTool.widgetStateFlow.value = WidgetState.Done(0)
+        dataTransferTool.reset()
+
+        connectToWifi()
+        event.value = Event(Events.NoNewPhotosToDownload)
     }
 
     private suspend fun filterRecentPhotos(availableMediaToDownload: List<PhotoFile>): List<PhotoFile> {
@@ -485,11 +609,21 @@ class DownloadPhotosUseCaseImpl(
         photosToDownload = photos
         downloadedPhotoUris.clear()
         dataTransferTool.pendingPhotosToDownload = photos
+        dataTransferTool.widgetStateFlow.value = WidgetState.Downloading(0, photos.size)
+        dataTransferTool.serviceStateFlow.value = ServiceState.DOWNLOADING
 
         event.value = Event(Events.DownloadPhotosWithService(photos))
     }
 
     private fun onDownloadPhotoInfo(info: PhotoDownloadInfo) {
+        if (photosToDownload.isNotEmpty()) {
+            val completedCount = downloadedPhotoUris.values.count { it.downloadProgress == 100 }
+            dataTransferTool.widgetStateFlow.value = WidgetState.Downloading(
+                current = completedCount.coerceAtLeast(1).coerceAtMost(photosToDownload.size),
+                total = photosToDownload.size,
+            )
+        }
+
         val currentState = state.value
         if ((currentState is DownloadPhotos) || (currentState is GetPhotos) || (currentState is States.SelectFolders)) {
             state.value = DownloadPhotos(
@@ -505,14 +639,22 @@ class DownloadPhotosUseCaseImpl(
 
     private fun onDownloadFinished() {
         stopKeepAlive()
+        isBackgroundSync = false
         val wasStopping = state.value is States.StoppingDownload
-        val numDownloaded = downloadedPhotoUris.size
+        val numDownloaded = downloadedPhotoUris.values.count { it.downloadProgress == 100 }
+            .takeIf { it > 0 } ?: downloadedPhotoUris.size
         val photosSnapshot = photosToDownload
         val urisSnapshot = downloadedPhotoUris.toMap()
 
         photosToDownload = emptyList()
         downloadedPhotoUris.clear()
+        dataTransferTool.widgetStateFlow.value = if (wasStopping) {
+            WidgetState.Idle
+        } else {
+            WidgetState.Done(numDownloaded)
+        }
         dataTransferTool.reset()
+        bleUtil?.disconnect()
         wifiUtil.cleanup()
 
         updateLatestDownloadedPhotos(photosSnapshot, urisSnapshot)
@@ -558,6 +700,8 @@ class DownloadPhotosUseCaseImpl(
 
     private fun onStopDownloading() {
         stopKeepAlive()
+        isBackgroundSync = false
+        dataTransferTool.widgetStateFlow.value = WidgetState.Stopping
         state.value = States.StoppingDownload
         event.value = Event(Events.StopDownload)
     }

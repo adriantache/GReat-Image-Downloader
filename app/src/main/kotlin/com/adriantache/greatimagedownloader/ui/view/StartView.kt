@@ -2,6 +2,7 @@ package com.adriantache.greatimagedownloader.ui.view
 
 import android.content.Intent
 import android.provider.Settings.ACTION_WIFI_SETTINGS
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColor
 import androidx.compose.animation.core.LinearEasing
@@ -56,11 +57,20 @@ fun StartView(
     onChangeWifiDetails: () -> Unit,
     onAdjustSettings: () -> Unit,
     autoStartConnection: Boolean = false,
+    isConnecting: Boolean = false,
+    onCancelConnection: () -> Unit = {},
 ) {
     val context = LocalContext.current
 
-    var isLoading by remember(autoStartConnection) { mutableStateOf(autoStartConnection) }
+    var isLoading by remember(autoStartConnection, isConnecting, isHardWifiTimeout) {
+        mutableStateOf((autoStartConnection || isConnecting) && !isHardWifiTimeout)
+    }
     var isWifiDisabled by remember { mutableStateOf(false) }
+
+    BackHandler(enabled = isLoading) {
+        isLoading = false
+        onCancelConnection()
+    }
 
     LifecycleResumeEffect(onCheckWifiDisabled) {
         isWifiDisabled = onCheckWifiDisabled()
@@ -87,7 +97,6 @@ fun StartView(
                     painterResource(id = R.drawable.baseline_settings_24),
                     contentDescription = null,
                     modifier = Modifier.requiredSize(24.dp),
-//                    tint = MaterialTheme.colorScheme.onPrimary,
                 )
             }
         }
@@ -129,23 +138,10 @@ fun StartView(
                         bgColor = bgColor,
                         iconPainter = painterResource(id = R.drawable.wifi_pending),
                         text = stringResource(R.string.connecting_to_camera),
-                    )
-                }
-            }
-
-            AnimatedVisibility(isHardWifiTimeout) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp)
-                        .background(MaterialTheme.colorScheme.errorContainer, RoundedCornerShape(16.dp))
-                        .padding(16.dp),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Text(
-                        text = stringResource(R.string.wifi_hard_timeout),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onErrorContainer,
+                        onClick = {
+                            isLoading = false
+                            onCancelConnection()
+                        }
                     )
                 }
             }
@@ -182,6 +178,23 @@ fun StartView(
                         text = stringResource(R.string.change_wifi_details),
                         style = MaterialTheme.typography.labelSmall,
                     )
+                }
+
+                AnimatedVisibility(isHardWifiTimeout) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp)
+                            .background(MaterialTheme.colorScheme.errorContainer, RoundedCornerShape(16.dp))
+                            .padding(16.dp),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text(
+                            text = stringResource(R.string.wifi_hard_timeout),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onErrorContainer,
+                        )
+                    }
                 }
             }
         }

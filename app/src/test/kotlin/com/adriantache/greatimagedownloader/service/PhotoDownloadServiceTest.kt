@@ -4,6 +4,7 @@ import android.app.NotificationManager
 import android.content.Context
 import android.content.Intent
 import androidx.test.core.app.ApplicationProvider
+import com.adriantache.greatimagedownloader.domain.DownloadPhotosUseCase
 import com.adriantache.greatimagedownloader.domain.data.FakeRepository
 import com.adriantache.greatimagedownloader.domain.data.Repository
 import com.adriantache.greatimagedownloader.domain.data.model.PhotoDownloadInfo
@@ -16,6 +17,7 @@ import com.adriantache.greatimagedownloader.service.model.PhotoFileItem
 import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.verify
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
@@ -95,6 +97,30 @@ class PhotoDownloadServiceTest {
         service.onStartCommand(intent, 0, 1)
 
         assertThat(dataTransferTool.serviceStateFlow.value).isEqualTo(ServiceState.CONNECTING)
+    }
+
+    @Test
+    fun `QUICK_DOWNLOAD action triggers startBackgroundSync on DownloadPhotosUseCase`() {
+        val mockUseCase = mockk<DownloadPhotosUseCase>(relaxed = true)
+        stopKoin()
+        startKoin {
+            modules(
+                module {
+                    single<Repository> { repository }
+                    single { dataTransferTool }
+                    single<DownloadPhotosUseCase> { mockUseCase }
+                }
+            )
+        }
+
+        val service = serviceController.create().get()
+        val intent = Intent(context, PhotoDownloadService::class.java).apply {
+            action = PhotoDownloadService.Actions.QUICK_DOWNLOAD.name
+        }
+
+        service.onStartCommand(intent, 0, 1)
+
+        verify(exactly = 1) { mockUseCase.startBackgroundSync() }
     }
 
     @Test
@@ -190,7 +216,7 @@ class PhotoDownloadServiceTest {
         assertThat(dataTransferTool.imageFlow.value).isEqualTo(photoInfo)
         assertThat(dataTransferTool.downloadFinishedFlow.value?.value).isEqualTo(Unit)
         assertThat(dataTransferTool.serviceStateFlow.value).isEqualTo(ServiceState.IDLE)
-        
+
         val shadowService = shadowOf(service)
         assertThat(shadowService.isStoppedBySelf).isTrue
     }
@@ -200,7 +226,7 @@ class PhotoDownloadServiceTest {
         val mockRepo = mockk<Repository>(relaxed = true)
         val partialInfo = PhotoDownloadInfo("photo1.jpg", "content://media/1", 50, Kbps(500.0))
         val error = DomainException(DomainError.CameraDisconnected)
-        
+
         every { mockRepo.downloadMediaToStorage(any()) } returns flow {
             emit(Result.success(partialInfo))
             emit(Result.failure(error))
@@ -248,7 +274,7 @@ class PhotoDownloadServiceTest {
         }
 
         val service = serviceController.create().get()
-        
+
         // Stop action
         val stopIntent = Intent(context, PhotoDownloadService::class.java).apply {
             action = PhotoDownloadService.Actions.STOP.name
@@ -279,7 +305,7 @@ class PhotoDownloadServiceTest {
     fun `destroying service cleans up resources`() {
         serviceController.create().get()
         serviceController.destroy()
-        
+
         // Verifies no crashes during destroy and wakeLock/wifiLock release
     }
 }

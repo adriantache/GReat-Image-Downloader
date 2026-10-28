@@ -136,21 +136,25 @@ class RepositoryImpl(
                 try {
                     val response = ricohApi.getPhotos()
 
-                    return@withContext if (response.isSuccessful) {
+                    if (response.isSuccessful) {
                         val photoFile = response.body()?.dirs?.flatMap { it.toPhotoInfoList() }.orEmpty()
-
-                        Result.success(photoFile)
-                    } else {
+                        // If the camera was just turned on, its HTTP server may respond with an empty dirs list
+                        // while the SD card is still being mounted/indexed. Retry briefly before returning empty.
+                        if (photoFile.isNotEmpty() || attempt == maxAttempts) {
+                            return@withContext Result.success(photoFile)
+                        }
+                    } else if (attempt == maxAttempts) {
                         val exception = CameraException.Unknown(response.errorBody()?.string())
-                        Result.failure(exception.toDomainException())
+                        return@withContext Result.failure(exception.toDomainException())
                     }
                 } catch (e: Exception) {
                     lastException = e
                     if (e is SocketTimeoutException || e !is IOException || attempt == maxAttempts) {
                         break
                     }
-                    delay(300L * attempt)
                 }
+
+                delay(300L * attempt)
             }
 
             val exception = when (val e = lastException) {

@@ -17,6 +17,7 @@ class DataTransferTool {
     val errorFlow = MutableStateFlow<Event<DomainError>?>(null)
     val downloadFinishedFlow = MutableStateFlow<Event<Unit>?>(null)
     val serviceStateFlow = MutableStateFlow(ServiceState.IDLE)
+    val widgetStateFlow = MutableStateFlow<WidgetState>(WidgetState.Idle)
 
     @Volatile
     var pendingPhotosToDownload: List<PhotoFile> = emptyList()
@@ -42,5 +43,15 @@ class DataTransferTool {
 
     enum class ServiceState {
         IDLE, CONNECTING, FETCHING, DOWNLOADING, STOPPING
+    }
+
+    sealed interface WidgetState {
+        data object Idle : WidgetState
+        data object Connecting : WidgetState
+        data object Checking : WidgetState
+        data class Downloading(val current: Int, val total: Int) : WidgetState
+        data object Stopping : WidgetState
+        data class Done(val count: Int) : WidgetState
+        data object Error : WidgetState
     }
 }

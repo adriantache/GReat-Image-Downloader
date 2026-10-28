@@ -32,6 +32,7 @@ import com.adriantache.greatimagedownloader.domain.model.Events.ConfirmDeleteAll
 import com.adriantache.greatimagedownloader.domain.model.Events.ConnectWithService
 import com.adriantache.greatimagedownloader.domain.model.Events.DownloadPhotosWithService
 import com.adriantache.greatimagedownloader.domain.model.Events.InvalidWifiInput
+import com.adriantache.greatimagedownloader.domain.model.Events.NoNewPhotosToDownload
 import com.adriantache.greatimagedownloader.domain.model.Events.StopDownload
 import com.adriantache.greatimagedownloader.domain.model.Events.SuccessfulDownload
 import com.adriantache.greatimagedownloader.domain.model.States
@@ -78,8 +79,14 @@ fun MainScreenStateMachine(
         }
     }
 
-    val isBackHandlerEnabled = when (stateValue) {
-        is DownloadPhotos, is ChangeSettings, is RequestWifiCredentials -> true
+    val isBackHandlerEnabled = when (val state = stateValue) {
+        is DownloadPhotos,
+        is ChangeSettings,
+        is RequestWifiCredentials,
+        is GetPhotos,
+        is States.SelectFolders -> true
+
+        is ConnectWifi -> state.isConnecting
         else -> false
     }
 
@@ -88,6 +95,9 @@ fun MainScreenStateMachine(
             is DownloadPhotos -> state.onStopDownloading()
             is ChangeSettings -> state.onExitSettings()
             is RequestWifiCredentials -> state.onDismiss()
+            is ConnectWifi -> state.onCancelConnection()
+            is GetPhotos -> viewModel.cancelConnection()
+            is States.SelectFolders -> state.onFoldersSelect(emptyList())
             else -> Unit
         }
     }
@@ -108,12 +118,13 @@ fun MainScreenStateMachine(
 
                 is RequestPermissions -> PermissionsRequester(
                     onPermissionsGranted = state.onPermissionsGranted
-                ) { isLocationPermissionGranted, isPhotosPermissionGranted, isNotificationsPermissionGranted, isLocalNetworkPermissionGranted, onRequestPermissions ->
+                ) { isLocationPermissionGranted, isPhotosPermissionGranted, isNotificationsPermissionGranted, isLocalNetworkPermissionGranted, isBluetoothPermissionGranted, onRequestPermissions ->
                     PermissionsView(
                         isLocationPermissionGranted = isLocationPermissionGranted,
                         isPhotosPermissionGranted = isPhotosPermissionGranted,
                         isNotificationsPermissionGranted = isNotificationsPermissionGranted,
                         isLocalNetworkPermissionGranted = isLocalNetworkPermissionGranted,
+                        isBluetoothPermissionGranted = isBluetoothPermissionGranted,
                         onRequestPermissions = onRequestPermissions,
                     )
                 }
@@ -132,6 +143,8 @@ fun MainScreenStateMachine(
                     onChangeWifiDetails = state.onChangeWifiDetails,
                     onAdjustSettings = state.onAdjustSettings,
                     autoStartConnection = state.autoStartConnection,
+                    isConnecting = state.isConnecting,
+                    onCancelConnection = state.onCancelConnection,
                 )
 
                 GetPhotos -> SyncView()
@@ -172,7 +185,7 @@ private fun HandleEvent(
 
         when (event) {
             is SuccessfulDownload -> snackbarHostState.showSnackbar("Downloaded ${event.numDownloadedPhotos} photos.")
-
+            NoNewPhotosToDownload -> snackbarHostState.showSnackbar("No new photos to download.")
             CannotDownloadPhotos -> Unit
             InvalidWifiInput -> Unit
             is ConfirmDeleteAllPhotos -> Unit
@@ -222,6 +235,7 @@ private fun HandleEvent(
         )
 
         is SuccessfulDownload -> Unit
+        NoNewPhotosToDownload -> Unit
         is DownloadPhotosWithService -> Unit
         is ConnectWithService -> Unit
         is StopDownload -> Unit
