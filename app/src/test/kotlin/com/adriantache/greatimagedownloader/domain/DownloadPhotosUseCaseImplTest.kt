@@ -264,6 +264,7 @@ class DownloadPhotosUseCaseImplTest {
 
         // Assert
         assertThat(repository.shutdownCalled).isTrue
+        assertThat(wifiUtil.cleanupCalledCount).isGreaterThan(0)
         assertThat(useCase.state.value).isInstanceOf(States.ConnectWifi::class.java)
     }
 
@@ -377,6 +378,7 @@ class DownloadPhotosUseCaseImplTest {
         advanceUntilIdle()
 
         // Assert
+        assertThat(wifiUtil.cleanupCalledCount).isGreaterThan(0)
         assertThat(useCase.state.value).isInstanceOf(States.ConnectWifi::class.java)
         assertThat(useCase.event.value?.value).isInstanceOf(Events.SuccessfulDownload::class.java)
     }

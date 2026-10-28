@@ -9,6 +9,7 @@ import android.content.Context
 import android.net.ConnectivityManager
 import android.net.ConnectivityManager.NetworkCallback
 import android.net.MacAddress
+import android.net.NetworkCapabilities
 import android.net.NetworkRequest
 import android.net.wifi.ScanResult
 import android.net.wifi.WifiInfo
@@ -66,14 +67,25 @@ class WifiUtilImpl(
                 }
 
                 val request = NetworkRequest.Builder()
-                    .addTransportType(android.net.NetworkCapabilities.TRANSPORT_WIFI)
+                    .addTransportType(NetworkCapabilities.TRANSPORT_WIFI)
                     .setNetworkSpecifier(specifierBuilder.build())
                     .build()
 
                 val callback = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                     object : NetworkCallback(FLAG_INCLUDE_LOCATION_INFO) {
                         override fun onAvailable(network: android.net.Network) {
-                            handleOnAvailable(network, continuation)
+                            handleOnAvailable(network, null, continuation)
+                        }
+
+                        override fun onCapabilitiesChanged(
+                            network: android.net.Network,
+                            networkCapabilities: NetworkCapabilities,
+                        ) {
+                            handleOnAvailable(network, networkCapabilities, continuation)
+                        }
+
+                        override fun onLost(network: android.net.Network) {
+                            handleOnLost(network)
                         }
 
                         override fun onUnavailable() {
@@ -83,7 +95,18 @@ class WifiUtilImpl(
                 } else {
                     object : NetworkCallback() {
                         override fun onAvailable(network: android.net.Network) {
-                            handleOnAvailable(network, continuation)
+                            handleOnAvailable(network, null, continuation)
+                        }
+
+                        override fun onCapabilitiesChanged(
+                            network: android.net.Network,
+                            networkCapabilities: NetworkCapabilities,
+                        ) {
+                            handleOnAvailable(network, networkCapabilities, continuation)
+                        }
+
+                        override fun onLost(network: android.net.Network) {
+                            handleOnLost(network)
                         }
 
                         override fun onUnavailable() {
@@ -105,17 +128,24 @@ class WifiUtilImpl(
 
     private fun handleOnAvailable(
         network: android.net.Network,
+        callbackCapabilities: NetworkCapabilities?,
         continuation: kotlinx.coroutines.CancellableContinuation<Pair<Boolean, String?>>,
     ) {
         connectivityManager.bindProcessToNetwork(network)
 
-        // On success, get the BSSID from the network capabilities
-        val capabilities = connectivityManager.getNetworkCapabilities(network)
+        // Prefer capabilities delivered directly to onCapabilitiesChanged (which carry unredacted location info)
+        val capabilities = callbackCapabilities ?: connectivityManager.getNetworkCapabilities(network)
         val wifiInfo = capabilities?.transportInfo as? WifiInfo
         val newBssid = wifiInfo?.bssid?.takeIf { isValidBssid(it) }
 
         if (continuation.isActive) {
             continuation.resume(Pair(true, newBssid))
+        }
+    }
+
+    private fun handleOnLost(network: android.net.Network) {
+        if (connectivityManager.boundNetworkForProcess == network) {
+            connectivityManager.bindProcessToNetwork(null)
         }
     }
 
@@ -127,15 +157,25 @@ class WifiUtilImpl(
         }
     }
 
+    @Suppress("DEPRECATION")
     private fun isAlreadyConnected(targetSsid: String): Boolean {
-        val network = connectivityManager.activeNetwork ?: return false
-        val capabilities = connectivityManager.getNetworkCapabilities(network) ?: return false
-        val wifiInfo = capabilities.transportInfo as? WifiInfo ?: return false
-        
-        val currentSsid = wifiInfo.ssid?.removeSurrounding("\"")
-        if (currentSsid == targetSsid.removeSurrounding("\"")) {
-            connectivityManager.bindProcessToNetwork(network)
-            return true
+        val cleanTargetSsid = targetSsid.removeSurrounding("\"")
+        val candidateNetworks = buildList {
+            connectivityManager.boundNetworkForProcess?.let { add(it) }
+            connectivityManager.activeNetwork?.let { add(it) }
+            addAll(connectivityManager.allNetworks)
+        }.distinct()
+
+        for (network in candidateNetworks) {
+            val capabilities = connectivityManager.getNetworkCapabilities(network) ?: continue
+            if (!capabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)) continue
+
+            val wifiInfo = capabilities.transportInfo as? WifiInfo
+            val currentSsid = wifiInfo?.ssid?.removeSurrounding("\"")
+            if (currentSsid == cleanTargetSsid) {
+                connectivityManager.bindProcessToNetwork(network)
+                return true
+            }
         }
         return false
     }
@@ -197,7 +237,14 @@ class WifiUtilImpl(
 
         @Suppress("DEPRECATION")
         if (!wifiManager.startScan()) {
-            channel.close(RuntimeException("WiFi scan failed"))
+            // If Android throttles active scans, fall back to cached scan results
+            val cachedResults = wifiManager.scanResults.orEmpty().sortedByDescending { it.level }
+            if (cachedResults.isNotEmpty()) {
+                cachedResults.forEach { trySend(it) }
+                channel.close()
+            } else {
+                channel.close(RuntimeException("WiFi scan failed"))
+            }
         }
 
         awaitClose {

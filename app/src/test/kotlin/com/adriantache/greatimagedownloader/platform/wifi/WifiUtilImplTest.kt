@@ -7,7 +7,6 @@ import android.net.Network
 import android.net.wifi.ScanResult
 import android.net.wifi.WifiManager
 import androidx.test.core.app.ApplicationProvider
-import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.launch
@@ -72,13 +71,12 @@ class WifiUtilImplTest {
     @Test
     fun `suggestNetwork returns RICOH SSID when found in scan results`() = runTest {
         // Arrange
-        // ScanResult fields are public, we can use a real instance in Robolectric
         val scanResult = ScanResult()
         @Suppress("DEPRECATION")
         scanResult.SSID = "RICOH_GRIII_123456"
         scanResult.capabilities = "[WPA2-PSK-CCMP][ESS]"
         scanResult.level = -50
-        
+
         shadowWifiManager.setScanResults(listOf(scanResult))
         shadowWifiManager.setStartScanSucceeds(true)
 
@@ -87,11 +85,30 @@ class WifiUtilImplTest {
             val result = wifiUtil.suggestNetwork()
             assertThat(result).isEqualTo("RICOH_GRIII_123456")
         }
-        
+
         // Trigger the broadcast
         context.sendBroadcast(Intent(WifiManager.SCAN_RESULTS_AVAILABLE_ACTION))
         advanceUntilIdle()
         resultJob.cancel()
+    }
+
+    @Test
+    fun `suggestNetwork falls back to cached scan results when startScan is throttled`() = runTest {
+        // Arrange
+        val scanResult = ScanResult()
+        @Suppress("DEPRECATION")
+        scanResult.SSID = "GR_20D70B"
+        scanResult.capabilities = "[WPA2-PSK-CCMP][ESS]"
+        scanResult.level = -45
+
+        shadowWifiManager.setScanResults(listOf(scanResult))
+        shadowWifiManager.setStartScanSucceeds(false)
+
+        // Act
+        val result = wifiUtil.suggestNetwork()
+
+        // Assert
+        assertThat(result).isEqualTo("GR_20D70B")
     }
 
     @Test

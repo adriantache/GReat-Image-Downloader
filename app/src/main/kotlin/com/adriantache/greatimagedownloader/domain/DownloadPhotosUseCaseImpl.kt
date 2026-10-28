@@ -149,6 +149,7 @@ class DownloadPhotosUseCaseImpl(
                 onDismiss = {
                     event.value = null
                     scope.launch { repository.shutDownCamera() }
+                    wifiUtil.cleanup()
                     onDownloadFinished()
                 }
             )
@@ -223,7 +224,7 @@ class DownloadPhotosUseCaseImpl(
                     break
                 }
 
-                if (attempt < maxRetries) delay(20.seconds)
+                if (attempt < maxRetries) delay(3.seconds)
             }
 
             if (isConnected) {
@@ -350,6 +351,7 @@ class DownloadPhotosUseCaseImpl(
                             onFoldersSelect = { selectedFolders ->
                                 if (selectedFolders.isEmpty()) {
                                     scope.launch { repository.shutDownCamera() }
+                                    wifiUtil.cleanup()
                                     connectToWifi()
                                 } else {
                                     downloadPhotos(photosToProcess.filter { it.directory in selectedFolders })
@@ -409,6 +411,7 @@ class DownloadPhotosUseCaseImpl(
         val wasStopping = state.value is States.StoppingDownload
 
         dataTransferTool.reset()
+        wifiUtil.cleanup()
 
         updateLatestDownloadedPhotos(photosToDownload, downloadedPhotoUris)
 
