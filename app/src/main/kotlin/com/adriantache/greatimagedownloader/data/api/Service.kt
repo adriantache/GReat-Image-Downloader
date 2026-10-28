@@ -1,6 +1,7 @@
 package com.adriantache.greatimagedownloader.data.api
 
 import kotlinx.serialization.json.Json
+import okhttp3.ConnectionPool
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Protocol
@@ -12,9 +13,10 @@ private const val RICOH_BASE_URL = "http://192.168.0.1/"
 
 fun getApi(): RicohApi {
     val okHttpClient = OkHttpClient.Builder()
-        .connectTimeout(15, TimeUnit.SECONDS)
+        .connectTimeout(5, TimeUnit.SECONDS)
         .readTimeout(60, TimeUnit.SECONDS)
         .writeTimeout(15, TimeUnit.SECONDS)
+        .connectionPool(ConnectionPool(maxIdleConnections = 1, keepAliveDuration = 15, TimeUnit.SECONDS))
         .protocols(listOf(Protocol.HTTP_1_1)) // Cameras often have issues with HTTP/2 negotiation.
         .retryOnConnectionFailure(true)
         .build()

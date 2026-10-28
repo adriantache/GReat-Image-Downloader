@@ -208,6 +208,27 @@ class RepositoryImplTest {
     }
 
     @Test
+    fun `getCameraPhotoList retries on transient IOException and succeeds`() = runTest {
+        val photoInfo = PhotoInfo(null, null, listOf(Dir("dir", listOf("file"))))
+        ricohApi.photosResponse = Response.success(photoInfo)
+        ricohApi.getPhotosFailureCountBeforeSuccess = 2
+
+        val result = repository.getCameraPhotoList()
+
+        assertThat(result.isSuccess).isTrue
+        assertThat(ricohApi.getPhotosCalledCount).isEqualTo(3)
+        assertThat(result.getOrNull()?.first()?.name).isEqualTo("file")
+    }
+
+    @Test
+    fun `pingCamera returns success when api responds 200`() = runTest {
+        val result = repository.pingCamera()
+
+        assertThat(result.isSuccess).isTrue
+        assertThat(ricohApi.pingCalledCount).isEqualTo(1)
+    }
+
+    @Test
     fun `getCameraPhotoList maps IOException to NetworkError`() = runTest {
         ricohApi.getPhotosShouldThrow = IOException("network")
 

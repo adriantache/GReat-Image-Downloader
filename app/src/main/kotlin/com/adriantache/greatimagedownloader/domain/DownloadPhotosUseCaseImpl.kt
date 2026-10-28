@@ -25,8 +25,10 @@ import com.adriantache.greatimagedownloader.service.DataTransferTool.ServiceStat
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlin.time.Duration.Companion.seconds
 
@@ -48,6 +50,7 @@ class DownloadPhotosUseCaseImpl(
 
     private var photosToDownload: List<PhotoFile> = emptyList()
     private val downloadedPhotoUris = mutableMapOf<String, PhotoDownloadInfo>()
+    private var keepAliveJob: Job? = null
 
     init {
         scope.launch {
@@ -114,6 +117,8 @@ class DownloadPhotosUseCaseImpl(
     }
 
     private fun onError(error: DomainError) {
+        stopKeepAlive()
+
         // Delete partially downloaded files on error
         downloadedPhotoUris.values
             .filter { it.downloadProgress < 100 }
@@ -349,6 +354,7 @@ class DownloadPhotosUseCaseImpl(
                         state.value = States.SelectFolders(
                             folderInfo = FolderInfo(photosToProcess),
                             onFoldersSelect = { selectedFolders ->
+                                stopKeepAlive()
                                 if (selectedFolders.isEmpty()) {
                                     scope.launch { repository.shutDownCamera() }
                                     wifiUtil.cleanup()
@@ -358,6 +364,7 @@ class DownloadPhotosUseCaseImpl(
                                 }
                             }
                         )
+                        startKeepAlive()
                     } else {
                         downloadPhotos(photosToProcess)
                     }
@@ -408,6 +415,7 @@ class DownloadPhotosUseCaseImpl(
     }
 
     private fun onDownloadFinished() {
+        stopKeepAlive()
         val wasStopping = state.value is States.StoppingDownload
 
         dataTransferTool.reset()
@@ -442,7 +450,24 @@ class DownloadPhotosUseCaseImpl(
     }
 
     private fun onStopDownloading() {
+        stopKeepAlive()
         state.value = States.StoppingDownload
         event.value = Event(Events.StopDownload)
+    }
+
+    private fun startKeepAlive() {
+        stopKeepAlive()
+        keepAliveJob = scope.launch {
+            repeat(20) {
+                delay(15.seconds)
+                if (!isActive || state.value !is States.SelectFolders) return@launch
+                repository.pingCamera()
+            }
+        }
+    }
+
+    private fun stopKeepAlive() {
+        keepAliveJob?.cancel()
+        keepAliveJob = null
     }
 }

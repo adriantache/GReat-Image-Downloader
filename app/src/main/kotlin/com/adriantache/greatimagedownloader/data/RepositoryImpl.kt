@@ -14,6 +14,7 @@ import com.adriantache.greatimagedownloader.domain.data.model.WifiDetails
 import com.adriantache.greatimagedownloader.domain.model.Settings
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
@@ -73,27 +74,57 @@ class RepositoryImpl(
     }
 
 
-    override suspend fun getCameraPhotoList(): Result<List<PhotoFile>> {
-        return withContext(ioDispatcher) {
-            try {
-                val response = ricohApi.getPhotos()
-
-                if (response.isSuccessful) {
-                    val photoFile = response.body()?.dirs?.flatMap { it.toPhotoInfoList() }.orEmpty()
-
-                    Result.success(photoFile)
-                } else {
-                    val exception = CameraException.Unknown(response.errorBody().toString())
-                    Result.failure(exception.toDomainException())
-                }
-            } catch (e: Exception) {
-                val exception = when (e) {
-                    is SocketTimeoutException -> CameraException.CameraDisconnected
-                    is IOException -> CameraException.NetworkError(e)
-                    else -> CameraException.Unknown(e.message)
-                }
+    override suspend fun pingCamera(): Result<Unit> = withContext(ioDispatcher) {
+        try {
+            val response = ricohApi.ping()
+            if (response.isSuccessful) {
+                Result.success(Unit)
+            } else {
+                val exception = CameraException.Unknown(response.errorBody()?.string())
                 Result.failure(exception.toDomainException())
             }
+        } catch (e: Exception) {
+            val exception = when (e) {
+                is SocketTimeoutException -> CameraException.CameraDisconnected
+                is IOException -> CameraException.NetworkError(e)
+                else -> CameraException.Unknown(e.message)
+            }
+            Result.failure(exception.toDomainException())
+        }
+    }
+
+    override suspend fun getCameraPhotoList(): Result<List<PhotoFile>> {
+        return withContext(ioDispatcher) {
+            var lastException: Exception? = null
+            val maxAttempts = 3
+
+            for (attempt in 1..maxAttempts) {
+                try {
+                    val response = ricohApi.getPhotos()
+
+                    return@withContext if (response.isSuccessful) {
+                        val photoFile = response.body()?.dirs?.flatMap { it.toPhotoInfoList() }.orEmpty()
+
+                        Result.success(photoFile)
+                    } else {
+                        val exception = CameraException.Unknown(response.errorBody()?.string())
+                        Result.failure(exception.toDomainException())
+                    }
+                } catch (e: Exception) {
+                    lastException = e
+                    if (e is SocketTimeoutException || e !is IOException || attempt == maxAttempts) {
+                        break
+                    }
+                    delay(300L * attempt)
+                }
+            }
+
+            val exception = when (val e = lastException) {
+                is SocketTimeoutException -> CameraException.CameraDisconnected
+                is IOException -> CameraException.NetworkError(e)
+                else -> CameraException.Unknown(e?.message)
+            }
+            Result.failure(exception.toDomainException())
         }
     }
 

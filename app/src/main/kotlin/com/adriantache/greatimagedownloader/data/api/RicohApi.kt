@@ -7,9 +7,13 @@ import retrofit2.Response
 import retrofit2.http.GET
 import retrofit2.http.POST
 import retrofit2.http.Path
+import retrofit2.http.Query
 import retrofit2.http.Streaming
 
 interface RicohApi {
+    @GET("v1/ping")
+    suspend fun ping(): Response<Unit>
+
     @GET("v1/photos")
     suspend fun getPhotos(): Response<PhotoInfo>
 
@@ -22,6 +26,7 @@ interface RicohApi {
     suspend fun getPhoto(
         @Path("dir") directory: String,
         @Path("file") file: String,
+        @Query("size") size: String? = null,
     ): ResponseBody
 
     @POST("v1/device/finish")

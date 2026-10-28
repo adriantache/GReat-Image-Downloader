@@ -196,6 +196,7 @@ class DownloadPhotosUseCaseImplTest {
 
         // Assert
         assertThat(useCase.state.value).isInstanceOf(States.SelectFolders::class.java)
+        assertThat(repository.pingCalledCount).isGreaterThan(0)
     }
 
     @Test

@@ -18,6 +18,7 @@ interface Repository {
     suspend fun deleteAll(): Result<Unit>
 
     // Camera operations
+    suspend fun pingCamera(): Result<Unit>
     suspend fun getCameraPhotoList(): Result<List<PhotoFile>>
     fun downloadMediaToStorage(photo: PhotoFile): Flow<Result<PhotoDownloadInfo>>
     suspend fun shutDownCamera(): Result<Unit>

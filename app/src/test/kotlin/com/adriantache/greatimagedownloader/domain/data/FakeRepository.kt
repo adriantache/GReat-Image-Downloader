@@ -19,6 +19,8 @@ class FakeRepository : Repository {
     val deletedMediaUris = mutableListOf<String>()
     
     var shutdownCalled = false
+    var pingCalledCount = 0
+    var pingResult: Result<Unit> = Result.success(Unit)
     val downloadFlow = MutableSharedFlow<Result<PhotoDownloadInfo>>()
 
     override fun getWifiDetails(): Result<WifiDetails> = Result.success(wifiDetails)
@@ -42,6 +44,11 @@ class FakeRepository : Repository {
         savedPhotos.clear()
         savedMovies.clear()
         return Result.success(Unit)
+    }
+
+    override suspend fun pingCamera(): Result<Unit> {
+        pingCalledCount++
+        return pingResult
     }
 
     override suspend fun getCameraPhotoList(): Result<List<PhotoFile>> = cameraPhotoListResult
