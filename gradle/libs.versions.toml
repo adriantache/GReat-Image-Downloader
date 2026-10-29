@@ -21,8 +21,8 @@ exifinterface = "1.4.2"
 mockk = "1.14.11"
 kotlinxCoroutinesTest = "1.11.0"
 robolectric = "4.17"
-playServicesWearable = "19.0.0"
-wearCompose = "1.4.1"
+playServicesWearable = "20.0.1"
+wearCompose = "1.7.1"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
