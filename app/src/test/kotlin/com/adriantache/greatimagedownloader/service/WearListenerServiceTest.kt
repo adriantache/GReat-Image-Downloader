@@ -1,7 +1,9 @@
 package com.adriantache.greatimagedownloader.service
 
+import android.app.Application
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
+import com.adriantache.greatimagedownloader.MainActivity
 import com.adriantache.greatimagedownloader.domain.data.FakeRepository
 import com.adriantache.greatimagedownloader.domain.data.Repository
 import com.adriantache.greatimagedownloader.domain.data.model.WifiDetails
@@ -34,6 +36,11 @@ class WearListenerServiceTest {
     @Before
     fun setUp() {
         context = ApplicationProvider.getApplicationContext()
+        val app = ApplicationProvider.getApplicationContext<Application>()
+        shadowOf(app).grantPermissions(
+            android.Manifest.permission.ACCESS_FINE_LOCATION,
+            android.Manifest.permission.READ_EXTERNAL_STORAGE,
+        )
         repository = FakeRepository()
         wearableSyncManager = mockk(relaxed = true)
 
@@ -85,6 +92,28 @@ class WearListenerServiceTest {
         assertThat(nextIntent).isNotNull
         assertThat(nextIntent.component?.className).isEqualTo(PhotoDownloadService::class.java.name)
         assertThat(nextIntent.action).isEqualTo(PhotoDownloadService.Actions.QUICK_DOWNLOAD.name)
+    }
+
+    @Test
+    fun `START_SYNC message without required permissions opens MainActivity and broadcasts error`() {
+        val app = ApplicationProvider.getApplicationContext<Application>()
+        shadowOf(app).denyPermissions(android.Manifest.permission.ACCESS_FINE_LOCATION)
+
+        val service = Robolectric.buildService(WearListenerService::class.java).create().get()
+
+        val mockEvent = mockk<MessageEvent>(relaxed = true) {
+            io.mockk.every { path } returns WearConstants.PATH_START_SYNC
+            io.mockk.every { sourceNodeId } returns "watch_node_456"
+        }
+
+        service.onMessageReceived(mockEvent)
+
+        val nextActivity = shadowOf(service).nextStartedActivity
+        assertThat(nextActivity).isNotNull
+        assertThat(nextActivity.component?.className).isEqualTo(MainActivity::class.java.name)
+        verify {
+            wearableSyncManager.broadcastStatus(match { it.state == "ERROR" })
+        }
     }
 
     @Test

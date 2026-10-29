@@ -100,6 +100,20 @@ class DownloadPhotosUseCaseImpl(
                 onServiceStateChanged(serviceState)
             }
         }
+
+        scope.launch {
+            dataTransferTool.cameraStatusFlow.collect { status ->
+                if (status != null) {
+                    currentCameraStatus = status
+                    val currentState = state.value
+                    if (currentState is DownloadPhotos) {
+                        state.value = currentState.copy(cameraStatus = status)
+                    } else if (currentState is States.SelectFolders) {
+                        state.value = currentState.copy(cameraStatus = status)
+                    }
+                }
+            }
+        }
     }
 
     @Synchronized
@@ -142,7 +156,11 @@ class DownloadPhotosUseCaseImpl(
             }
 
             ServiceState.DOWNLOADING -> Unit // Handled by imageFlow
-            ServiceState.IDLE -> Unit
+            ServiceState.IDLE -> {
+                if (state.value is States.StoppingDownload) {
+                    onDownloadFinished()
+                }
+            }
             ServiceState.STOPPING -> {
                 dataTransferTool.widgetStateFlow.value = WidgetState.Stopping
                 state.value = States.StoppingDownload
@@ -277,6 +295,8 @@ class DownloadPhotosUseCaseImpl(
         val wifiDetails = repository.getWifiDetails().getOrNull()?.toEntity() ?: WifiDetailsEntity()
 
         if (!wifiDetails.isValid) {
+            connectionJob?.cancel()
+            connectionJob = null
             state.value = RequestWifiCredentials(
                 onWifiCredentialsInput = { onWifiCredentialsInput(it.toEntity()) },
                 onSuggestWifiName = { wifiUtil.suggestNetwork() },
@@ -315,6 +335,8 @@ class DownloadPhotosUseCaseImpl(
             onCheckWifiDisabled = { wifiUtil.isWifiDisabled },
             onConnect = { startWifiConnection(wifiDetails) },
             onChangeWifiDetails = {
+                connectionJob?.cancel()
+                connectionJob = null
                 state.value = RequestWifiCredentials(
                     onWifiCredentialsInput = { onWifiCredentialsInput(it.toEntity()) },
                     onSuggestWifiName = { wifiUtil.suggestNetwork() },
@@ -525,6 +547,7 @@ class DownloadPhotosUseCaseImpl(
         fetchJob?.cancel()
         fetchJob = scope.launch {
             currentCameraStatus = repository.getCameraStatus().getOrNull()
+            dataTransferTool.cameraStatusFlow.value = currentCameraStatus
 
             // If Android redacted the Wi-Fi BSSID, fall back to the MAC address reported by the camera API
             val cameraMac = currentCameraStatus?.macAddress

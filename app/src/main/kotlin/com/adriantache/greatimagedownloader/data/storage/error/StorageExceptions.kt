@@ -3,6 +3,7 @@ package com.adriantache.greatimagedownloader.data.storage.error
 sealed class FilesStorageException : Exception() {
     data object StorageFull : FilesStorageException()
     data object FileCreationError : FilesStorageException()
+    data class NetworkError(override val cause: Throwable) : FilesStorageException()
     data class Unknown(override val cause: Throwable) : FilesStorageException()
 }
 

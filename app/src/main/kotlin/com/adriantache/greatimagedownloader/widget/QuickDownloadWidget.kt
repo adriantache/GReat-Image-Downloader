@@ -44,6 +44,7 @@ import com.adriantache.greatimagedownloader.domain.data.Repository
 import com.adriantache.greatimagedownloader.service.DataTransferTool
 import com.adriantache.greatimagedownloader.service.DataTransferTool.WidgetState
 import com.adriantache.greatimagedownloader.service.PhotoDownloadService
+import com.adriantache.greatimagedownloader.ui.permissions.PermissionsHelper
 import org.koin.core.component.KoinComponent
 
 class QuickDownloadWidget : GlanceAppWidget(), KoinComponent {
@@ -140,6 +141,15 @@ class QuickDownloadActionCallback : ActionCallback, KoinComponent {
                 action = PhotoDownloadService.Actions.STOP.name
             }
             ContextCompat.startForegroundService(context, stopIntent)
+            return
+        }
+
+        if (!PermissionsHelper.hasAllRequiredPermissions(context)) {
+            val activityIntent = Intent(context, MainActivity::class.java).apply {
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+                putExtra(MainActivity.EXTRA_AUTO_CONNECT, true)
+            }
+            context.startActivity(activityIntent)
             return
         }
 

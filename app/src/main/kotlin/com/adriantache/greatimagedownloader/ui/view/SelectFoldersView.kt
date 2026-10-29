@@ -45,7 +45,7 @@ fun SelectFoldersView(
         if (cameraStatus?.batteryLevel != null || cameraStatus?.isHot == true) {
             val statusParts = buildList {
                 cameraStatus.model?.let { add(it) }
-                cameraStatus.batteryLevel?.let { add("Battery: $it%") }
+                cameraStatus.formattedBattery?.let { add("Battery: $it") }
                 if (cameraStatus.isHot) add("Camera is warm!")
             }
             Text(text = statusParts.joinToString(" • "))

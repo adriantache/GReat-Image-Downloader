@@ -84,7 +84,8 @@ fun MainScreenStateMachine(
         is ChangeSettings,
         is RequestWifiCredentials,
         is GetPhotos,
-        is States.SelectFolders -> true
+        is States.SelectFolders,
+        States.StoppingDownload -> true
 
         is ConnectWifi -> state.isConnecting
         else -> false
@@ -98,6 +99,7 @@ fun MainScreenStateMachine(
             is ConnectWifi -> state.onCancelConnection()
             is GetPhotos -> viewModel.cancelConnection()
             is States.SelectFolders -> state.onFoldersSelect(emptyList())
+            States.StoppingDownload -> Unit
             else -> Unit
         }
     }
@@ -290,8 +292,10 @@ fun connectToWifiWithService(
 }
 
 fun stopDownload(context: Context) {
-    val serviceIntent = Intent(context, PhotoDownloadService::class.java)
-    serviceIntent.action = Actions.STOP.name
-
-    ContextCompat.startForegroundService(context, serviceIntent)
+    val serviceIntent = Intent(context, PhotoDownloadService::class.java).apply {
+        action = Actions.STOP.name
+    }
+    runCatching {
+        ContextCompat.startForegroundService(context, serviceIntent)
+    }
 }

@@ -3,6 +3,7 @@ package com.adriantache.greatimagedownloader.service
 import com.adriantache.greatimagedownloader.domain.ble.ConnectionStage
 import com.adriantache.greatimagedownloader.domain.data.model.PhotoDownloadInfo
 import com.adriantache.greatimagedownloader.domain.data.model.PhotoFile
+import com.adriantache.greatimagedownloader.domain.model.CameraStatus
 import com.adriantache.greatimagedownloader.domain.model.DomainError
 import com.adriantache.greatimagedownloader.domain.utils.model.Event
 import kotlinx.coroutines.channels.BufferOverflow
@@ -21,6 +22,7 @@ class DataTransferTool {
     val widgetStateFlow = MutableStateFlow<WidgetState>(WidgetState.Idle)
     val connectionStageFlow = MutableStateFlow<ConnectionStage?>(null)
     val connectionAttemptFlow = MutableStateFlow(1)
+    val cameraStatusFlow = MutableStateFlow<CameraStatus?>(null)
 
     @Volatile
     var pendingPhotosToDownload: List<PhotoFile> = emptyList()
@@ -43,6 +45,7 @@ class DataTransferTool {
         serviceStateFlow.value = ServiceState.IDLE
         connectionStageFlow.value = null
         connectionAttemptFlow.value = 1
+        cameraStatusFlow.value = null
         pendingPhotosToDownload = emptyList()
     }
 

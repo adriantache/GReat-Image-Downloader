@@ -191,11 +191,12 @@ private fun DownloadDashboard(
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        cameraStatus.batteryLevel?.let { battery ->
+                        cameraStatus.formattedBattery?.let { formattedBattery ->
+                            val isCritical = (cameraStatus.batteryLevel ?: 100) <= 20
                             Text(
-                                text = "Camera battery: $battery%",
+                                text = "Camera battery: $formattedBattery",
                                 style = MaterialTheme.typography.labelMedium,
-                                color = if (battery <= 20) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
+                                color = if (isCritical) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                         }
                         if (cameraStatus.isHot) {

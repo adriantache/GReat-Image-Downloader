@@ -8,6 +8,7 @@ import com.adriantache.greatimagedownloader.domain.model.DomainError
 import com.adriantache.greatimagedownloader.domain.model.DomainException
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.Test
+import java.io.IOException
 
 class ErrorMapperTest {
 
@@ -43,6 +44,13 @@ class ErrorMapperTest {
     @Test
     fun `toDomainException maps FileCreationError to NetworkError`() {
         val exception = FilesStorageException.FileCreationError
+        val domainException = exception.toDomainException()
+        assertThat(domainException.domainError).isEqualTo(DomainError.NetworkError)
+    }
+
+    @Test
+    fun `toDomainException maps FilesStorageException NetworkError correctly`() {
+        val exception = FilesStorageException.NetworkError(IOException("socket closed"))
         val domainException = exception.toDomainException()
         assertThat(domainException.domainError).isEqualTo(DomainError.NetworkError)
     }
@@ -99,10 +107,11 @@ class ErrorMapperTest {
 
     @Test
     fun `mapDomainError maps failure correctly`() {
-        val result = Result.failure<String>(CameraException.CameraDisconnected)
+        val exception = CameraException.CameraDisconnected
+        val result = Result.failure<String>(exception)
         val mappedResult = result.mapDomainError()
         assertThat(mappedResult.isFailure).isTrue
-        val exception = mappedResult.exceptionOrNull() as DomainException
-        assertThat(exception.domainError).isEqualTo(DomainError.CameraDisconnected)
+        val actualException = mappedResult.exceptionOrNull() as? DomainException
+        assertThat(actualException?.domainError).isEqualTo(DomainError.CameraDisconnected)
     }
 }

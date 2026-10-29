@@ -9,15 +9,11 @@ import android.Manifest.permission.READ_MEDIA_IMAGES
 import android.os.Build
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.derivedStateOf
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
-import com.google.accompanist.permissions.PermissionState
 import com.google.accompanist.permissions.isGranted
-import com.google.accompanist.permissions.rememberPermissionState
+import com.google.accompanist.permissions.rememberMultiplePermissionsState
 
-// TODO: move this functionality to usecase and platform layers
 @OptIn(ExperimentalPermissionsApi::class)
 @Composable
 fun PermissionsRequester(
@@ -31,113 +27,78 @@ fun PermissionsRequester(
         onRequestPermissions: () -> Unit,
     ) -> Unit,
 ) {
-    val localNetworkPermissionState = if (Build.VERSION.SDK_INT >= 37) { // API 37: Android 17
-        rememberPermissionState(permission = "android.permission.ACCESS_LOCAL_NETWORK") { }
+    val photosPermission = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+        READ_MEDIA_IMAGES
     } else {
-        null
+        READ_EXTERNAL_STORAGE
     }
 
-    val isLocalNetworkPermissionGranted by remember(localNetworkPermissionState) {
-        derivedStateOf {
-            localNetworkPermissionState == null || localNetworkPermissionState.status.isGranted
-        }
-    }
-    val photosPermissionState = rememberPermissionState(
-        permission = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            READ_MEDIA_IMAGES
-        } else {
-            READ_EXTERNAL_STORAGE
-        }
-    ) { }
-
-    val locationPermissionState = rememberPermissionState(permission = ACCESS_FINE_LOCATION) { }
-
-    val notificationsPermissionsState: PermissionState? = if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
-        null
-    } else {
-        rememberPermissionState(permission = POST_NOTIFICATIONS) { }
-    }
-
-    val isNotificationsPermissionGranted by remember(notificationsPermissionsState) {
-        derivedStateOf {
-            Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
-                    notificationsPermissionsState?.status?.isGranted == true
+    val permissionsList = remember {
+        buildList {
+            add(ACCESS_FINE_LOCATION)
+            add(photosPermission)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                add(POST_NOTIFICATIONS)
+            }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                add(BLUETOOTH_CONNECT)
+                add(BLUETOOTH_SCAN)
+            }
+            if (Build.VERSION.SDK_INT >= 37) {
+                add("android.permission.ACCESS_LOCAL_NETWORK")
+            }
         }
     }
 
-    val bluetoothConnectPermissionState: PermissionState? = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-        rememberPermissionState(permission = BLUETOOTH_CONNECT) { }
+    val multiplePermissionsState = rememberMultiplePermissionsState(permissions = permissionsList)
+
+    val isLocationPermissionGranted = multiplePermissionsState.permissions
+        .firstOrNull { it.permission == ACCESS_FINE_LOCATION }?.status?.isGranted ?: false
+
+    val isPhotosPermissionGranted = multiplePermissionsState.permissions
+        .firstOrNull { it.permission == photosPermission }?.status?.isGranted ?: false
+
+    val isNotificationsPermissionGranted = if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
+        true
     } else {
-        null
+        multiplePermissionsState.permissions
+            .firstOrNull { it.permission == POST_NOTIFICATIONS }?.status?.isGranted ?: false
     }
 
-    val bluetoothScanPermissionState: PermissionState? = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-        rememberPermissionState(permission = BLUETOOTH_SCAN) { }
+    val isBluetoothPermissionGranted = if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) {
+        true
     } else {
-        null
+        val connectGranted = multiplePermissionsState.permissions
+            .firstOrNull { it.permission == BLUETOOTH_CONNECT }?.status?.isGranted == true
+        val scanGranted = multiplePermissionsState.permissions
+            .firstOrNull { it.permission == BLUETOOTH_SCAN }?.status?.isGranted == true
+        connectGranted && scanGranted
     }
 
-    val isBluetoothPermissionGranted by remember(bluetoothConnectPermissionState, bluetoothScanPermissionState) {
-        derivedStateOf {
-            Build.VERSION.SDK_INT < Build.VERSION_CODES.S ||
-                (bluetoothConnectPermissionState?.status?.isGranted == true &&
-                    bluetoothScanPermissionState?.status?.isGranted == true)
-        }
+    val isLocalNetworkPermissionGranted = if (Build.VERSION.SDK_INT < 37) {
+        true
+    } else {
+        multiplePermissionsState.permissions
+            .firstOrNull { it.permission == "android.permission.ACCESS_LOCAL_NETWORK" }?.status?.isGranted ?: true
     }
 
-    LaunchedEffect(
-        locationPermissionState,
-        photosPermissionState,
-        isNotificationsPermissionGranted,
-        isLocalNetworkPermissionGranted,
-        isBluetoothPermissionGranted,
-    ) {
-        if (locationPermissionState.status.isGranted &&
-            photosPermissionState.status.isGranted &&
-            isNotificationsPermissionGranted &&
-            isLocalNetworkPermissionGranted &&
-            isBluetoothPermissionGranted
-        ) {
+    LaunchedEffect(multiplePermissionsState.allPermissionsGranted) {
+        if (multiplePermissionsState.allPermissionsGranted) {
             onPermissionsGranted()
         }
     }
 
     content(
-        /* isLocationPermissionGranted */ locationPermissionState.status.isGranted,
-        /* isPhotosPermissionGranted */ photosPermissionState.status.isGranted,
+        /* isLocationPermissionGranted */ isLocationPermissionGranted,
+        /* isPhotosPermissionGranted */ isPhotosPermissionGranted,
         /* isNotificationsPermissionGranted */ isNotificationsPermissionGranted,
         /* isLocalNetworkPermissionGranted */ isLocalNetworkPermissionGranted,
         /* isBluetoothPermissionGranted */ isBluetoothPermissionGranted,
     ) /* onRequestPermissions */ {
-        onRequestPermissions(
-            photosPermissionState,
-            locationPermissionState,
-            notificationsPermissionsState,
-            localNetworkPermissionState,
-            bluetoothConnectPermissionState,
-            bluetoothScanPermissionState,
-            onPermissionsGranted,
-        )
-    }
-}
-
-@OptIn(ExperimentalPermissionsApi::class)
-private fun onRequestPermissions(
-    photosPermissionState: PermissionState,
-    locationPermissionState: PermissionState,
-    notificationsPermissionState: PermissionState?,
-    localNetworkPermissionState: PermissionState?,
-    bluetoothConnectPermissionState: PermissionState?,
-    bluetoothScanPermissionState: PermissionState?,
-    onPermissionsGranted: () -> Unit,
-) {
-    when {
-        !locationPermissionState.status.isGranted -> locationPermissionState.launchPermissionRequest()
-        !photosPermissionState.status.isGranted -> photosPermissionState.launchPermissionRequest()
-        notificationsPermissionState != null && !notificationsPermissionState.status.isGranted -> notificationsPermissionState.launchPermissionRequest()
-        localNetworkPermissionState != null && !localNetworkPermissionState.status.isGranted -> localNetworkPermissionState.launchPermissionRequest()
-        bluetoothConnectPermissionState != null && !bluetoothConnectPermissionState.status.isGranted -> bluetoothConnectPermissionState.launchPermissionRequest()
-        bluetoothScanPermissionState != null && !bluetoothScanPermissionState.status.isGranted -> bluetoothScanPermissionState.launchPermissionRequest()
-        else -> onPermissionsGranted()
+        if (multiplePermissionsState.allPermissionsGranted) {
+            onPermissionsGranted()
+        } else {
+            multiplePermissionsState.launchMultiplePermissionRequest()
+        }
     }
 }

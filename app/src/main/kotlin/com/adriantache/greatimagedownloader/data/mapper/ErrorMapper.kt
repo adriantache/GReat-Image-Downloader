@@ -14,6 +14,7 @@ fun Throwable.toDomainException(): DomainException {
         is CameraException.Unknown -> DomainError.Unknown(message)
         is FilesStorageException.StorageFull -> DomainError.StorageFull
         is FilesStorageException.FileCreationError -> DomainError.NetworkError
+        is FilesStorageException.NetworkError -> DomainError.NetworkError
         is FilesStorageException.Unknown -> DomainError.Unknown(cause.message)
         is WifiStorageException.Unknown -> DomainError.Unknown(cause.message)
         is PreferencesStorageException.SerializationError -> DomainError.Unknown("Serialization error: ${cause.message}")

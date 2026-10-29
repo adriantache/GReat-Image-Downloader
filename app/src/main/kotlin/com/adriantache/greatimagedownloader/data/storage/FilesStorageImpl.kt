@@ -269,7 +269,7 @@ class FilesStorageImpl(
                 val error = if (e.message?.contains("No space left on device", ignoreCase = true) == true) {
                     FilesStorageException.StorageFull
                 } else {
-                    FilesStorageException.Unknown(e)
+                    FilesStorageException.NetworkError(e)
                 }
                 emit(Result.failure(error))
             }

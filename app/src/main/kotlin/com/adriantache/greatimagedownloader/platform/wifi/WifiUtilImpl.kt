@@ -17,6 +17,7 @@ import android.net.wifi.WifiManager
 import android.net.wifi.WifiNetworkSpecifier
 import android.os.Build
 import android.util.Log
+import androidx.core.content.ContextCompat
 import com.adriantache.greatimagedownloader.domain.wifi.WifiUtil
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
@@ -230,9 +231,11 @@ class WifiUtilImpl(
             }
         }
 
-        context.registerReceiver(
+        ContextCompat.registerReceiver(
+            context,
             receiver,
-            android.content.IntentFilter(WifiManager.SCAN_RESULTS_AVAILABLE_ACTION)
+            android.content.IntentFilter(WifiManager.SCAN_RESULTS_AVAILABLE_ACTION),
+            ContextCompat.RECEIVER_EXPORTED,
         )
 
         @Suppress("DEPRECATION")
