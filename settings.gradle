@@ -16,3 +16,4 @@ dependencyResolutionManagement {
 }
 rootProject.name = "GReat Image Downloader"
 include ':app'
+include ':wear'

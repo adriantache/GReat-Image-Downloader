@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">GR Sync</string>
+    <string name="sync_photos">Sync Photos</string>
+    <string name="ready_to_sync">Ready to download</string>
+    <string name="stop">Stop</string>
+    <string name="stopping">Stopping…</string>
+    <string name="done">Done!</string>
+    <string name="photos_downloaded">%1$d photos downloaded</string>
+    <string name="no_new_photos">0 new photos</string>
+    <string name="retry">Retry</string>
+    <string name="ok">OK</string>
+    <string name="phone_not_connected">Phone not connected</string>
+    <string name="checking_camera">Checking camera…</string>
+    <string name="downloading">Downloading…</string>
+</resources>

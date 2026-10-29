@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="gr_yellow">#FFCA28</color>
+    <color name="gr_yellow_glow">#4DFFCA28</color>
+    <color name="gr_dark">#121212</color>
+</resources>

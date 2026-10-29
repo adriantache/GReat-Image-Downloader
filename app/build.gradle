@@ -13,8 +13,8 @@ android {
         applicationId = "com.adriantache.greatimagedownloader"
         minSdk = 30
         targetSdk = 37
-        versionCode = 10204
-        versionName = "1.2.4"
+        versionCode = 10205
+        versionName = "1.2.5"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -97,6 +97,7 @@ dependencies {
     implementation libs.retrofit.kotlinx.serialization
     implementation libs.kotlinx.serialization.json
     implementation libs.okhttp.logging
+    implementation libs.play.services.wearable
     testImplementation libs.junit
     testImplementation libs.assertj.core
     testImplementation libs.mockk

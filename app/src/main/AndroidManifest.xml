@@ -74,6 +74,26 @@
             android:exported="false"
             android:foregroundServiceType="connectedDevice" />
 
+        <service
+            android:name=".service.WearListenerService"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="com.google.android.gms.wearable.MESSAGE_RECEIVED" />
+                <data
+                    android:host="*"
+                    android:pathPrefix="/start-sync"
+                    android:scheme="wear" />
+                <data
+                    android:host="*"
+                    android:pathPrefix="/stop-sync"
+                    android:scheme="wear" />
+                <data
+                    android:host="*"
+                    android:pathPrefix="/request-status"
+                    android:scheme="wear" />
+            </intent-filter>
+        </service>
+
         <receiver
             android:name=".widget.QuickDownloadWidgetReceiver"
             android:exported="true"
