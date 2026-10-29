@@ -5,6 +5,7 @@ import android.provider.Settings.ACTION_WIFI_SETTINGS
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColor
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.infiniteRepeatable
@@ -119,12 +120,12 @@ fun StartView(
                 )
             }
         } else if (isLoading) {
-            val infiniteTransition = rememberInfiniteTransition(label = "")
+            val infiniteTransition = rememberInfiniteTransition(label = "ConnectingTransition")
             val bgColor by infiniteTransition.animateColor(
                 initialValue = MaterialTheme.colorScheme.primary,
                 targetValue = Color.Black,
                 animationSpec = infiniteRepeatable(
-                    animation = tween(800, easing = LinearEasing),
+                    animation = tween(2000, easing = FastOutSlowInEasing),
                     repeatMode = RepeatMode.Reverse
                 ),
                 label = "Background Animation"

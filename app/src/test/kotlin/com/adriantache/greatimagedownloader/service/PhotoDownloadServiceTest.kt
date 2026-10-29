@@ -10,9 +10,12 @@ import com.adriantache.greatimagedownloader.domain.data.FakeRepository
 import com.adriantache.greatimagedownloader.domain.data.Repository
 import com.adriantache.greatimagedownloader.domain.data.model.PhotoDownloadInfo
 import com.adriantache.greatimagedownloader.domain.data.model.PhotoFile
+import com.adriantache.greatimagedownloader.domain.model.CameraStatus
 import com.adriantache.greatimagedownloader.domain.model.DomainError
 import com.adriantache.greatimagedownloader.domain.model.DomainException
 import com.adriantache.greatimagedownloader.domain.utils.model.Kbps
+import com.adriantache.greatimagedownloader.domain.wifi.FakeWifiUtil
+import com.adriantache.greatimagedownloader.domain.wifi.WifiUtil
 import com.adriantache.greatimagedownloader.service.DataTransferTool.ServiceState
 import com.adriantache.greatimagedownloader.service.model.PhotoFileItem
 import io.mockk.coEvery
@@ -44,6 +47,7 @@ class PhotoDownloadServiceTest {
     private lateinit var context: Context
     private lateinit var repository: FakeRepository
     private lateinit var dataTransferTool: DataTransferTool
+    private lateinit var fakeWifiUtil: FakeWifiUtil
     private lateinit var serviceController: ServiceController<PhotoDownloadService>
     private lateinit var shadowNotificationManager: ShadowNotificationManager
 
@@ -55,12 +59,14 @@ class PhotoDownloadServiceTest {
 
         repository = FakeRepository()
         dataTransferTool = DataTransferTool()
+        fakeWifiUtil = FakeWifiUtil()
 
         startKoin {
             modules(
                 module {
                     single<Repository> { repository }
                     single { dataTransferTool }
+                    single<WifiUtil> { fakeWifiUtil }
                 }
             )
         }
@@ -122,6 +128,7 @@ class PhotoDownloadServiceTest {
                 module {
                     single<Repository> { repository }
                     single { dataTransferTool }
+                    single<WifiUtil> { fakeWifiUtil }
                     single<DownloadPhotosUseCase> { mockUseCase }
                 }
             )
@@ -146,6 +153,7 @@ class PhotoDownloadServiceTest {
                 module {
                     single<Repository> { mockRepo }
                     single { dataTransferTool }
+                    single<WifiUtil> { fakeWifiUtil }
                 }
             )
         }
@@ -170,7 +178,10 @@ class PhotoDownloadServiceTest {
         val mockRepo = mockk<Repository>(relaxed = true)
         val photoInfo = PhotoDownloadInfo("photo1.jpg", "content://media/1", 100, Kbps(500.0))
         every { mockRepo.downloadMediaToStorage(any()) } returns flowOf(Result.success(photoInfo))
+        coEvery { mockRepo.getCameraStatus() } returns Result.success(CameraStatus())
         coEvery { mockRepo.shutDownCamera() } returns Result.success(Unit)
+        coEvery { mockRepo.getCameraStatus() } returns Result.success(CameraStatus())
+        coEvery { mockRepo.getCameraStatus() } returns Result.success(CameraStatus())
 
         stopKoin()
         startKoin {
@@ -178,6 +189,7 @@ class PhotoDownloadServiceTest {
                 module {
                     single<Repository> { mockRepo }
                     single { dataTransferTool }
+                    single<WifiUtil> { fakeWifiUtil }
                 }
             )
         }
@@ -204,7 +216,10 @@ class PhotoDownloadServiceTest {
         val mockRepo = mockk<Repository>(relaxed = true)
         val photoInfo = PhotoDownloadInfo("photo1.jpg", "content://media/1", 100, Kbps(500.0))
         every { mockRepo.downloadMediaToStorage(any()) } returns flowOf(Result.success(photoInfo))
+        coEvery { mockRepo.getCameraStatus() } returns Result.success(CameraStatus())
         coEvery { mockRepo.shutDownCamera() } returns Result.success(Unit)
+        coEvery { mockRepo.getCameraStatus() } returns Result.success(CameraStatus())
+        coEvery { mockRepo.getCameraStatus() } returns Result.success(CameraStatus())
 
         stopKoin()
         startKoin {
@@ -212,6 +227,7 @@ class PhotoDownloadServiceTest {
                 module {
                     single<Repository> { mockRepo }
                     single { dataTransferTool }
+                    single<WifiUtil> { fakeWifiUtil }
                 }
             )
         }
@@ -239,7 +255,9 @@ class PhotoDownloadServiceTest {
     fun `download failure posts error notification and emits error to errorFlow`() {
         val mockRepo = mockk<Repository>(relaxed = true)
         val partialInfo = PhotoDownloadInfo("photo1.jpg", "content://media/1", 50, Kbps(500.0))
-        val error = DomainException(DomainError.CameraDisconnected)
+        val error = DomainException(DomainError.StorageFull)
+
+        coEvery { mockRepo.getCameraStatus() } returns Result.success(CameraStatus())
 
         every { mockRepo.downloadMediaToStorage(any()) } returns flow {
             emit(Result.success(partialInfo))
@@ -252,6 +270,7 @@ class PhotoDownloadServiceTest {
                 module {
                     single<Repository> { mockRepo }
                     single { dataTransferTool }
+                    single<WifiUtil> { fakeWifiUtil }
                 }
             )
         }
@@ -267,7 +286,7 @@ class PhotoDownloadServiceTest {
 
         Thread.sleep(200)
 
-        assertThat(dataTransferTool.errorFlow.value?.value).isEqualTo(DomainError.CameraDisconnected)
+        assertThat(dataTransferTool.errorFlow.value?.value).isEqualTo(DomainError.StorageFull)
         assertThat(shadowNotificationManager.allNotifications).hasSize(2) // Foreground + error notification
     }
 
@@ -288,6 +307,7 @@ class PhotoDownloadServiceTest {
             }
         }
         coEvery { mockRepo.shutDownCamera() } returns Result.success(Unit)
+        coEvery { mockRepo.getCameraStatus() } returns Result.success(CameraStatus())
 
         stopKoin()
         startKoin {
@@ -295,6 +315,7 @@ class PhotoDownloadServiceTest {
                 module {
                     single<Repository> { mockRepo }
                     single { dataTransferTool }
+                    single<WifiUtil> { fakeWifiUtil }
                 }
             )
         }
@@ -320,6 +341,7 @@ class PhotoDownloadServiceTest {
         val mockRepo = mockk<Repository>(relaxed = true)
         val photoInfo = PhotoDownloadInfo("photo1.jpg", "content://media/1", 100, Kbps(500.0))
         every { mockRepo.downloadMediaToStorage(any()) } returns flowOf(Result.success(photoInfo))
+        coEvery { mockRepo.getCameraStatus() } returns Result.success(CameraStatus())
 
         stopKoin()
         startKoin {
@@ -327,6 +349,7 @@ class PhotoDownloadServiceTest {
                 module {
                     single<Repository> { mockRepo }
                     single { dataTransferTool }
+                    single<WifiUtil> { fakeWifiUtil }
                 }
             )
         }

@@ -158,4 +158,11 @@ class WifiUtilImplTest {
         advanceUntilIdle()
         resultJob.cancel()
     }
+
+    @Test
+    fun `ensureBound binds to available Wi-Fi network`() {
+        val bound = wifiUtil.ensureBound()
+        assertThat(bound).isTrue
+        assertThat(connectivityManager.boundNetworkForProcess).isNotNull
+    }
 }

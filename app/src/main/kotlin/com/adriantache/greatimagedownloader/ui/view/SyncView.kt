@@ -43,7 +43,7 @@ fun SyncView() {
         initialValue = MaterialTheme.colorScheme.primary,
         targetValue = Color.Black,
         animationSpec = infiniteRepeatable(
-            animation = tween(800, easing = LinearEasing),
+            animation = tween(2000, easing = FastOutSlowInEasing),
             repeatMode = RepeatMode.Reverse
         ),
         label = "Background Animation"

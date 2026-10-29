@@ -4,9 +4,11 @@ class FakeWifiUtil : WifiUtil {
     var connectResult: Pair<Boolean, String?> = Pair(true, "BSSID")
     var isWifiDisabledValue = false
     var suggestNetworkResult = "SSID"
+    var ensureBoundResult = true
 
     var connectCalledCount = 0
     var cleanupCalledCount = 0
+    var ensureBoundCalledCount = 0
 
     override suspend fun connectToWifi(ssid: String, password: String, bssid: String?): Pair<Boolean, String?> {
         connectCalledCount++
@@ -17,6 +19,11 @@ class FakeWifiUtil : WifiUtil {
         get() = isWifiDisabledValue
 
     override suspend fun suggestNetwork(): String = suggestNetworkResult
+
+    override fun ensureBound(): Boolean {
+        ensureBoundCalledCount++
+        return ensureBoundResult
+    }
 
     override fun cleanup() {
         cleanupCalledCount++

@@ -11,5 +11,7 @@ interface WifiUtil {
 
     suspend fun suggestNetwork(): String
 
+    fun ensureBound(): Boolean
+
     fun cleanup()
 }

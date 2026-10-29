@@ -185,6 +185,27 @@ class WifiUtilImpl(
         return !bssid.isNullOrBlank() && bssid != "02:00:00:00:00:00"
     }
 
+    override fun ensureBound(): Boolean {
+        val currentBound = connectivityManager.boundNetworkForProcess
+        if (currentBound != null) {
+            val caps = connectivityManager.getNetworkCapabilities(currentBound)
+            if (caps?.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) == true) {
+                return true
+            }
+        }
+
+        val wifiNetwork = connectivityManager.allNetworks.firstOrNull { network ->
+            val caps = connectivityManager.getNetworkCapabilities(network)
+            caps?.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) == true
+        }
+
+        if (wifiNetwork != null) {
+            connectivityManager.bindProcessToNetwork(wifiNetwork)
+            return true
+        }
+        return false
+    }
+
     override fun cleanup() {
         networkCallback?.let {
             runCatching { connectivityManager.unregisterNetworkCallback(it) }

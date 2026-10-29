@@ -16,6 +16,7 @@ import com.adriantache.greatimagedownloader.domain.data.model.PhotoFile
 import com.adriantache.greatimagedownloader.domain.model.DomainError
 import com.adriantache.greatimagedownloader.domain.model.DomainException
 import com.adriantache.greatimagedownloader.domain.utils.model.Event
+import com.adriantache.greatimagedownloader.domain.wifi.WifiUtil
 import com.adriantache.greatimagedownloader.service.DataTransferTool.ServiceState
 import com.adriantache.greatimagedownloader.service.DataTransferTool.WidgetState
 import com.adriantache.greatimagedownloader.service.model.PhotoFileItem
@@ -37,6 +38,7 @@ class PhotoDownloadService : Service(), KoinComponent {
     private val scope = CoroutineScope(Dispatchers.IO)
     private val repository: Repository by inject()
     private val dataTransferTool: DataTransferTool by inject()
+    private val wifiUtil: WifiUtil by inject()
 
     private var wifiLock: WifiManager.WifiLock? = null
     private var wakeLock: PowerManager.WakeLock? = null
@@ -217,6 +219,7 @@ class PhotoDownloadService : Service(), KoinComponent {
         }
 
         continueDownload = true
+        acquireLocks()
         downloadJob?.cancel()
 
         downloadJob = scope.launch {
@@ -244,104 +247,93 @@ class PhotoDownloadService : Service(), KoinComponent {
         var isError = false
         val completedPhotos = mutableListOf<PhotoFile>()
 
-        // Periodically ping the camera every 15s to keep its Wi-Fi AP and power alive,
-        // and fetch live battery/thermal status
-        val keepAliveJob = scope.launch {
-            while (isActive && continueDownload) {
-                delay(15.seconds)
-                if (!isActive || !continueDownload) break
-                val status = repository.getCameraStatus().getOrNull()
-                if (status != null) {
-                    dataTransferTool.cameraStatusFlow.value = status
-                } else {
-                    runCatching { repository.pingCamera() }
-                }
-            }
-        }
+        for (index in photosToDownload.indices) {
+            if (!continueDownload) break
 
-        try {
-            for (index in photosToDownload.indices) {
+            updateNotification(index + 1, photosToDownload.size)
+            dataTransferTool.widgetStateFlow.value = WidgetState.Downloading(index + 1, photosToDownload.size)
+
+            val photo = photosToDownload[index]
+
+            // Ensure we are bound to the camera's Wi-Fi network before requesting the file
+            wifiUtil.ensureBound()
+
+            // Safely refresh camera status (battery / thermal) between photo downloads
+            val status = runCatching { repository.getCameraStatus().getOrNull() }.getOrNull()
+            if (status != null) {
+                dataTransferTool.cameraStatusFlow.value = status
+            }
+
+            var photoDownloaded = false
+            var lastDomainError: DomainError? = null
+            val maxRetries = 3
+
+            for (attempt in 1..maxRetries) {
                 if (!continueDownload) break
 
-                updateNotification(index + 1, photosToDownload.size)
-                dataTransferTool.widgetStateFlow.value = WidgetState.Downloading(index + 1, photosToDownload.size)
+                var lastUri: String? = null
+                var lastProgress = 0
+                var attemptFailed = false
 
-                val photo = photosToDownload[index]
-                var photoDownloaded = false
-                var lastDomainError: DomainError? = null
-                val maxRetries = 3
+                try {
+                    repository.downloadMediaToStorage(photo).collect { result ->
+                        if (!continueDownload) {
+                            throw CancellationException("Download stopped by user")
+                        }
 
-                for (attempt in 1..maxRetries) {
-                    if (!continueDownload) break
-
-                    var lastUri: String? = null
-                    var lastProgress = 0
-                    var attemptFailed = false
-
-                    try {
-                        repository.downloadMediaToStorage(photo).collect { result ->
-                            if (!continueDownload) {
-                                throw CancellationException("Download stopped by user")
-                            }
-
-                            result.fold(
-                                onSuccess = { info ->
-                                    lastUri = info.uri
-                                    lastProgress = info.downloadProgress
-                                    dataTransferTool.emitImageProgress(info)
-                                    if (info.downloadProgress == 100) {
-                                        completedPhotos.add(photo)
-                                        photoDownloaded = true
-                                    }
-                                },
-                                onFailure = { throwable ->
-                                    attemptFailed = true
-                                    lastUri?.let { uri ->
-                                        if (lastProgress < 100) {
-                                            repository.deleteMedia(uri)
-                                        }
-                                    }
-
-                                    lastDomainError = (throwable as? DomainException)?.domainError
-                                        ?: DomainError.Unknown(throwable.message)
+                        result.fold(
+                            onSuccess = { info ->
+                                lastUri = info.uri
+                                lastProgress = info.downloadProgress
+                                dataTransferTool.emitImageProgress(info)
+                                if (info.downloadProgress == 100) {
+                                    completedPhotos.add(photo)
+                                    photoDownloaded = true
                                 }
-                            )
-                        }
-                    } catch (_: CancellationException) {
-                        lastUri?.let { uri ->
-                            if (lastProgress < 100) {
-                                repository.deleteMedia(uri)
+                            },
+                            onFailure = { throwable ->
+                                attemptFailed = true
+                                lastUri?.let { uri ->
+                                    if (lastProgress < 100) {
+                                        repository.deleteMedia(uri)
+                                    }
+                                }
+
+                                lastDomainError = (throwable as? DomainException)?.domainError
+                                    ?: DomainError.Unknown(throwable.message)
                             }
+                        )
+                    }
+                } catch (_: CancellationException) {
+                    lastUri?.let { uri ->
+                        if (lastProgress < 100) {
+                            repository.deleteMedia(uri)
                         }
-                        break
                     }
-
-                    if (photoDownloaded) {
-                        break
-                    }
-
-                    // If storage is full, camera disconnected, or user cancelled, don't retry
-                    if (lastDomainError == DomainError.StorageFull ||
-                        lastDomainError == DomainError.CameraDisconnected ||
-                        !continueDownload
-                    ) {
-                        break
-                    }
-
-                    if (attemptFailed && attempt < maxRetries) {
-                        Log.w("PhotoDownloadService", "Download of ${photo.name} failed (attempt $attempt/$maxRetries). Retrying...")
-                        delay(500)
-                    }
-                }
-
-                if (!photoDownloaded && continueDownload) {
-                    isError = true
-                    handleError(lastDomainError ?: DomainError.NetworkError)
                     break
                 }
+
+                if (photoDownloaded) {
+                    break
+                }
+
+                // If storage is full or user cancelled, don't retry
+                if (lastDomainError == DomainError.StorageFull || !continueDownload) {
+                    break
+                }
+
+                if (attemptFailed && attempt < maxRetries) {
+                    Log.w("PhotoDownloadService", "Download of ${photo.name} failed (attempt $attempt/$maxRetries, error: $lastDomainError). Retrying...")
+                    wifiUtil.ensureBound()
+                    delay(500L * attempt)
+                }
             }
-        } finally {
-            keepAliveJob.cancel()
+
+            if (!photoDownloaded && continueDownload) {
+                isError = true
+                handleError(lastDomainError ?: DomainError.NetworkError)
+                break
+            }
         }
 
         if (completedPhotos.isNotEmpty()) {
@@ -417,13 +409,26 @@ class PhotoDownloadService : Service(), KoinComponent {
 
     private fun acquireLocks() {
         val wifiManager = applicationContext.getSystemService(WIFI_SERVICE) as WifiManager
-        val lockType = WifiManager.WIFI_MODE_FULL_LOW_LATENCY
-        wifiLock = wifiManager.createWifiLock(lockType, "PhotoDownloadService:WifiLock")
-        wifiLock?.acquire()
+        @Suppress("DEPRECATION")
+        val lockType = WifiManager.WIFI_MODE_FULL_HIGH_PERF
+        if (wifiLock == null) {
+            wifiLock = wifiManager.createWifiLock(lockType, "PhotoDownloadService:WifiLock").apply {
+                setReferenceCounted(false)
+            }
+        }
+        if (wifiLock?.isHeld != true) {
+            wifiLock?.acquire()
+        }
 
         val powerManager = getSystemService(POWER_SERVICE) as PowerManager
-        wakeLock = powerManager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "PhotoDownloadService:WakeLock")
-        wakeLock?.acquire(10 * 60 * 1000L /*10 minutes max*/)
+        if (wakeLock == null) {
+            wakeLock = powerManager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "PhotoDownloadService:WakeLock").apply {
+                setReferenceCounted(false)
+            }
+        }
+        if (wakeLock?.isHeld != true) {
+            wakeLock?.acquire(60 * 60 * 1000L /* 1 hour safety timeout */)
+        }
     }
 
     private fun releaseLocks() {

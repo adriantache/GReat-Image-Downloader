@@ -3,6 +3,7 @@ package com.adriantache.greatimagedownloader.ui.view
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -13,7 +14,12 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Battery1Bar
+import androidx.compose.material.icons.filled.Battery4Bar
+import androidx.compose.material.icons.filled.BatteryAlert
+import androidx.compose.material.icons.filled.BatteryFull
 import androidx.compose.material.icons.filled.Speed
+import androidx.compose.material.icons.filled.Thermostat
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.Icon
@@ -108,105 +114,115 @@ private fun DownloadDashboard(
             containerColor = MaterialTheme.colorScheme.surface
         )
     ) {
-        Column(
-            modifier = Modifier.padding(24.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(24.dp)
-        ) {
-            // Speed indicator with icons
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
+        Box(modifier = Modifier.fillMaxWidth()) {
+            if (cameraStatus?.batteryLevel != null || cameraStatus?.isHot == true) {
                 Row(
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(top = 16.dp, end = 20.dp),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
-                    repeat(5) { i ->
-                        val active = i < status.bars
+                    if (cameraStatus.isHot) {
                         Icon(
-                            imageVector = Icons.Default.Speed,
-                            contentDescription = null,
-                            tint = if (active) statusColor else statusColor.copy(alpha = 0.15f),
-                            modifier = Modifier.size(if (active) 36.dp else 24.dp)
+                            imageVector = Icons.Filled.Thermostat,
+                            contentDescription = "Camera temperature high",
+                            tint = MaterialTheme.colorScheme.error,
+                            modifier = Modifier.size(18.dp),
+                        )
+                    }
+                    cameraStatus.batteryLevel?.let { level ->
+                        val (icon, tint) = when {
+                            level <= 20 -> Icons.Filled.BatteryAlert to MaterialTheme.colorScheme.error
+                            level < 50 -> Icons.Filled.Battery1Bar to MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                            level < 80 -> Icons.Filled.Battery4Bar to MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                            else -> Icons.Filled.BatteryFull to MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                        }
+                        Icon(
+                            imageVector = icon,
+                            contentDescription = "Camera battery: ${cameraStatus.formattedBattery ?: "$level%"}",
+                            tint = tint,
+                            modifier = Modifier.size(22.dp),
+                        )
+                    }
+                }
+            }
+
+            Column(
+                modifier = Modifier.padding(24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(24.dp)
+            ) {
+                // Speed indicator with icons
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        repeat(5) { i ->
+                            val active = i < status.bars
+                            Icon(
+                                imageVector = Icons.Default.Speed,
+                                contentDescription = null,
+                                tint = if (active) statusColor else statusColor.copy(alpha = 0.15f),
+                                modifier = Modifier.size(if (active) 36.dp else 24.dp)
+                            )
+                        }
+                    }
+
+                    Text(
+                        text = "${"%.2f".format(speedMbps)} MB/s",
+                        style = MaterialTheme.typography.displayMedium,
+                        fontWeight = FontWeight.Black,
+                        color = statusColor
+                    )
+
+                    Surface(
+                        color = statusColor.copy(alpha = 0.1f),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Text(
+                            text = status.label,
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = statusColor
                         )
                     }
                 }
 
-                Text(
-                    text = "${"%.2f".format(speedMbps)} MB/s",
-                    style = MaterialTheme.typography.displayMedium,
-                    fontWeight = FontWeight.Black,
-                    color = statusColor
-                )
-
-                Surface(
-                    color = statusColor.copy(alpha = 0.1f),
-                    shape = RoundedCornerShape(12.dp)
-                ) {
-                    Text(
-                        text = status.label,
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
-                        style = MaterialTheme.typography.labelLarge,
-                        fontWeight = FontWeight.ExtraBold,
-                        color = statusColor
+                // Progress section
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    LinearProgressIndicator(
+                        progress = { animatedProgress },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(18.dp)
+                            .clip(RoundedCornerShape(9.dp)),
+                        color = statusColor,
+                        trackColor = statusColor.copy(alpha = 0.1f)
                     )
-                }
-            }
 
-            // Progress section
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                LinearProgressIndicator(
-                    progress = { animatedProgress },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(18.dp)
-                        .clip(RoundedCornerShape(9.dp)),
-                    color = statusColor,
-                    trackColor = statusColor.copy(alpha = 0.1f)
-                )
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = "$currentPhoto / $totalPhotos photos",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Text(
-                        text = "${(progress * 100).toInt()}%",
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Black,
-                        color = statusColor
-                    )
-                }
-
-                if (cameraStatus?.batteryLevel != null || cameraStatus?.isHot == true) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically,
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        cameraStatus.formattedBattery?.let { formattedBattery ->
-                            val isCritical = (cameraStatus.batteryLevel ?: 100) <= 20
-                            Text(
-                                text = "Camera battery: $formattedBattery",
-                                style = MaterialTheme.typography.labelMedium,
-                                color = if (isCritical) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                        if (cameraStatus.isHot) {
-                            Text(
-                                text = "Camera warm (high temp)",
-                                style = MaterialTheme.typography.labelMedium,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.error,
-                            )
-                        }
+                        Text(
+                            text = "$currentPhoto / $totalPhotos photos",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Text(
+                            text = "${(progress * 100).toInt()}%",
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Black,
+                            color = statusColor
+                        )
                     }
                 }
             }
