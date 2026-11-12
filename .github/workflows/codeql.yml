@@ -50,7 +50,7 @@ jobs:
         shell: bash
         run: |
           chmod +x ./gradlew
-          ./gradlew assembleDebug
+          ./gradlew clean assembleDebug --no-build-cache --no-daemon
 
       - name: Perform CodeQL Analysis
         uses: github/codeql-action/analyze@v4
