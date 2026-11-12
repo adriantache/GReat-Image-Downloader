@@ -61,6 +61,8 @@ class WearListenerService : WearableListenerService(), KoinComponent {
                 val serviceIntent = Intent(this, PhotoDownloadService::class.java).apply {
                     action = PhotoDownloadService.Actions.QUICK_DOWNLOAD.name
                 }
+                val dataTransferTool = getKoin().getOrNull<DataTransferTool>()
+                dataTransferTool?.widgetStateFlow?.value = DataTransferTool.WidgetState.Connecting("BT…")
                 ContextCompat.startForegroundService(this, serviceIntent)
             }
 

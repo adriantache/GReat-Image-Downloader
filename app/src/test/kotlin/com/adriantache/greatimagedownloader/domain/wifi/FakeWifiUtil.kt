@@ -9,9 +9,11 @@ class FakeWifiUtil : WifiUtil {
     var connectCalledCount = 0
     var cleanupCalledCount = 0
     var ensureBoundCalledCount = 0
+    val connectedBssids = mutableListOf<String?>()
 
     override suspend fun connectToWifi(ssid: String, password: String, bssid: String?): Pair<Boolean, String?> {
         connectCalledCount++
+        connectedBssids.add(bssid)
         return connectResult
     }
 

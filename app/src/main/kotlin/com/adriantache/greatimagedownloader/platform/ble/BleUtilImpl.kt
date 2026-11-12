@@ -13,6 +13,7 @@ import android.bluetooth.BluetoothGattDescriptor
 import android.bluetooth.BluetoothManager
 import android.bluetooth.BluetoothProfile
 import android.bluetooth.le.ScanCallback
+import android.bluetooth.le.ScanFilter
 import android.bluetooth.le.ScanResult
 import android.bluetooth.le.ScanSettings
 import android.content.Context
@@ -20,6 +21,7 @@ import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
+import android.os.ParcelUuid
 import android.util.Log
 import androidx.core.content.ContextCompat
 import com.adriantache.greatimagedownloader.domain.ble.BleUtil
@@ -86,12 +88,24 @@ class BleUtilImpl(
 
         var details: WifiDetails? = null
 
-        for (bonded in bondedCandidates) {
-            Log.d(TAG, "Attempting connection to bonded camera: ${bonded.name} (${bonded.address})")
-            details = withTimeoutOrNull(12.seconds) {
-                connectAndEnableAp(bonded, onProgress)
+        // Retry loop: when waking a camera from standby, the camera typically reboots its BLE stack
+        // during power-on (disconnecting with status 147), so we allow up to 3 connection attempts.
+        val maxConnectionAttempts = 3
+        connectionLoop@ for (attempt in 1..maxConnectionAttempts) {
+            for (bonded in bondedCandidates) {
+                Log.d(TAG, "Connecting to bonded camera ${bonded.name} (${bonded.address}) [attempt $attempt/$maxConnectionAttempts]")
+                details = withTimeoutOrNull(10.seconds) {
+                    connectAndEnableAp(bonded, onProgress)
+                }
+                if (details != null || activeGatt != null) {
+                    break@connectionLoop
+                }
             }
-            if (details != null || activeGatt != null) break
+
+            if (attempt < maxConnectionAttempts && bondedCandidates.isNotEmpty()) {
+                Log.d(TAG, "Camera may be waking/booting. Waiting 2000ms before reconnecting...")
+                delay(2000.milliseconds)
+            }
         }
 
         if (details == null && activeGatt == null) {
@@ -102,7 +116,7 @@ class BleUtilImpl(
             )
             if (scannedDevice != null) {
                 Log.d(TAG, "Scanned Ricoh camera found: ${scannedDevice.name} (${scannedDevice.address})")
-                details = withTimeoutOrNull(12.seconds) {
+                details = withTimeoutOrNull(10.seconds) {
                     connectAndEnableAp(scannedDevice, onProgress)
                 }
             }
@@ -163,11 +177,40 @@ class BleUtilImpl(
                     }
                 }
 
+                // Explicit filters are required on Android 8.1+ to permit scanning while the screen is off
+                val filters = buildList {
+                    for (address in bondedAddresses) {
+                        if (BluetoothAdapter.checkBluetoothAddress(address)) {
+                            add(ScanFilter.Builder().setDeviceAddress(address).build())
+                        }
+                    }
+                    add(
+                        ScanFilter.Builder()
+                            .setManufacturerData(RICOH_COMPANY_ID, byteArrayOf())
+                            .build()
+                    )
+                    add(
+                        ScanFilter.Builder()
+                            .setServiceUuid(ParcelUuid(CAMERA_SERVICE_UUID))
+                            .build()
+                    )
+                    add(
+                        ScanFilter.Builder()
+                            .setServiceUuid(ParcelUuid(BLUETOOTH_CONTROL_SERVICE_UUID))
+                            .build()
+                    )
+                    add(
+                        ScanFilter.Builder()
+                            .setServiceUuid(ParcelUuid(WLAN_SERVICE_UUID))
+                            .build()
+                    )
+                }
+
                 val settings = ScanSettings.Builder()
                     .setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY)
                     .build()
 
-                runCatching { scanner.startScan(null, settings, callback) }
+                runCatching { scanner.startScan(filters, settings, callback) }
                     .onFailure {
                         if (continuation.isActive) {
                             continuation.resume(null)
@@ -225,8 +268,24 @@ class BleUtilImpl(
             var discoveredPassphrase: String? = null
             var opModePollRetries = 0
             var netTypeWriteRetries = 0
+            var apModeActivated = false
 
             val operationQueue = ArrayDeque<GattAction>()
+            var watchdogRunnable: Runnable? = null
+            var processNextFn: ((BluetoothGatt) -> Unit)? = null
+
+            fun cancelWatchdog() {
+                watchdogRunnable?.let { mainHandler.removeCallbacks(it) }
+                watchdogRunnable = null
+            }
+
+            fun scheduleWatchdog(gatt: BluetoothGatt) {
+                cancelWatchdog()
+                watchdogRunnable = Runnable {
+                    Log.w(TAG, "GATT action timed out after 3000ms. Advancing queue.")
+                    processNextFn?.invoke(gatt)
+                }.also { mainHandler.postDelayed(it, 3000L) }
+            }
 
             fun buildWifiDetails(): WifiDetails? {
                 val ssid = discoveredSsid
@@ -239,12 +298,22 @@ class BleUtilImpl(
             }
 
             fun processNext(gatt: BluetoothGatt) {
+                cancelWatchdog()
                 val next = operationQueue.removeFirstOrNull()
                 if (next == null) {
-                    activeGatt = gatt
-                    Log.d(TAG, "All GATT setup operations finished. Keeping BLE connection alive for Wi-Fi handoff.")
-                    if (continuation.isActive) {
-                        continuation.resume(buildWifiDetails())
+                    if (apModeActivated) {
+                        activeGatt = gatt
+                        Log.d(TAG, "All GATT setup operations finished and AP mode activated! Keeping BLE connection alive for Wi-Fi handoff.")
+                        if (continuation.isActive) {
+                            continuation.resume(buildWifiDetails())
+                        }
+                    } else {
+                        Log.d(TAG, "GATT queue completed but AP mode was not active (camera waking up or setup incomplete). Closing session to allow reconnect.")
+                        runCatching { gatt.disconnect() }
+                        runCatching { gatt.close() }
+                        if (continuation.isActive) {
+                            continuation.resume(null)
+                        }
                     }
                     return
                 }
@@ -255,6 +324,7 @@ class BleUtilImpl(
                     }
 
                     is GattAction.EnableNotification -> {
+                        scheduleWatchdog(gatt)
                         gatt.setCharacteristicNotification(next.characteristic, true)
                         val cccd = next.characteristic.getDescriptor(CCCD_UUID)
                         val started = if (cccd != null) {
@@ -276,6 +346,7 @@ class BleUtilImpl(
                     }
 
                     is GattAction.Read -> {
+                        scheduleWatchdog(gatt)
                         val started = gatt.readCharacteristic(next.characteristic)
                         if (!started) {
                             processNext(gatt)
@@ -283,23 +354,36 @@ class BleUtilImpl(
                     }
 
                     is GattAction.Write -> {
+                        val supportsWrite = (next.characteristic.properties and BluetoothGattCharacteristic.PROPERTY_WRITE) != 0
+                        val writeType = if (supportsWrite) {
+                            BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT
+                        } else {
+                            BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE
+                        }
+
                         val started = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                             gatt.writeCharacteristic(
                                 next.characteristic,
                                 next.payload,
-                                BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT,
+                                writeType,
                             ) == BluetoothGatt.GATT_SUCCESS
                         } else {
-                            next.characteristic.writeType = BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT
+                            next.characteristic.writeType = writeType
                             next.characteristic.value = next.payload
                             gatt.writeCharacteristic(next.characteristic)
                         }
+
                         if (!started) {
                             processNext(gatt)
+                        } else if (writeType == BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE) {
+                            mainHandler.postDelayed({ processNext(gatt) }, 100L)
+                        } else {
+                            scheduleWatchdog(gatt)
                         }
                     }
                 }
             }
+            processNextFn = ::processNext
 
             val callback = object : BluetoothGattCallback() {
                 override fun onConnectionStateChange(gatt: BluetoothGatt, status: Int, newState: Int) {
@@ -309,13 +393,14 @@ class BleUtilImpl(
                         onProgress(ConnectionStage.CAMERA_CONNECTED)
                         gatt.discoverServices()
                     } else if (newState == BluetoothProfile.STATE_DISCONNECTED) {
-                        Log.d(TAG, "Disconnected from GATT server")
+                        cancelWatchdog()
+                        Log.d(TAG, "Disconnected from GATT server (status=$status, apModeActivated=$apModeActivated)")
                         if (activeGatt === gatt) {
                             activeGatt = null
                         }
                         runCatching { gatt.close() }
                         if (continuation.isActive) {
-                            continuation.resume(buildWifiDetails())
+                            continuation.resume(if (apModeActivated) buildWifiDetails() else null)
                         }
                     }
                 }
@@ -331,46 +416,40 @@ class BleUtilImpl(
                         return
                     }
 
-                    // 1. Bluetooth Control Service: register paired device name & enable BLE anytime
-                    val btControlService = gatt.getService(BLUETOOTH_CONTROL_SERVICE_UUID)
-                    val pairedNameChar = btControlService?.getCharacteristic(PAIRED_DEVICE_NAME_CHAR_UUID)
-                    if (pairedNameChar != null) {
-                        val deviceNameBytes = Build.MODEL.orEmpty().ifBlank { "Android" }
-                            .take(20)
-                            .toByteArray(Charsets.UTF_8)
-                        operationQueue.add(GattAction.Write(pairedNameChar, deviceNameBytes))
-                    }
-                    val bleEnableChar = btControlService?.getCharacteristic(BLE_ENABLE_CONDITION_CHAR_UUID)
-                    if (bleEnableChar != null) {
-                        operationQueue.add(GattAction.Write(bleEnableChar, byteArrayOf(BLE_ENABLE_ANYTIME)))
-                    }
-
-                    // 2. Camera Service: wake camera by writing Power = 1
                     val cameraService = gatt.getService(CAMERA_SERVICE_UUID)
-                    val powerChar = cameraService?.getCharacteristic(CAMERA_POWER_CHAR_UUID)
-                    if (powerChar != null) {
-                        onProgress(ConnectionStage.STARTING_WIFI)
-                        operationQueue.add(GattAction.Write(powerChar, byteArrayOf(POWER_ON)))
-                    }
-
-                    // 3. WLAN Service: read SSID and Passphrase
                     val wlanService = gatt.getService(WLAN_SERVICE_UUID)
-                    val ssidChar = wlanService?.getCharacteristic(WLAN_SSID_CHAR_UUID)
-                    val passChar = wlanService?.getCharacteristic(WLAN_PASSPHRASE_CHAR_UUID)
-                    if (ssidChar != null) operationQueue.add(GattAction.Read(ssidChar))
-                    if (passChar != null) operationQueue.add(GattAction.Read(passChar))
 
-                    // 4. Poll Operation Mode until camera leaves BLE_STARTUP / POWER_OFF_TRANSFER
-                    val opModeChar = cameraService?.getCharacteristic(OPERATION_MODE_CHAR_UUID)
-                    if (opModeChar != null) {
-                        operationQueue.add(GattAction.Delay(500L))
-                        operationQueue.add(GattAction.Read(opModeChar))
+                    if (wlanService == null) {
+                        // Camera is in sleep / standby mode: WLAN service is not running yet.
+                        // Send Power = 1 to wake the camera SoC and boot the system.
+                        val powerChar = cameraService?.getCharacteristic(CAMERA_POWER_CHAR_UUID)
+                        if (powerChar != null) {
+                            Log.d(TAG, "Camera is asleep (no WLAN service). Sending POWER_ON to wake up...")
+                            onProgress(ConnectionStage.CAMERA_CONNECTED)
+                            operationQueue.add(GattAction.Write(powerChar, byteArrayOf(POWER_ON)))
+                        } else {
+                            Log.w(TAG, "Camera power characteristic not found in standby mode.")
+                        }
                     } else {
-                        // Fallback if Operation Mode characteristic not exposed: wait 3s then write Network Type
-                        val netTypeChar = wlanService?.getCharacteristic(WLAN_NETWORK_TYPE_CHAR_UUID)
-                        if (netTypeChar != null) {
-                            operationQueue.add(GattAction.Delay(3000L))
-                            operationQueue.add(GattAction.Write(netTypeChar, byteArrayOf(NETWORK_TYPE_AP)))
+                        // Camera is booted and active: WLAN service is available!
+                        onProgress(ConnectionStage.STARTING_WIFI)
+
+                        // 1. Read SSID and Passphrase
+                        val ssidChar = wlanService.getCharacteristic(WLAN_SSID_CHAR_UUID)
+                        val passChar = wlanService.getCharacteristic(WLAN_PASSPHRASE_CHAR_UUID)
+                        if (ssidChar != null) operationQueue.add(GattAction.Read(ssidChar))
+                        if (passChar != null) operationQueue.add(GattAction.Read(passChar))
+
+                        // 2. Poll Operation Mode until camera leaves BLE_STARTUP / POWER_OFF_TRANSFER
+                        val opModeChar = cameraService?.getCharacteristic(OPERATION_MODE_CHAR_UUID)
+                        if (opModeChar != null) {
+                            operationQueue.add(GattAction.Delay(300L))
+                            operationQueue.add(GattAction.Read(opModeChar))
+                        } else {
+                            val netTypeChar = wlanService.getCharacteristic(WLAN_NETWORK_TYPE_CHAR_UUID)
+                            if (netTypeChar != null) {
+                                operationQueue.add(GattAction.Write(netTypeChar, byteArrayOf(NETWORK_TYPE_AP)))
+                            }
                         }
                     }
 
@@ -456,6 +535,7 @@ class BleUtilImpl(
                     Log.d(TAG, "onCharacteristicWrite uuid=${characteristic.uuid} status=$status")
                     if (characteristic.uuid == WLAN_NETWORK_TYPE_CHAR_UUID) {
                         if (status == BluetoothGatt.GATT_SUCCESS) {
+                            apModeActivated = true
                             Log.d(TAG, "BLE WLAN activation: Camera accepted Network Type = 1 (AP mode)! Wi-Fi is spinning up.")
                         } else if (netTypeWriteRetries < 3) {
                             netTypeWriteRetries++
@@ -471,6 +551,7 @@ class BleUtilImpl(
             gattRef = device.connectGatt(context, false, callback, BluetoothDevice.TRANSPORT_LE)
 
             continuation.invokeOnCancellation {
+                cancelWatchdog()
                 if (activeGatt !== gattRef) {
                     runCatching { gattRef?.disconnect() }
                     runCatching { gattRef?.close() }

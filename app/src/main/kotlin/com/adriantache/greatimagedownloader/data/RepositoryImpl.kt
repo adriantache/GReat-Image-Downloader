@@ -1,5 +1,7 @@
 package com.adriantache.greatimagedownloader.data
 
+import android.util.Log
+
 import com.adriantache.greatimagedownloader.data.api.RicohApi
 import com.adriantache.greatimagedownloader.data.api.error.CameraException
 import com.adriantache.greatimagedownloader.data.mapper.mapDomainError
@@ -175,11 +177,13 @@ class RepositoryImpl(
                 val useFastPreview = settings?.fastPreviewDownload == true
                 val requestedSize = if (useFastPreview && !photo.isVideoFile) "view" else null
 
+                Log.d("RepositoryImpl", "downloadMediaToStorage: Requesting ${photo.directory}/${photo.name} (size: $requestedSize)")
                 val imageResponse = ricohApi.getPhoto(
                     directory = photo.directory,
                     file = photo.name,
                     size = requestedSize,
                 )
+                Log.d("RepositoryImpl", "downloadMediaToStorage: Received response header for ${photo.name}")
 
                 filesStorage.savePhoto(
                     responseBody = imageResponse,
@@ -188,6 +192,7 @@ class RepositoryImpl(
                     emit(result.mapDomainError())
                 }
             } catch (e: Exception) {
+                Log.e("RepositoryImpl", "downloadMediaToStorage: Exception while downloading ${photo.name}: ${e.message}", e)
                 val exception = when (e) {
                     is SocketTimeoutException -> CameraException.CameraDisconnected
                     is IOException -> CameraException.NetworkError(e)

@@ -249,6 +249,31 @@ class DownloadPhotosUseCaseImplTest {
     }
 
     @Test
+    fun `existing saved BSSID is preserved when wifi BSSID is redacted and across retries`() = runTest {
+        // Arrange: Saved BSSID exists, but Android redacts BSSID to null in onAvailable and Ricoh /v1/props has no macAddress
+        repository.wifiDetails = WifiDetails("SSID", "PASSWORD", "AA:BB:CC:DD:EE:FF")
+        wifiUtil.connectResult = Pair(true, null)
+        repository.cameraStatusResult = Result.success(
+            CameraStatus(model = "RICOH GR III", batteryLevel = 80, macAddress = null)
+        )
+        repository.cameraPhotoListResult = Result.success(
+            listOf(PhotoFile("100RICOH", "R0001234.JPG"))
+        )
+
+        // Act
+        (useCase.state.value as States.Init).onInit()
+        advanceUntilIdle()
+        (useCase.state.value as States.RequestPermissions).onPermissionsGranted()
+        advanceUntilIdle()
+        (useCase.state.value as States.ConnectWifi).onConnect()
+        advanceUntilIdle()
+
+        // Assert: Saved BSSID was passed to connectToWifi and was not overwritten with null
+        assertThat(wifiUtil.connectedBssids).containsExactly("AA:BB:CC:DD:EE:FF")
+        assertThat(repository.wifiDetails.bssid).isEqualTo("AA:BB:CC:DD:EE:FF")
+    }
+
+    @Test
     fun `selecting folders triggers download event and populates pendingPhotosToDownload`() = runTest {
         // Arrange
         repository.wifiDetails = WifiDetails("SSID", "PASSWORD", null)

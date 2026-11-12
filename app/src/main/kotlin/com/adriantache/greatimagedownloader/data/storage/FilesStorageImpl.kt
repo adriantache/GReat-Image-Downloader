@@ -9,6 +9,7 @@ import android.net.Uri
 import android.os.Environment
 import android.provider.MediaStore
 import android.provider.OpenableColumns
+import android.util.Log
 import androidx.core.net.toUri
 import androidx.exifinterface.media.ExifInterface
 import com.adriantache.greatimagedownloader.data.storage.error.FilesStorageException
@@ -175,27 +176,31 @@ class FilesStorageImpl(
     ): Flow<Result<PhotoDownloadInfo>> {
         return flow {
             val fileSize = responseBody.contentLength()
+            Log.d("FilesStorageImpl", "savePhoto: Starting save for ${file.name}, contentLength = $fileSize bytes")
 
             val contentResolver = context.contentResolver
             val imageUri = getFileUri(contentResolver, file, responseBody.contentType()) ?: run {
+                Log.e("FilesStorageImpl", "savePhoto: Failed to obtain MediaStore URI for ${file.name}")
                 responseBody.close()
                 emit(Result.failure(FilesStorageException.FileCreationError))
                 return@flow
             }
             val outputStream = contentResolver.openOutputStream(imageUri) ?: run {
+                Log.e("FilesStorageImpl", "savePhoto: Failed to open OutputStream for $imageUri")
                 deleteInvalidFile(contentResolver, imageUri)
                 responseBody.close()
                 emit(Result.failure(FilesStorageException.FileCreationError))
                 return@flow
             }
 
+            var totalBytesRead = 0L
             try {
                 val imageUriString = imageUri.toString()
+                Log.d("FilesStorageImpl", "savePhoto: Streaming ${file.name} to $imageUriString")
 
                 responseBody.use { body ->
                     body.source().use { source ->
                         outputStream.sink().buffer().use { destination ->
-                            var totalBytesRead = 0L
                             var bytesSinceLastReport = 0L
                             var lastProgressReportTime = 0L
 
@@ -245,6 +250,7 @@ class FilesStorageImpl(
                 }
 
                 markFileComplete(contentResolver, imageUri)
+                Log.d("FilesStorageImpl", "savePhoto: ${file.name} saved successfully, totalBytesRead = $totalBytesRead")
 
                 // Skip EXIF/bitmap dimension inspection for video files
                 val isLandscape = if (file.isVideoFile) {
@@ -265,6 +271,7 @@ class FilesStorageImpl(
                     )
                 )
             } catch (e: IOException) {
+                Log.e("FilesStorageImpl", "savePhoto: IOException while streaming ${file.name}: ${e.message}", e)
                 deleteInvalidFile(contentResolver, imageUri)
                 val error = if (e.message?.contains("No space left on device", ignoreCase = true) == true) {
                     FilesStorageException.StorageFull

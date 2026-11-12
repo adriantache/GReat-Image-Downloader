@@ -21,6 +21,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import kotlin.math.abs
 
 class WearableSyncManager(
     private val context: Context,
@@ -37,11 +38,16 @@ class WearableSyncManager(
         encodeDefaults = true
     }
 
+    private var lastProgressBroadcastTime = 0L
+    private var lastProgressPercent = -1
+    private var lastPhotoIndex = -1
+
     init {
         startObserving()
     }
 
     private fun startObserving() {
+        // Broadcast major state changes immediately (and update persistent DataItem)
         scope.launch {
             combine(
                 dataTransferTool.serviceStateFlow,
@@ -51,18 +57,36 @@ class WearableSyncManager(
             ) { _, _, _, _ ->
                 buildCurrentStatus()
             }.distinctUntilChanged().collect { status ->
-                Log.d(TAG, "Broadcasting status update: $status")
+                Log.d(TAG, "Broadcasting state update: $status")
                 broadcastStatus(status)
             }
         }
 
+        // Throttle high-frequency byte progress to prevent Bluetooth channel saturation and watch UI lag
         scope.launch {
             dataTransferTool.imageUpdatesFlow.collect { imageInfo ->
                 if (dataTransferTool.serviceStateFlow.value == ServiceState.DOWNLOADING) {
-                    val status = buildCurrentStatus().copy(
-                        photoProgressPercent = imageInfo.downloadProgress,
-                    )
-                    broadcastStatus(status)
+                    val currentWidgetState = dataTransferTool.widgetStateFlow.value as? WidgetState.Downloading
+                    val currentPhoto = currentWidgetState?.current ?: 0
+                    val now = System.currentTimeMillis()
+                    val isCompletion = imageInfo.downloadProgress == 100
+                    val isPhotoChanged = currentPhoto != lastPhotoIndex
+                    val isPercentChangedSignificantly = abs(imageInfo.downloadProgress - lastProgressPercent) >= 2
+                    val isTimeElapsed = (now - lastProgressBroadcastTime) >= 250L
+
+                    if (isCompletion || isPhotoChanged || (isPercentChangedSignificantly && isTimeElapsed)) {
+                        lastProgressBroadcastTime = now
+                        lastProgressPercent = imageInfo.downloadProgress
+                        lastPhotoIndex = currentPhoto
+
+                        val roundedSpeed = (imageInfo.downloadSpeed.value * 10).toLong() / 10.0
+                        val status = buildCurrentStatus().copy(
+                            photoProgressPercent = imageInfo.downloadProgress,
+                            downloadSpeedKbps = roundedSpeed,
+                            currentFileName = imageInfo.name,
+                        )
+                        sendStreamingProgress(status)
+                    }
                 }
             }
         }
@@ -78,24 +102,29 @@ class WearableSyncManager(
             WidgetState.Idle -> WearDownloadStatus(state = "IDLE")
 
             is WidgetState.Connecting -> {
-                val stageDesc = when (stage) {
-                    ConnectionStage.CONNECTING_BLE -> "Connecting via Bluetooth…"
-                    ConnectionStage.CAMERA_CONNECTED -> "Camera connected! Waking…"
-                    ConnectionStage.STARTING_WIFI -> "Starting camera Wi-Fi…"
+                val (stageDesc, step) = when (stage) {
+                    ConnectionStage.CONNECTING_BLE -> "Connecting via Bluetooth…" to 1
+                    ConnectionStage.CAMERA_CONNECTED -> "Camera connected! Waking…" to 2
+                    ConnectionStage.STARTING_WIFI -> "Starting camera Wi-Fi…" to 3
                     ConnectionStage.JOINING_WIFI -> {
-                        if (attempt > 1) "Joining Wi-Fi… ($attempt/5)" else "Joining camera Wi-Fi…"
+                        val text = if (attempt > 1) "Joining Wi-Fi… ($attempt/5)" else "Joining camera Wi-Fi…"
+                        text to 4
                     }
-                    null -> "Connecting to camera…"
+                    null -> "Connecting to camera…" to 1
                 }
                 WearDownloadStatus(
                     state = "CONNECTING",
                     stageText = stageDesc,
+                    connectionStep = step,
+                    totalConnectionSteps = 5,
                 )
             }
 
             WidgetState.Checking -> WearDownloadStatus(
                 state = "CHECKING",
                 stageText = "Checking camera for new photos…",
+                connectionStep = 5,
+                totalConnectionSteps = 5,
             )
 
             is WidgetState.Downloading -> WearDownloadStatus(
@@ -104,6 +133,8 @@ class WearableSyncManager(
                 currentPhoto = widgetState.current,
                 totalPhotos = widgetState.total,
                 photoProgressPercent = image?.downloadProgress ?: 0,
+                downloadSpeedKbps = image?.downloadSpeed?.value ?: 0.0,
+                currentFileName = image?.name.orEmpty(),
             )
 
             WidgetState.Stopping -> WearDownloadStatus(
@@ -145,6 +176,18 @@ class WearableSyncManager(
                 dataMap.putLong(WearConstants.KEY_TIMESTAMP, System.currentTimeMillis())
             }
             dataClient.putDataItem(putDataMapReq.asPutDataRequest().setUrgent())
+        }
+    }
+
+    fun sendStreamingProgress(status: WearDownloadStatus) {
+        val jsonString = runCatching { json.encodeToString(status) }.getOrNull() ?: return
+        val jsonBytes = jsonString.toByteArray(Charsets.UTF_8)
+        nodeClient.connectedNodes.addOnSuccessListener { nodes ->
+            for (node in nodes) {
+                messageClient.sendMessage(node.id, WearConstants.PATH_DOWNLOAD_STATUS, jsonBytes)
+            }
+        }.addOnFailureListener { e ->
+            Log.w(TAG, "Failed to send streaming progress to nodes: ${e.message}")
         }
     }
 

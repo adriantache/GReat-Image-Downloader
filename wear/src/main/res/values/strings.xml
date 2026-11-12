@@ -13,4 +13,7 @@
     <string name="phone_not_connected">Phone not connected</string>
     <string name="checking_camera">Checking camera…</string>
     <string name="downloading">Downloading…</string>
+    <string name="cancel">Cancel</string>
+    <string name="step_progress">Step %1$d of %2$d</string>
+    <string name="check_phone">Open phone app to reconnect</string>
 </resources>

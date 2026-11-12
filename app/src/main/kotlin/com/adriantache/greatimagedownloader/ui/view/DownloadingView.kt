@@ -39,6 +39,7 @@ import androidx.compose.ui.unit.dp
 import com.adriantache.greatimagedownloader.domain.data.model.PhotoDownloadInfo
 import com.adriantache.greatimagedownloader.domain.model.CameraStatus
 import com.adriantache.greatimagedownloader.domain.utils.model.Kbps
+import com.adriantache.greatimagedownloader.ui.util.KeepScreenOn
 
 @Composable
 fun DownloadingView(
@@ -50,6 +51,8 @@ fun DownloadingView(
     cameraStatus: CameraStatus? = null,
     onClose: () -> Unit,
 ) {
+    KeepScreenOn()
+
     Column(
         modifier = modifier
             .fillMaxSize()

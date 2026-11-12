@@ -24,6 +24,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.adriantache.greatimagedownloader.domain.model.CameraStatus
 import com.adriantache.greatimagedownloader.domain.model.FolderInfo
+import com.adriantache.greatimagedownloader.ui.util.KeepScreenOn
 
 @Composable
 fun SelectFoldersView(
@@ -31,6 +32,8 @@ fun SelectFoldersView(
     cameraStatus: CameraStatus? = null,
     onFoldersSelect: (List<String>) -> Unit,
 ) {
+    KeepScreenOn()
+
     var selectedFolders by remember { mutableStateOf(folderInfo.folders.keys) }
 
     Column(

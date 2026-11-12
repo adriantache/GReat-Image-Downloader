@@ -337,6 +337,61 @@ class PhotoDownloadServiceTest {
     }
 
     @Test
+    fun `download reconnects to camera Wi-Fi when network drops during screen-off download`() {
+        val mockRepo = mockk<Repository>(relaxed = true)
+        val photoInfo = PhotoDownloadInfo("photo1.jpg", "content://media/1", 100, Kbps(500.0))
+        var callCount = 0
+
+        // Simulate Wi-Fi drop (ensureBound returns false) on initial check, requiring connectToWifi
+        fakeWifiUtil.ensureBoundResult = false
+        fakeWifiUtil.connectResult = Pair(true, "AA:BB:CC:DD:EE:FF")
+
+        every { mockRepo.downloadMediaToStorage(any()) } answers {
+            callCount++
+            if (callCount == 1) {
+                flow {
+                    emit(Result.failure(DomainException(DomainError.NetworkError)))
+                }
+            } else {
+                fakeWifiUtil.ensureBoundResult = true
+                flowOf(Result.success(photoInfo))
+            }
+        }
+        coEvery { mockRepo.getWifiDetails() } returns Result.success(
+            com.adriantache.greatimagedownloader.domain.data.model.WifiDetails("RICOH_GR", "12345678", "AA:BB:CC:DD:EE:FF")
+        )
+        coEvery { mockRepo.shutDownCamera() } returns Result.success(Unit)
+        coEvery { mockRepo.getCameraStatus() } returns Result.success(CameraStatus())
+
+        stopKoin()
+        startKoin {
+            modules(
+                module {
+                    single<Repository> { mockRepo }
+                    single { dataTransferTool }
+                    single<WifiUtil> { fakeWifiUtil }
+                }
+            )
+        }
+
+        val service = serviceController.create().get()
+        val photos = arrayListOf(PhotoFileItem("100RICOH", "photo1.jpg"))
+        val intent = Intent(context, PhotoDownloadService::class.java).apply {
+            action = PhotoDownloadService.Actions.START.name
+            putParcelableArrayListExtra(PhotoDownloadService.PHOTOS_LIST_EXTRA, photos)
+        }
+
+        service.onStartCommand(intent, 0, 1)
+
+        Thread.sleep(900)
+
+        assertThat(callCount).isEqualTo(2)
+        assertThat(fakeWifiUtil.connectCalledCount).isGreaterThan(0)
+        assertThat(dataTransferTool.imageFlow.value).isEqualTo(photoInfo)
+        assertThat(dataTransferTool.downloadFinishedFlow.value?.value).isEqualTo(Unit)
+    }
+
+    @Test
     fun `STOP action interrupts active downloading`() {
         val mockRepo = mockk<Repository>(relaxed = true)
         val photoInfo = PhotoDownloadInfo("photo1.jpg", "content://media/1", 100, Kbps(500.0))

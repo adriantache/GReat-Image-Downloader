@@ -56,14 +56,18 @@ class WearCommunicationClient(
     }
 
     fun sendStartSync() {
+        markSyncInitiated()
         _statusFlow.value = WearDownloadStatus(
             state = "CONNECTING",
             stageText = "Connecting via Bluetooth…",
+            connectionStep = 1,
+            totalConnectionSteps = 5,
         )
         sendMessageToAllNodes(WearConstants.PATH_START_SYNC)
     }
 
     fun sendStopSync() {
+        _lastSyncInitiatedTime = 0L
         _statusFlow.value = WearDownloadStatus(
             state = "STOPPING",
             stageText = "Stopping…",
@@ -76,11 +80,11 @@ class WearCommunicationClient(
     }
 
     fun resetToIdle() {
+        _lastSyncInitiatedTime = 0L
         _statusFlow.value = WearDownloadStatus(state = "IDLE")
     }
 
     override fun onMessageReceived(messageEvent: MessageEvent) {
-        Log.d(TAG, "onMessageReceived path=${messageEvent.path}")
         if (messageEvent.path == WearConstants.PATH_DOWNLOAD_STATUS) {
             parseAndUpdateStatus(String(messageEvent.data, Charsets.UTF_8))
         }
@@ -104,9 +108,7 @@ class WearCommunicationClient(
         runCatching {
             json.decodeFromString<WearDownloadStatus>(jsonString)
         }.onSuccess { status ->
-            Log.d(TAG, "Parsed status update: $status")
-            _statusFlow.value = status
-            _isPhoneConnectedFlow.value = true
+            updateSharedStatus(status)
         }.onFailure { e ->
             Log.w(TAG, "Failed to parse WearDownloadStatus JSON: ${e.message}")
         }
@@ -133,10 +135,23 @@ class WearCommunicationClient(
         private const val TAG = "WearCommClient"
         private val _statusFlow = MutableStateFlow(WearDownloadStatus())
         private val _isPhoneConnectedFlow = MutableStateFlow(true)
+        private var _lastSyncInitiatedTime = 0L
+
+        fun markSyncInitiated() {
+            _lastSyncInitiatedTime = System.currentTimeMillis()
+        }
 
         fun updateSharedStatus(status: WearDownloadStatus) {
-            _statusFlow.value = status
-            _isPhoneConnectedFlow.value = true
+            // Guard against stale initial IDLE replies during the 3-second startup handshake
+            val isFreshSync = (System.currentTimeMillis() - _lastSyncInitiatedTime) < 3000L
+            if (status.state == "IDLE" && isFreshSync) {
+                Log.d(TAG, "Ignoring stale IDLE during sync handshake")
+                return
+            }
+            if (_statusFlow.value != status) {
+                _statusFlow.value = status
+                _isPhoneConnectedFlow.value = true
+            }
         }
     }
 }

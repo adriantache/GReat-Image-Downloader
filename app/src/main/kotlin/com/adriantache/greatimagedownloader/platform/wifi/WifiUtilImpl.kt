@@ -20,11 +20,15 @@ import android.util.Log
 import androidx.core.content.ContextCompat
 import com.adriantache.greatimagedownloader.domain.wifi.WifiUtil
 import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.firstOrNull
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
@@ -40,6 +44,15 @@ class WifiUtilImpl(
 
     private var networkCallback: NetworkCallback? = null
 
+    @Volatile
+    private var connectedCameraNetwork: android.net.Network? = null
+
+    @Volatile
+    private var targetCameraSsid: String? = null
+
+    @Volatile
+    private var latestBssid: String? = null
+
     override val isWifiDisabled: Boolean
         get() = !wifiManager.isWifiEnabled
 
@@ -48,81 +61,120 @@ class WifiUtilImpl(
         password: String,
         bssid: String?, // The new, optional BSSID for the "fast path"
     ): Pair<Boolean, String?> { // Returns success status and the new BSSID if found
-        if (isAlreadyConnected(ssid)) {
-            Log.d("WifiUtilImpl", "Already connected to $ssid")
-            return Pair(true, bssid)
+        val cleanSsid = ssid.removeSurrounding("\"")
+        targetCameraSsid = cleanSsid
+
+        if (isAlreadyConnected(cleanSsid)) {
+            val resolvedBssid = findBssidFromScanResults(cleanSsid)
+                ?: latestBssid
+                ?: bssid?.takeIf { isValidBssid(it) }
+            Log.d("WifiUtilImpl", "Already connected to $cleanSsid (bssid=$resolvedBssid)")
+            return Pair(true, resolvedBssid)
         }
 
-        cleanup()
+        cleanup(clearTargetSsid = false)
+
+        // Trigger an active scan immediately so Android's WifiNetworkFactory has fresh scan results
+        // even when the device screen is off (when OS periodic scans are paused).
+        @Suppress("DEPRECATION")
+        runCatching { wifiManager.startScan() }
+
+        val effectiveBssid = bssid?.takeIf { isValidBssid(it) }
+            ?: findBssidFromScanResults(cleanSsid)
+            ?: latestBssid?.takeIf { isValidBssid(it) }
+
+        if (effectiveBssid != null) {
+            latestBssid = effectiveBssid
+        }
 
         return withTimeoutOrNull(15.seconds) { // Overall 15 second timeout
-            suspendCancellableCoroutine { continuation ->
-                val specifierBuilder = WifiNetworkSpecifier.Builder()
-                    .setSsid(ssid)
-                    .setWpa2Passphrase(password)
-
-                // If we have a BSSID, add it to the specifier for a faster connection
-                // Only use it if it's not the dummy "02:00:00:00:00:00" address
-                if (isValidBssid(bssid)) {
-                    specifierBuilder.setBssid(MacAddress.fromString(bssid!!))
+            val scanScope = CoroutineScope(dispatcher)
+            val periodicScanJob = scanScope.launch {
+                // Keep feeding scan results to WifiNetworkFactory while waiting for the camera AP to boot when screen is off
+                delay(4.seconds)
+                if (isActive) {
+                    @Suppress("DEPRECATION")
+                    runCatching { wifiManager.startScan() }
                 }
+                delay(5.seconds)
+                if (isActive) {
+                    @Suppress("DEPRECATION")
+                    runCatching { wifiManager.startScan() }
+                }
+            }
 
-                val request = NetworkRequest.Builder()
-                    .addTransportType(NetworkCapabilities.TRANSPORT_WIFI)
-                    .setNetworkSpecifier(specifierBuilder.build())
-                    .build()
+            try {
+                suspendCancellableCoroutine { continuation ->
+                    val specifierBuilder = WifiNetworkSpecifier.Builder()
+                        .setSsid(cleanSsid)
+                        .setWpa2Passphrase(password)
 
-                val callback = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                    object : NetworkCallback(FLAG_INCLUDE_LOCATION_INFO) {
-                        override fun onAvailable(network: android.net.Network) {
-                            handleOnAvailable(network, null, continuation)
+                    // If we have a BSSID, add it to the specifier for a faster connection
+                    // and to bypass the interactive system dialog when the screen is off.
+                    if (isValidBssid(effectiveBssid)) {
+                        runCatching { specifierBuilder.setBssid(MacAddress.fromString(effectiveBssid!!)) }
+                    }
+
+                    val request = NetworkRequest.Builder()
+                        .addTransportType(NetworkCapabilities.TRANSPORT_WIFI)
+                        .removeCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+                        .setNetworkSpecifier(specifierBuilder.build())
+                        .build()
+
+                    val callback = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                        object : NetworkCallback(FLAG_INCLUDE_LOCATION_INFO) {
+                            override fun onAvailable(network: android.net.Network) {
+                                handleOnAvailable(network, null, cleanSsid, effectiveBssid, continuation)
+                            }
+
+                            override fun onCapabilitiesChanged(
+                                network: android.net.Network,
+                                networkCapabilities: NetworkCapabilities,
+                            ) {
+                                handleOnAvailable(network, networkCapabilities, cleanSsid, effectiveBssid, continuation)
+                            }
+
+                            override fun onLost(network: android.net.Network) {
+                                handleOnLost(network)
+                            }
+
+                            override fun onUnavailable() {
+                                handleOnUnavailable(continuation)
+                            }
                         }
+                    } else {
+                        object : NetworkCallback() {
+                            override fun onAvailable(network: android.net.Network) {
+                                handleOnAvailable(network, null, cleanSsid, effectiveBssid, continuation)
+                            }
 
-                        override fun onCapabilitiesChanged(
-                            network: android.net.Network,
-                            networkCapabilities: NetworkCapabilities,
-                        ) {
-                            handleOnAvailable(network, networkCapabilities, continuation)
-                        }
+                            override fun onCapabilitiesChanged(
+                                network: android.net.Network,
+                                networkCapabilities: NetworkCapabilities,
+                            ) {
+                                handleOnAvailable(network, networkCapabilities, cleanSsid, effectiveBssid, continuation)
+                            }
 
-                        override fun onLost(network: android.net.Network) {
-                            handleOnLost(network)
-                        }
+                            override fun onLost(network: android.net.Network) {
+                                handleOnLost(network)
+                            }
 
-                        override fun onUnavailable() {
-                            handleOnUnavailable(continuation)
+                            override fun onUnavailable() {
+                                handleOnUnavailable(continuation)
+                            }
                         }
                     }
-                } else {
-                    object : NetworkCallback() {
-                        override fun onAvailable(network: android.net.Network) {
-                            handleOnAvailable(network, null, continuation)
-                        }
 
-                        override fun onCapabilitiesChanged(
-                            network: android.net.Network,
-                            networkCapabilities: NetworkCapabilities,
-                        ) {
-                            handleOnAvailable(network, networkCapabilities, continuation)
-                        }
+                    networkCallback = callback
 
-                        override fun onLost(network: android.net.Network) {
-                            handleOnLost(network)
-                        }
-
-                        override fun onUnavailable() {
-                            handleOnUnavailable(continuation)
-                        }
+                    continuation.invokeOnCancellation {
+                        cleanup(clearTargetSsid = false)
                     }
+
+                    connectivityManager.requestNetwork(request, callback, 15_000)
                 }
-
-                networkCallback = callback
-
-                continuation.invokeOnCancellation {
-                    cleanup()
-                }
-
-                connectivityManager.requestNetwork(request, callback, 15_000)
+            } finally {
+                periodicScanJob.cancel()
             }
         } ?: Pair(false, null) // Timeout case
     }
@@ -130,14 +182,24 @@ class WifiUtilImpl(
     private fun handleOnAvailable(
         network: android.net.Network,
         callbackCapabilities: NetworkCapabilities?,
+        ssid: String,
+        fallbackBssid: String?,
         continuation: kotlinx.coroutines.CancellableContinuation<Pair<Boolean, String?>>,
     ) {
+        connectedCameraNetwork = network
         connectivityManager.bindProcessToNetwork(network)
 
         // Prefer capabilities delivered directly to onCapabilitiesChanged (which carry unredacted location info)
         val capabilities = callbackCapabilities ?: connectivityManager.getNetworkCapabilities(network)
         val wifiInfo = capabilities?.transportInfo as? WifiInfo
         val newBssid = wifiInfo?.bssid?.takeIf { isValidBssid(it) }
+            ?: findBssidFromScanResults(ssid)
+            ?: latestBssid?.takeIf { isValidBssid(it) }
+            ?: fallbackBssid?.takeIf { isValidBssid(it) }
+
+        if (newBssid != null) {
+            latestBssid = newBssid
+        }
 
         if (continuation.isActive) {
             continuation.resume(Pair(true, newBssid))
@@ -145,6 +207,10 @@ class WifiUtilImpl(
     }
 
     private fun handleOnLost(network: android.net.Network) {
+        Log.w("WifiUtilImpl", "Wi-Fi network lost: $network")
+        if (connectedCameraNetwork == network) {
+            connectedCameraNetwork = null
+        }
         if (connectivityManager.boundNetworkForProcess == network) {
             connectivityManager.bindProcessToNetwork(null)
         }
@@ -161,6 +227,15 @@ class WifiUtilImpl(
     @Suppress("DEPRECATION")
     private fun isAlreadyConnected(targetSsid: String): Boolean {
         val cleanTargetSsid = targetSsid.removeSurrounding("\"")
+        val cameraNet = connectedCameraNetwork
+        if (cameraNet != null && cameraNet in connectivityManager.allNetworks) {
+            val caps = connectivityManager.getNetworkCapabilities(cameraNet)
+            if (caps?.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) == true) {
+                connectivityManager.bindProcessToNetwork(cameraNet)
+                return true
+            }
+        }
+
         val candidateNetworks = buildList {
             connectivityManager.boundNetworkForProcess?.let { add(it) }
             connectivityManager.activeNetwork?.let { add(it) }
@@ -174,6 +249,7 @@ class WifiUtilImpl(
             val wifiInfo = capabilities.transportInfo as? WifiInfo
             val currentSsid = wifiInfo?.ssid?.removeSurrounding("\"")
             if (currentSsid == cleanTargetSsid) {
+                connectedCameraNetwork = network
                 connectivityManager.bindProcessToNetwork(network)
                 return true
             }
@@ -181,22 +257,55 @@ class WifiUtilImpl(
         return false
     }
 
+    private fun findBssidFromScanResults(targetSsid: String): String? {
+        val cleanTarget = targetSsid.removeSurrounding("\"")
+        val results = runCatching { wifiManager.scanResults.orEmpty() }.getOrDefault(emptyList())
+        return results
+            .filter { extractSsid(it).equals(cleanTarget, ignoreCase = true) && isValidBssid(it.BSSID) }
+            .maxByOrNull { it.level }
+            ?.BSSID
+    }
+
     private fun isValidBssid(bssid: String?): Boolean {
         return !bssid.isNullOrBlank() && bssid != "02:00:00:00:00:00"
     }
 
     override fun ensureBound(): Boolean {
+        val cameraNet = connectedCameraNetwork
+        if (cameraNet != null) {
+            val caps = connectivityManager.getNetworkCapabilities(cameraNet)
+            if (caps?.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) == true) {
+                if (connectivityManager.boundNetworkForProcess != cameraNet) {
+                    connectivityManager.bindProcessToNetwork(cameraNet)
+                }
+                return true
+            } else {
+                connectedCameraNetwork = null
+            }
+        }
+
         val currentBound = connectivityManager.boundNetworkForProcess
         if (currentBound != null) {
             val caps = connectivityManager.getNetworkCapabilities(currentBound)
             if (caps?.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) == true) {
-                return true
+                // If we had a target camera SSID, make sure the bound network is not a home internet Wi-Fi
+                if (targetCameraSsid == null || !caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)) {
+                    return true
+                }
             }
         }
 
+        // If we are actively targeting a camera SSID and connectedCameraNetwork was lost,
+        // only bind to a Wi-Fi network that matches the camera SSID or is a local-only (unvalidated) Wi-Fi network.
+        val expectedSsid = targetCameraSsid
         val wifiNetwork = connectivityManager.allNetworks.firstOrNull { network ->
-            val caps = connectivityManager.getNetworkCapabilities(network)
-            caps?.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) == true
+            val caps = connectivityManager.getNetworkCapabilities(network) ?: return@firstOrNull false
+            if (!caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)) return@firstOrNull false
+            if (expectedSsid == null) return@firstOrNull true
+
+            val wifiInfo = caps.transportInfo as? WifiInfo
+            val ssid = wifiInfo?.ssid?.removeSurrounding("\"")
+            ssid == expectedSsid || !caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
         }
 
         if (wifiNetwork != null) {
@@ -207,10 +316,18 @@ class WifiUtilImpl(
     }
 
     override fun cleanup() {
+        cleanup(clearTargetSsid = true)
+    }
+
+    private fun cleanup(clearTargetSsid: Boolean) {
         networkCallback?.let {
             runCatching { connectivityManager.unregisterNetworkCallback(it) }
         }
         networkCallback = null
+        connectedCameraNetwork = null
+        if (clearTargetSsid) {
+            targetCameraSsid = null
+        }
 
         connectivityManager.bindProcessToNetwork(null)
     }

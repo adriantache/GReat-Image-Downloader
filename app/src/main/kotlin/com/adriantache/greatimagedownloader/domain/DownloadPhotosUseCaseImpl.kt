@@ -232,6 +232,11 @@ class DownloadPhotosUseCaseImpl(
     }
 
     override fun startBackgroundSync() {
+        if (dataTransferTool.serviceStateFlow.value != ServiceState.IDLE || isBackgroundSync) {
+            Log.d("DownloadPhotosUseCase", "startBackgroundSync: ignored, already active (state=${dataTransferTool.serviceStateFlow.value}, isBackgroundSync=$isBackgroundSync)")
+            return
+        }
+
         val wifiDetails = repository.getWifiDetails().getOrNull()?.toEntity() ?: WifiDetailsEntity()
         if (!wifiDetails.isValid || wifiUtil.isWifiDisabled) {
             dataTransferTool.widgetStateFlow.value = WidgetState.Error
@@ -367,6 +372,18 @@ class DownloadPhotosUseCaseImpl(
             dataTransferTool.widgetStateFlow.value = WidgetState.Connecting("BT…")
             dataTransferTool.serviceStateFlow.value = ServiceState.CONNECTING
 
+            // Start the foreground service immediately (before BLE wake-up) so WakeLock and WifiLock
+            // are held even if the user turns the phone screen off while Bluetooth is waking the camera.
+            if (!wifiDetails.ssid.isNullOrBlank() && !wifiDetails.password.isNullOrBlank()) {
+                event.value = Event(
+                    Events.ConnectWithService(
+                        ssid = wifiDetails.ssid,
+                        password = wifiDetails.password,
+                        bssid = wifiDetails.bssid,
+                    )
+                )
+            }
+
             var isConnected = false
             var newBssid: String? = null
             val maxRetries = 5
@@ -392,6 +409,7 @@ class DownloadPhotosUseCaseImpl(
 
             val targetSsid = bleWifiDetails?.ssid?.takeIf { it.isNotBlank() } ?: wifiDetails.ssid!!
             val targetPassword = bleWifiDetails?.password?.takeIf { it.isNotBlank() } ?: wifiDetails.password!!
+            var currentBssid = wifiDetails.bssid?.takeIf { it.isNotBlank() }
 
             for (attempt in 1..maxRetries) {
                 if (!isActive) return@launch
@@ -408,40 +426,50 @@ class DownloadPhotosUseCaseImpl(
                 val stageText = if (attempt > 1) "Join $attempt…" else "Join…"
                 dataTransferTool.widgetStateFlow.value = WidgetState.Connecting(stageText)
 
+                // Keep using the known BSSID across retries so Android's WifiNetworkFactory
+                // can bypass the interactive approval dialog when the screen is off.
+                val attemptBssid = if (attempt < maxRetries) currentBssid else null
+
                 // Notify Service/UI that we are attempting connection
                 event.value = Event(
                     Events.ConnectWithService(
                         ssid = targetSsid,
                         password = targetPassword,
-                        bssid = if (attempt == 1) wifiDetails.bssid else null, // Only try BSSID on first attempt
+                        bssid = attemptBssid,
                     )
                 )
 
                 val (attemptIsConnected, attemptNewBssid) = wifiUtil.connectToWifi(
                     ssid = targetSsid,
                     password = targetPassword,
-                    bssid = if (attempt == 1) wifiDetails.bssid else null,
+                    bssid = attemptBssid,
                 )
+
+                if (!attemptNewBssid.isNullOrBlank()) {
+                    currentBssid = attemptNewBssid
+                }
 
                 if (attemptIsConnected) {
                     isConnected = true
-                    newBssid = attemptNewBssid
+                    newBssid = attemptNewBssid ?: currentBssid
                     break
                 }
 
-                if (attempt < maxRetries) delay(3.seconds)
+                if (attempt < maxRetries) delay(5.seconds)
             }
 
             if (!isActive) return@launch
 
             if (isConnected) {
-                // Save new BSSID
+                // Save new BSSID (never overwrite an existing valid BSSID with null if SSID is unchanged)
                 repository.getWifiDetails().getOrNull()?.let { currentDetails ->
+                    val resolvedBssid = newBssid?.takeIf { it.isNotBlank() }
+                        ?: currentDetails.bssid?.takeIf { currentDetails.ssid == targetSsid }
                     repository.saveWifiDetails(
                         currentDetails.copy(
                             ssid = targetSsid,
                             password = targetPassword,
-                            bssid = newBssid,
+                            bssid = resolvedBssid,
                         )
                     )
                 }
@@ -683,9 +711,9 @@ class DownloadPhotosUseCaseImpl(
 
     private fun onDownloadPhotoInfo(info: PhotoDownloadInfo) {
         if (photosToDownload.isNotEmpty()) {
-            val completedCount = downloadedPhotoUris.values.count { it.downloadProgress == 100 }
+            val currentPhotoIndex = downloadedPhotoUris.size.coerceIn(1, photosToDownload.size)
             dataTransferTool.widgetStateFlow.value = WidgetState.Downloading(
-                current = completedCount.coerceAtLeast(1).coerceAtMost(photosToDownload.size),
+                current = currentPhotoIndex,
                 total = photosToDownload.size,
             )
         }

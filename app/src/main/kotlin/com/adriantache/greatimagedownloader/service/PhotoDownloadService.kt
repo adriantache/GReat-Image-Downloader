@@ -3,16 +3,20 @@ package com.adriantache.greatimagedownloader.service
 import android.app.NotificationManager
 import android.app.Service
 import android.content.Intent
+import android.content.pm.ServiceInfo
 import android.net.wifi.WifiManager
 import android.os.Build
 import android.os.IBinder
 import android.os.PowerManager
 import android.util.Log
+import androidx.core.app.ServiceCompat
 import androidx.glance.appwidget.updateAll
 import com.adriantache.greatimagedownloader.domain.DownloadPhotosUseCase
 import com.adriantache.greatimagedownloader.domain.ble.ConnectionStage
 import com.adriantache.greatimagedownloader.domain.data.Repository
+import com.adriantache.greatimagedownloader.domain.data.model.PhotoDownloadInfo
 import com.adriantache.greatimagedownloader.domain.data.model.PhotoFile
+import com.adriantache.greatimagedownloader.domain.data.model.WifiDetails
 import com.adriantache.greatimagedownloader.domain.model.DomainError
 import com.adriantache.greatimagedownloader.domain.model.DomainException
 import com.adriantache.greatimagedownloader.domain.utils.model.Event
@@ -59,7 +63,16 @@ class PhotoDownloadService : Service(), KoinComponent {
         registerNotificationChannel(this)
 
         val notification = getNotification(this)
-        startForeground(1, notification)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            ServiceCompat.startForeground(
+                this,
+                1,
+                notification,
+                ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE,
+            )
+        } else {
+            startForeground(1, notification)
+        }
 
         acquireLocks()
 
@@ -92,8 +105,10 @@ class PhotoDownloadService : Service(), KoinComponent {
 
                     ServiceState.DOWNLOADING -> {
                         hasEnteredActiveState = true
+                        Log.d("PhotoDownloadService", "serviceStateFlow collector: DOWNLOADING (downloadJobActive=${downloadJob?.isActive})")
                         if (downloadJob?.isActive != true) {
                             val pending = dataTransferTool.consumePendingPhotos()
+                            Log.d("PhotoDownloadService", "serviceStateFlow collector: consumed ${pending.size} pending photos")
                             if (pending.isNotEmpty()) {
                                 start(pending)
                             }
@@ -109,6 +124,7 @@ class PhotoDownloadService : Service(), KoinComponent {
 
                     ServiceState.IDLE -> {
                         if (hasEnteredActiveState && downloadJob?.isActive != true) {
+                            hasEnteredActiveState = false
                             refreshWidget()
                             stopSelf()
                         }
@@ -178,12 +194,18 @@ class PhotoDownloadService : Service(), KoinComponent {
             Actions.CONNECT.name -> {
                 Log.d("PhotoDownloadService", "onStartCommand: CONNECT")
                 hasEnteredActiveState = true
+                acquireLocks()
                 dataTransferTool.serviceStateFlow.value = ServiceState.CONNECTING
             }
 
             Actions.QUICK_DOWNLOAD.name -> {
                 Log.d("PhotoDownloadService", "onStartCommand: QUICK_DOWNLOAD")
                 hasEnteredActiveState = true
+                acquireLocks()
+                if (downloadJob?.isActive == true) {
+                    Log.d("PhotoDownloadService", "onStartCommand: QUICK_DOWNLOAD ignored, downloadJob already active")
+                    return START_STICKY
+                }
                 val useCase = getKoin().getOrNull<DownloadPhotosUseCase>()
                 if (useCase != null) {
                     useCase.startBackgroundSync()
@@ -195,7 +217,9 @@ class PhotoDownloadService : Service(), KoinComponent {
 
             Actions.STOP.name -> {
                 continueDownload = false
-                if (downloadJob?.isActive != true) {
+                if (downloadJob?.isActive == true) {
+                    dataTransferTool.widgetStateFlow.value = WidgetState.Stopping
+                } else {
                     getKoin().getOrNull<DownloadPhotosUseCase>()?.cancelConnection()
                     scope.launch { disconnect() }
                 }
@@ -209,9 +233,16 @@ class PhotoDownloadService : Service(), KoinComponent {
         super.onDestroy()
         releaseLocks()
         scope.cancel()
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            stopForeground(STOP_FOREGROUND_REMOVE)
+        } else {
+            @Suppress("DEPRECATION")
+            stopForeground(true)
+        }
     }
 
     private fun start(photosToDownload: List<PhotoFile>?) {
+        Log.d("PhotoDownloadService", "start: photosToDownload count = ${photosToDownload?.size}")
         if (photosToDownload.isNullOrEmpty()) {
             Log.e(this::class.java.simpleName, "Photos list is null!")
             scope.launch { disconnect() }
@@ -244,29 +275,41 @@ class PhotoDownloadService : Service(), KoinComponent {
     }
 
     private suspend fun downloadPhotos(photosToDownload: List<PhotoFile>) {
+        Log.d("PhotoDownloadService", "downloadPhotos: Beginning download of ${photosToDownload.size} photos")
         var isError = false
         val completedPhotos = mutableListOf<PhotoFile>()
 
         for (index in photosToDownload.indices) {
             if (!continueDownload) break
 
+            val photo = photosToDownload[index]
+            dataTransferTool.imageFlow.value = PhotoDownloadInfo(
+                name = photo.name,
+                uri = "",
+                downloadProgress = 0,
+                downloadSpeed = com.adriantache.greatimagedownloader.domain.utils.model.Kbps(0.0),
+                isLandscape = true,
+            )
             updateNotification(index + 1, photosToDownload.size)
             dataTransferTool.widgetStateFlow.value = WidgetState.Downloading(index + 1, photosToDownload.size)
 
-            val photo = photosToDownload[index]
+            Log.d("PhotoDownloadService", "downloadPhotos: [${index + 1}/${photosToDownload.size}] Starting ${photo.directory}/${photo.name}")
 
-            // Ensure we are bound to the camera's Wi-Fi network before requesting the file
-            wifiUtil.ensureBound()
+            // Ensure we are bound (or reconnected) to the camera's Wi-Fi network before requesting the file
+            ensureCameraWifiConnected()
 
-            // Safely refresh camera status (battery / thermal) between photo downloads
-            val status = runCatching { repository.getCameraStatus().getOrNull() }.getOrNull()
-            if (status != null) {
-                dataTransferTool.cameraStatusFlow.value = status
+            // Refresh camera status (battery / thermal) periodically rather than before every photo
+            // to minimize HTTP connection churn on the camera's single-threaded server
+            if (index == 0 || index % 5 == 0) {
+                val status = runCatching { repository.getCameraStatus().getOrNull() }.getOrNull()
+                if (status != null) {
+                    dataTransferTool.cameraStatusFlow.value = status
+                }
             }
 
             var photoDownloaded = false
             var lastDomainError: DomainError? = null
-            val maxRetries = 3
+            val maxRetries = 4
 
             for (attempt in 1..maxRetries) {
                 if (!continueDownload) break
@@ -276,6 +319,7 @@ class PhotoDownloadService : Service(), KoinComponent {
                 var attemptFailed = false
 
                 try {
+                    Log.d("PhotoDownloadService", "downloadPhotos: [${photo.name}] attempt $attempt/$maxRetries started")
                     repository.downloadMediaToStorage(photo).collect { result ->
                         if (!continueDownload) {
                             throw CancellationException("Download stopped by user")
@@ -289,10 +333,12 @@ class PhotoDownloadService : Service(), KoinComponent {
                                 if (info.downloadProgress == 100) {
                                     completedPhotos.add(photo)
                                     photoDownloaded = true
+                                    Log.d("PhotoDownloadService", "downloadPhotos: [${photo.name}] successfully finished (URI: $lastUri)")
                                 }
                             },
                             onFailure = { throwable ->
                                 attemptFailed = true
+                                Log.e("PhotoDownloadService", "downloadPhotos: [${photo.name}] attempt $attempt failed with error: ${throwable.message}")
                                 lastUri?.let { uri ->
                                     if (lastProgress < 100) {
                                         repository.deleteMedia(uri)
@@ -305,6 +351,7 @@ class PhotoDownloadService : Service(), KoinComponent {
                         )
                     }
                 } catch (_: CancellationException) {
+                    Log.d("PhotoDownloadService", "downloadPhotos: [${photo.name}] cancelled")
                     lastUri?.let { uri ->
                         if (lastProgress < 100) {
                             repository.deleteMedia(uri)
@@ -324,24 +371,25 @@ class PhotoDownloadService : Service(), KoinComponent {
 
                 if (attemptFailed && attempt < maxRetries) {
                     Log.w("PhotoDownloadService", "Download of ${photo.name} failed (attempt $attempt/$maxRetries, error: $lastDomainError). Retrying...")
-                    wifiUtil.ensureBound()
+                    ensureCameraWifiConnected(forceReconnect = attempt >= 2)
                     delay(500L * attempt)
                 }
             }
 
             if (!photoDownloaded && continueDownload) {
                 isError = true
+                Log.e("PhotoDownloadService", "downloadPhotos: All $maxRetries attempts failed for ${photo.name}")
                 handleError(lastDomainError ?: DomainError.NetworkError)
                 break
             }
         }
 
         if (completedPhotos.isNotEmpty()) {
+            Log.d("PhotoDownloadService", "downloadPhotos: Updating latest downloaded photos for ${completedPhotos.size} files")
             updateLatestDownloadedPhotos(completedPhotos)
         }
 
-        // Shut down camera first while process is still bound to the camera Wi-Fi network,
-        // before emitting downloadFinishedFlow (which triggers wifiUtil.cleanup() in the use case).
+        Log.d("PhotoDownloadService", "downloadPhotos: Shutting down camera (completed=${completedPhotos.size}, error=$isError)")
         repository.shutDownCamera()
 
         if (!isError || !continueDownload) {
@@ -355,7 +403,37 @@ class PhotoDownloadService : Service(), KoinComponent {
         }
 
         dataTransferTool.serviceStateFlow.value = ServiceState.IDLE
+        Log.d("PhotoDownloadService", "downloadPhotos: Finished, stopping service")
         stopSelf()
+    }
+
+    private suspend fun ensureCameraWifiConnected(forceReconnect: Boolean = false): Boolean {
+        if (!forceReconnect && wifiUtil.ensureBound()) {
+            return true
+        }
+
+        val wifiDetails = runCatching { repository.getWifiDetails().getOrNull() }.getOrNull()
+        val ssid = wifiDetails?.ssid?.takeIf { it.isNotBlank() }
+        val password = wifiDetails?.password
+        if (ssid == null || password == null) {
+            return wifiUtil.ensureBound()
+        }
+
+        Log.w(
+            "PhotoDownloadService",
+            "ensureCameraWifiConnected: Reconnecting to camera Wi-Fi (ssid=$ssid, forceReconnect=$forceReconnect)",
+        )
+        val (connected, newBssid) = wifiUtil.connectToWifi(ssid, password, wifiDetails.bssid)
+        if (connected) {
+            val resolvedBssid = newBssid?.takeIf { it.isNotBlank() } ?: wifiDetails.bssid
+            if (resolvedBssid != wifiDetails.bssid) {
+                runCatching { repository.saveWifiDetails(WifiDetails(ssid, password, resolvedBssid)) }
+            }
+            wifiUtil.ensureBound()
+            return true
+        }
+
+        return wifiUtil.ensureBound()
     }
 
     private suspend fun updateLatestDownloadedPhotos(downloadedPhotos: List<PhotoFile>) {
