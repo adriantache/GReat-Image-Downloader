@@ -20,7 +20,7 @@ espressoCore = "3.7.0"
 exifinterface = "1.4.2"
 mockk = "1.14.12"
 kotlinxCoroutinesTest = "1.11.0"
-robolectric = "4.17"
+robolectric = "4.18"
 playServicesWearable = "20.0.1"
 wearCompose = "1.7.1"
 
