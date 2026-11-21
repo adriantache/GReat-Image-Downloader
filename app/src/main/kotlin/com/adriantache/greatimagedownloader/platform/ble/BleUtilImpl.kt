@@ -267,6 +267,7 @@ class BleUtilImpl(
             var discoveredSsid: String? = null
             var discoveredPassphrase: String? = null
             var opModePollRetries = 0
+            var playbackModeRequested = false
             var netTypeWriteRetries = 0
             var apModeActivated = false
 
@@ -505,20 +506,29 @@ class BleUtilImpl(
                                 val mode = if (value.isNotEmpty()) value[0].toInt() else -1
                                 Log.d(TAG, "Read Operation Mode from camera BLE: 0x%02X".format(mode))
 
-                                val isStandby = mode == OPERATION_MODE_BLE_STARTUP.toInt() ||
-                                    mode == OPERATION_MODE_POWER_OFF_TRANSFER.toInt()
-
-                                if (isStandby && opModePollRetries < 10) {
-                                    opModePollRetries++
-                                    Log.d(TAG, "Camera is still in standby/boot mode (0x%02X). Waiting and retrying poll $opModePollRetries/10...".format(mode))
-                                    operationQueue.addFirst(GattAction.Read(gatt.getService(CAMERA_SERVICE_UUID)!!.getCharacteristic(OPERATION_MODE_CHAR_UUID)))
-                                    operationQueue.addFirst(GattAction.Delay(500L))
+                                val opModeChar = gatt.getService(CAMERA_SERVICE_UUID)?.getCharacteristic(OPERATION_MODE_CHAR_UUID)
+                                if (mode == OPERATION_MODE_POWER_OFF_TRANSFER.toInt() && !playbackModeRequested && opModeChar != null) {
+                                    playbackModeRequested = true
+                                    Log.d(TAG, "Camera is in PowerOffTransfer (0x04); requesting Playback mode (0x01)...")
+                                    operationQueue.addFirst(GattAction.Read(opModeChar))
+                                    operationQueue.addFirst(GattAction.Delay(300L))
+                                    operationQueue.addFirst(GattAction.Write(opModeChar, byteArrayOf(OPERATION_MODE_PLAYBACK)))
                                 } else {
-                                    Log.d(TAG, "Camera is ready to raise Wi-Fi AP (Operation Mode: 0x%02X). Queueing Network Type = 1 (AP mode).".format(mode))
-                                    val wlanService = gatt.getService(WLAN_SERVICE_UUID)
-                                    val netTypeChar = wlanService?.getCharacteristic(WLAN_NETWORK_TYPE_CHAR_UUID)
-                                    if (netTypeChar != null) {
-                                        operationQueue.addFirst(GattAction.Write(netTypeChar, byteArrayOf(NETWORK_TYPE_AP)))
+                                    val isStandby = mode == OPERATION_MODE_BLE_STARTUP.toInt() ||
+                                        mode == OPERATION_MODE_POWER_OFF_TRANSFER.toInt()
+
+                                    if (isStandby && opModePollRetries < 10 && opModeChar != null) {
+                                        opModePollRetries++
+                                        Log.d(TAG, "Camera is still in standby/boot mode (0x%02X). Waiting and retrying poll $opModePollRetries/10...".format(mode))
+                                        operationQueue.addFirst(GattAction.Read(opModeChar))
+                                        operationQueue.addFirst(GattAction.Delay(500L))
+                                    } else {
+                                        Log.d(TAG, "Camera is ready to raise Wi-Fi AP (Operation Mode: 0x%02X). Queueing Network Type = 1 (AP mode).".format(mode))
+                                        val wlanService = gatt.getService(WLAN_SERVICE_UUID)
+                                        val netTypeChar = wlanService?.getCharacteristic(WLAN_NETWORK_TYPE_CHAR_UUID)
+                                        if (netTypeChar != null) {
+                                            operationQueue.addFirst(GattAction.Write(netTypeChar, byteArrayOf(NETWORK_TYPE_AP)))
+                                        }
                                     }
                                 }
                             }
@@ -599,6 +609,7 @@ class BleUtilImpl(
 
         private const val BLE_ENABLE_ANYTIME: Byte = 1
         private const val POWER_ON: Byte = 1
+        private const val OPERATION_MODE_PLAYBACK: Byte = 1
         private const val OPERATION_MODE_BLE_STARTUP: Byte = 2
         private const val OPERATION_MODE_POWER_OFF_TRANSFER: Byte = 4
         private const val NETWORK_TYPE_AP: Byte = 1

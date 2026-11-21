@@ -62,8 +62,12 @@ class FilesStorageImpl(
         onFailure = { Result.failure(FilesStorageException.Unknown(it)) }
     )
 
-    private fun getSavedPhotoFiles(): List<DownloadedFile> {
-        val selection = "${MediaStore.Files.FileColumns.RELATIVE_PATH} like ?"
+    private fun getSavedPhotoFiles(includePending: Boolean = false): List<DownloadedFile> {
+        val selection = if (includePending) {
+            "${MediaStore.Files.FileColumns.RELATIVE_PATH} like ?"
+        } else {
+            "${MediaStore.Files.FileColumns.RELATIVE_PATH} like ? AND (${MediaStore.MediaColumns.IS_PENDING} IS NULL OR ${MediaStore.MediaColumns.IS_PENDING} != 1)"
+        }
         val selectionArgs = arrayOf("%$RICOH_PHOTOS_PATH%")
         val contentResolver = context.contentResolver
 
@@ -126,8 +130,12 @@ class FilesStorageImpl(
         onFailure = { Result.failure(FilesStorageException.Unknown(it)) }
     )
 
-    private fun getSavedMovieFiles(): List<DownloadedFile> {
-        val selection = "${MediaStore.Files.FileColumns.RELATIVE_PATH} like ?"
+    private fun getSavedMovieFiles(includePending: Boolean = false): List<DownloadedFile> {
+        val selection = if (includePending) {
+            "${MediaStore.Files.FileColumns.RELATIVE_PATH} like ?"
+        } else {
+            "${MediaStore.Files.FileColumns.RELATIVE_PATH} like ? AND (${MediaStore.MediaColumns.IS_PENDING} IS NULL OR ${MediaStore.MediaColumns.IS_PENDING} != 1)"
+        }
         val selectionArgs = arrayOf("%$RICOH_MOVIES_PATH%")
         val contentResolver = context.contentResolver
 
@@ -194,6 +202,7 @@ class FilesStorageImpl(
             }
 
             var totalBytesRead = 0L
+            var completed = false
             try {
                 val imageUriString = imageUri.toString()
                 Log.d("FilesStorageImpl", "savePhoto: Streaming ${file.name} to $imageUriString")
@@ -250,6 +259,7 @@ class FilesStorageImpl(
                 }
 
                 markFileComplete(contentResolver, imageUri)
+                completed = true
                 Log.d("FilesStorageImpl", "savePhoto: ${file.name} saved successfully, totalBytesRead = $totalBytesRead")
 
                 // Skip EXIF/bitmap dimension inspection for video files
@@ -272,13 +282,16 @@ class FilesStorageImpl(
                 )
             } catch (e: IOException) {
                 Log.e("FilesStorageImpl", "savePhoto: IOException while streaming ${file.name}: ${e.message}", e)
-                deleteInvalidFile(contentResolver, imageUri)
                 val error = if (e.message?.contains("No space left on device", ignoreCase = true) == true) {
                     FilesStorageException.StorageFull
                 } else {
                     FilesStorageException.NetworkError(e)
                 }
                 emit(Result.failure(error))
+            } finally {
+                if (!completed) {
+                    deleteInvalidFile(contentResolver, imageUri)
+                }
             }
         }.flowOn(Dispatchers.IO)
     }
@@ -330,12 +343,12 @@ class FilesStorageImpl(
     )
 
     override suspend fun deleteAll(): Result<Unit> = runCatching {
-        getSavedPhotoFiles().forEach {
+        getSavedPhotoFiles(includePending = true).forEach {
             val uri = ContentUris.withAppendedId(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, it.id)
             deleteMedia(uri.toString())
         }
 
-        getSavedMovieFiles().forEach {
+        getSavedMovieFiles(includePending = true).forEach {
             val uri = ContentUris.withAppendedId(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, it.id)
             deleteMedia(uri.toString())
         }
@@ -354,6 +367,16 @@ class FilesStorageImpl(
         val isVideo = mediaTypeString.startsWith("$MIME_TYPE_VIDEO/")
         val rootFolder = if (isVideo) RICOH_MOVIES_PATH else RICOH_PHOTOS_PATH
         val fullPath = rootFolder + "/" + file.directory
+        val contentUri = if (isVideo) MediaStore.Video.Media.EXTERNAL_CONTENT_URI else MediaStore.Images.Media.EXTERNAL_CONTENT_URI
+
+        // Remove any stale pending entry for the same target path so MediaStore doesn't create " (1)" duplicates
+        runCatching {
+            contentResolver.delete(
+                contentUri,
+                "${MediaStore.MediaColumns.DISPLAY_NAME} = ? AND ${MediaStore.MediaColumns.RELATIVE_PATH} like ? AND ${MediaStore.MediaColumns.IS_PENDING} = 1",
+                arrayOf(file.name, "%$fullPath%"),
+            )
+        }
 
         val contentValues = ContentValues().apply {
             put(MediaStore.MediaColumns.DISPLAY_NAME, file.name)
@@ -361,8 +384,6 @@ class FilesStorageImpl(
             put(MediaStore.MediaColumns.RELATIVE_PATH, fullPath)
             put(MediaStore.MediaColumns.IS_PENDING, 1)
         }
-
-        val contentUri = if (isVideo) MediaStore.Video.Media.EXTERNAL_CONTENT_URI else MediaStore.Images.Media.EXTERNAL_CONTENT_URI
 
         return contentResolver.insert(contentUri, contentValues)
     }
@@ -375,7 +396,12 @@ class FilesStorageImpl(
             val values = ContentValues().apply {
                 put(MediaStore.MediaColumns.IS_PENDING, 0)
             }
-            contentResolver.update(uri, values, null, null)
+            val updated = contentResolver.update(uri, values, null, null)
+            if (updated == 0) {
+                Log.w("FilesStorageImpl", "markFileComplete: update returned 0 rows for $uri")
+            }
+        }.onFailure { e ->
+            Log.e("FilesStorageImpl", "markFileComplete: Failed to clear IS_PENDING for $uri: ${e.message}", e)
         }
     }
 

@@ -146,4 +146,28 @@ class FilesStorageImplTest {
         assertThat(filesStorage.getSavedPhotos().getOrNull()).isEmpty()
         assertThat(filesStorage.getSavedMovies().getOrNull()).isEmpty()
     }
+
+    @Test
+    fun `getSavedPhotos excludes IS_PENDING entries`() {
+        val completedValues = ContentValues().apply {
+            put(MediaStore.MediaColumns.DISPLAY_NAME, "completed.jpg")
+            put(MediaStore.MediaColumns.TITLE, "completed")
+            put(MediaStore.MediaColumns.RELATIVE_PATH, "Pictures/Image Sync/100RICOH/")
+            put(MediaStore.MediaColumns.SIZE, 1000)
+            put(MediaStore.MediaColumns.IS_PENDING, 0)
+        }
+        val pendingValues = ContentValues().apply {
+            put(MediaStore.MediaColumns.DISPLAY_NAME, "pending.jpg")
+            put(MediaStore.MediaColumns.TITLE, "pending")
+            put(MediaStore.MediaColumns.RELATIVE_PATH, "Pictures/Image Sync/100RICOH/")
+            put(MediaStore.MediaColumns.SIZE, 1000)
+            put(MediaStore.MediaColumns.IS_PENDING, 1)
+        }
+        context.contentResolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, completedValues)
+        context.contentResolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, pendingValues)
+
+        val photos = filesStorage.getSavedPhotos().getOrNull()
+
+        assertThat(photos?.map { it.name }).containsExactly("completed.jpg")
+    }
 }
