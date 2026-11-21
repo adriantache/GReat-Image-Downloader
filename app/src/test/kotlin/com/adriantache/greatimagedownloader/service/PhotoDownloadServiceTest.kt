@@ -438,6 +438,59 @@ class PhotoDownloadServiceTest {
     }
 
     @Test
+    fun `unsorted photos download in ascending order and failure does not advance marker past gap`() {
+        val mockRepo = mockk<Repository>(relaxed = true)
+        val requestedOrder = mutableListOf<String>()
+
+        coEvery { mockRepo.getCameraStatus() } returns Result.success(CameraStatus())
+        coEvery { mockRepo.getLatestDownloadedPhotos() } returns Result.success(
+            listOf(PhotoFile("100RICOH", "R0000100.JPG"))
+        )
+        coEvery { mockRepo.shutDownCamera() } returns Result.success(Unit)
+        every { mockRepo.downloadMediaToStorage(any()) } answers {
+            val photo = firstArg<PhotoFile>()
+            requestedOrder.add(photo.name)
+            if (photo.name == "R0000102.JPG") {
+                flowOf(Result.failure(DomainException(DomainError.StorageFull)))
+            } else {
+                flowOf(Result.success(PhotoDownloadInfo(photo.name, "content://media/${photo.name}", 100, Kbps(500.0))))
+            }
+        }
+
+        stopKoin()
+        startKoin {
+            modules(
+                module {
+                    single<Repository> { mockRepo }
+                    single { dataTransferTool }
+                    single<WifiUtil> { fakeWifiUtil }
+                }
+            )
+        }
+
+        val service = serviceController.create().get()
+        // Pass photos in reverse order
+        val photos = arrayListOf(
+            PhotoFileItem("100RICOH", "R0000103.JPG"),
+            PhotoFileItem("100RICOH", "R0000102.JPG"),
+            PhotoFileItem("100RICOH", "R0000101.JPG"),
+        )
+        val intent = Intent(context, PhotoDownloadService::class.java).apply {
+            action = PhotoDownloadService.Actions.START.name
+            putParcelableArrayListExtra(PhotoDownloadService.PHOTOS_LIST_EXTRA, photos)
+        }
+
+        service.onStartCommand(intent, 0, 1)
+
+        Thread.sleep(300)
+
+        assertThat(requestedOrder).containsExactly("R0000101.JPG", "R0000102.JPG")
+        io.mockk.coVerify {
+            mockRepo.saveLatestDownloadedPhotos(listOf(PhotoFile("100RICOH", "R0000101.JPG")))
+        }
+    }
+
+    @Test
     fun `destroying service cleans up resources`() {
         serviceController.create().get()
         serviceController.destroy()

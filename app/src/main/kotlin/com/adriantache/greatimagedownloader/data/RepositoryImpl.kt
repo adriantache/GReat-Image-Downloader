@@ -140,6 +140,7 @@ class RepositoryImpl(
 
                     if (response.isSuccessful) {
                         val photoFile = response.body()?.dirs?.flatMap { it.toPhotoInfoList() }.orEmpty()
+                            .sortedWith(compareBy({ it.directory }, { it.name }))
                         // If the camera was just turned on, its HTTP server may respond with an empty dirs list
                         // while the SD card is still being mounted/indexed. Retry briefly before returning empty.
                         if (photoFile.isNotEmpty() || attempt == maxAttempts) {

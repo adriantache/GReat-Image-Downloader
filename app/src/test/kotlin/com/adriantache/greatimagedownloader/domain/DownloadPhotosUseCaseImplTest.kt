@@ -657,6 +657,46 @@ class DownloadPhotosUseCaseImplTest {
     }
 
     @Test
+    fun `onDownloadFinished does not advance marker past incomplete photo and counts only completed`() = runTest {
+        repository.latestDownloadedPhotos = mutableListOf(PhotoFile("100RICOH", "R0000100.JPG"))
+        repository.settings = Settings(rememberLastDownloadedPhotos = true)
+        repository.wifiDetails = WifiDetails("SSID", "PASSWORD", "BSSID")
+        repository.cameraPhotoListResult = Result.success(
+            listOf(
+                PhotoFile("100RICOH", "R0000103.JPG"),
+                PhotoFile("100RICOH", "R0000102.JPG"),
+                PhotoFile("100RICOH", "R0000101.JPG"),
+            )
+        )
+
+        (useCase.state.value as States.Init).onInit()
+        advanceUntilIdle()
+        (useCase.state.value as States.RequestPermissions).onPermissionsGranted()
+        advanceUntilIdle()
+        (useCase.state.value as States.ConnectWifi).onConnect()
+        advanceUntilIdle()
+        dataTransferTool.serviceStateFlow.value = DataTransferTool.ServiceState.FETCHING
+        advanceUntilIdle()
+
+        // R0000101 succeeds, R0000102 is only at 0% (failed/incomplete), R0000103 succeeded
+        dataTransferTool.imageFlow.value = PhotoDownloadInfo("R0000101.JPG", "content://media/101", 100, Kbps(500.0))
+        advanceUntilIdle()
+        dataTransferTool.imageFlow.value = PhotoDownloadInfo("R0000102.JPG", "", 0, Kbps(0.0))
+        advanceUntilIdle()
+        dataTransferTool.imageFlow.value = PhotoDownloadInfo("R0000103.JPG", "content://media/103", 100, Kbps(500.0))
+        advanceUntilIdle()
+        dataTransferTool.downloadFinishedFlow.value = Event(Unit)
+        advanceUntilIdle()
+
+        // Marker must stop at R0000101.JPG (not jump to R0000103.JPG)
+        assertThat(repository.latestDownloadedPhotos).containsExactly(
+            PhotoFile("100RICOH", "R0000101.JPG"),
+        )
+        val finishedEvent = useCase.event.value?.value as Events.SuccessfulDownload
+        assertThat(finishedEvent.numDownloadedPhotos).isEqualTo(2)
+    }
+
+    @Test
     fun `wifi connection retries 5 times before failing`() = runTest {
         // Arrange
         wifiUtil.connectResult = Pair(false, null)

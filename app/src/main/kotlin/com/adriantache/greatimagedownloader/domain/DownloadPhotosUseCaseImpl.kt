@@ -21,6 +21,7 @@ import com.adriantache.greatimagedownloader.domain.model.States.Init
 import com.adriantache.greatimagedownloader.domain.model.States.RequestPermissions
 import com.adriantache.greatimagedownloader.domain.model.States.RequestWifiCredentials
 import com.adriantache.greatimagedownloader.domain.model.WifiDetailsEntity
+import com.adriantache.greatimagedownloader.domain.utils.computeUpdatedLatestDownloadedPhotos
 import com.adriantache.greatimagedownloader.domain.utils.model.Event
 import com.adriantache.greatimagedownloader.domain.wifi.WifiUtil
 import com.adriantache.greatimagedownloader.logging.AppLogger
@@ -738,13 +739,14 @@ class DownloadPhotosUseCaseImpl(
     }
 
     private fun downloadPhotos(photos: List<PhotoFile>) {
-        photosToDownload = photos
+        val sortedPhotos = photos.sortedWith(compareBy({ it.directory }, { it.name }))
+        photosToDownload = sortedPhotos
         downloadedPhotoUris.clear()
-        dataTransferTool.pendingPhotosToDownload = photos
-        dataTransferTool.widgetStateFlow.value = WidgetState.Downloading(0, photos.size)
+        dataTransferTool.pendingPhotosToDownload = sortedPhotos
+        dataTransferTool.widgetStateFlow.value = WidgetState.Downloading(0, sortedPhotos.size)
         dataTransferTool.serviceStateFlow.value = ServiceState.DOWNLOADING
 
-        event.value = Event(Events.DownloadPhotosWithService(photos))
+        event.value = Event(Events.DownloadPhotosWithService(sortedPhotos))
     }
 
     private fun onDownloadPhotoInfo(info: PhotoDownloadInfo) {
@@ -774,7 +776,6 @@ class DownloadPhotosUseCaseImpl(
         isBackgroundSync = false
         val wasStopping = state.value is States.StoppingDownload
         val numDownloaded = downloadedPhotoUris.values.count { it.downloadProgress == 100 }
-            .takeIf { it > 0 } ?: downloadedPhotoUris.size
         val photosSnapshot = photosToDownload
         val urisSnapshot = downloadedPhotoUris.toMap()
 
@@ -807,26 +808,19 @@ class DownloadPhotosUseCaseImpl(
         // Make sure we don't count files that for whatever reason weren't downloaded.
         val completedFiles = photosToDownload.filter {
             downloadedPhotoUris[it.name]?.downloadProgress == 100
-        }
+        }.toSet()
 
-        val lastFiles = completedFiles.groupBy { it.directory }
-            .mapValues { entry -> entry.value.maxBy { it.name } }
-
-        if (lastFiles.isEmpty()) return
+        if (completedFiles.isEmpty()) return
 
         scope.launch {
-            val existingByDir = repository.getLatestDownloadedPhotos().getOrNull().orEmpty()
-                .associateBy { it.directory }
-                .toMutableMap()
+            val existingLatest = repository.getLatestDownloadedPhotos().getOrNull().orEmpty()
+            val updated = computeUpdatedLatestDownloadedPhotos(
+                existingLatest = existingLatest,
+                photosToDownload = photosToDownload,
+                completedPhotos = completedFiles,
+            )
 
-            for ((dir, newFile) in lastFiles) {
-                val existing = existingByDir[dir]
-                if (existing == null || newFile.name >= existing.name) {
-                    existingByDir[dir] = newFile
-                }
-            }
-
-            repository.saveLatestDownloadedPhotos(existingByDir.values.toList())
+            repository.saveLatestDownloadedPhotos(updated)
         }
     }
 

@@ -19,6 +19,7 @@ import com.adriantache.greatimagedownloader.domain.data.model.PhotoFile
 import com.adriantache.greatimagedownloader.domain.data.model.WifiDetails
 import com.adriantache.greatimagedownloader.domain.model.DomainError
 import com.adriantache.greatimagedownloader.domain.model.DomainException
+import com.adriantache.greatimagedownloader.domain.utils.computeUpdatedLatestDownloadedPhotos
 import com.adriantache.greatimagedownloader.domain.utils.model.Event
 import com.adriantache.greatimagedownloader.domain.wifi.WifiUtil
 import com.adriantache.greatimagedownloader.logging.AppLogger
@@ -292,14 +293,15 @@ class PhotoDownloadService : Service(), KoinComponent {
     }
 
     private suspend fun downloadPhotos(photosToDownload: List<PhotoFile>) {
-        Log.d("PhotoDownloadService", "downloadPhotos: Beginning download of ${photosToDownload.size} photos")
+        val sortedPhotos = photosToDownload.sortedWith(compareBy({ it.directory }, { it.name }))
+        Log.d("PhotoDownloadService", "downloadPhotos: Beginning download of ${sortedPhotos.size} photos")
         var isError = false
         val completedPhotos = mutableListOf<PhotoFile>()
 
-        for (index in photosToDownload.indices) {
+        for (index in sortedPhotos.indices) {
             if (!continueDownload) break
 
-            val photo = photosToDownload[index]
+            val photo = sortedPhotos[index]
             dataTransferTool.imageFlow.value = PhotoDownloadInfo(
                 name = photo.name,
                 uri = "",
@@ -307,10 +309,10 @@ class PhotoDownloadService : Service(), KoinComponent {
                 downloadSpeed = com.adriantache.greatimagedownloader.domain.utils.model.Kbps(0.0),
                 isLandscape = true,
             )
-            updateNotification(index + 1, photosToDownload.size)
-            dataTransferTool.widgetStateFlow.value = WidgetState.Downloading(index + 1, photosToDownload.size)
+            updateNotification(index + 1, sortedPhotos.size)
+            dataTransferTool.widgetStateFlow.value = WidgetState.Downloading(index + 1, sortedPhotos.size)
 
-            Log.d("PhotoDownloadService", "downloadPhotos: [${index + 1}/${photosToDownload.size}] Starting ${photo.directory}/${photo.name}")
+            Log.d("PhotoDownloadService", "downloadPhotos: [${index + 1}/${sortedPhotos.size}] Starting ${photo.directory}/${photo.name}")
 
             // Ensure we are bound (or reconnected) to the camera's Wi-Fi network before requesting the file
             ensureCameraWifiConnected()
@@ -400,7 +402,7 @@ class PhotoDownloadService : Service(), KoinComponent {
                     message = "All $maxRetries attempts failed for ${photo.name}: $lastDomainError",
                     keys = mapOf(
                         "photo_name" to photo.name,
-                        "photo_index" to "${index + 1}/${photosToDownload.size}",
+                        "photo_index" to "${index + 1}/${sortedPhotos.size}",
                     ),
                 )
                 handleError(lastDomainError ?: DomainError.NetworkError)
@@ -410,7 +412,7 @@ class PhotoDownloadService : Service(), KoinComponent {
 
         if (completedPhotos.isNotEmpty()) {
             Log.d("PhotoDownloadService", "downloadPhotos: Updating latest downloaded photos for ${completedPhotos.size} files")
-            updateLatestDownloadedPhotos(completedPhotos)
+            updateLatestDownloadedPhotos(sortedPhotos, completedPhotos)
         }
 
         Log.d("PhotoDownloadService", "downloadPhotos: Shutting down camera (completed=${completedPhotos.size}, error=$isError)")
@@ -460,26 +462,23 @@ class PhotoDownloadService : Service(), KoinComponent {
         return wifiUtil.ensureBound()
     }
 
-    private suspend fun updateLatestDownloadedPhotos(downloadedPhotos: List<PhotoFile>) {
-        val lastFiles = downloadedPhotos.groupBy { it.directory }
-            .mapValues { entry -> entry.value.maxBy { it.name } }
+    private suspend fun updateLatestDownloadedPhotos(
+        photosToDownload: List<PhotoFile>,
+        downloadedPhotos: List<PhotoFile>,
+    ) {
+        if (downloadedPhotos.isEmpty()) return
 
-        if (lastFiles.isEmpty()) return
-
-        val existingByDir = runCatching { repository.getLatestDownloadedPhotos().getOrNull() }
+        val existingLatest = runCatching { repository.getLatestDownloadedPhotos().getOrNull() }
             .getOrNull()
             .orEmpty()
-            .associateBy { it.directory }
-            .toMutableMap()
 
-        for ((dir, newFile) in lastFiles) {
-            val existing = existingByDir[dir]
-            if (existing == null || newFile.name >= existing.name) {
-                existingByDir[dir] = newFile
-            }
-        }
+        val updated = computeUpdatedLatestDownloadedPhotos(
+            existingLatest = existingLatest,
+            photosToDownload = photosToDownload,
+            completedPhotos = downloadedPhotos.toSet(),
+        )
 
-        repository.saveLatestDownloadedPhotos(existingByDir.values.toList())
+        repository.saveLatestDownloadedPhotos(updated)
     }
 
     private fun updateNotification(currentImage: Int, totalImages: Int) {
