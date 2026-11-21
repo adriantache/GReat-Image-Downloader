@@ -41,6 +41,7 @@ import androidx.glance.unit.ColorProvider
 import com.adriantache.greatimagedownloader.MainActivity
 import com.adriantache.greatimagedownloader.R
 import com.adriantache.greatimagedownloader.domain.data.Repository
+import com.adriantache.greatimagedownloader.logging.AppLogger
 import com.adriantache.greatimagedownloader.service.DataTransferTool
 import com.adriantache.greatimagedownloader.service.DataTransferTool.WidgetState
 import com.adriantache.greatimagedownloader.service.PhotoDownloadService
@@ -134,7 +135,11 @@ class QuickDownloadActionCallback : ActionCallback, KoinComponent {
             currentState is WidgetState.Checking ||
             currentState is WidgetState.Downloading
 
+        AppLogger.setKey("flow_source", "widget")
+        AppLogger.d("QuickDownloadWidget", "onAction: widgetState=$currentState, isBusy=$isBusy")
+
         if (isBusy) {
+            AppLogger.d("QuickDownloadWidget", "onAction: stopping active transfer")
             dataTransferTool?.widgetStateFlow?.value = WidgetState.Stopping
             QuickDownloadWidget().updateAll(context)
             val stopIntent = Intent(context, PhotoDownloadService::class.java).apply {
@@ -145,6 +150,7 @@ class QuickDownloadActionCallback : ActionCallback, KoinComponent {
         }
 
         if (!PermissionsHelper.hasAllRequiredPermissions(context)) {
+            AppLogger.w("QuickDownloadWidget", "onAction: missing permissions, launching MainActivity")
             val activityIntent = Intent(context, MainActivity::class.java).apply {
                 flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
                 putExtra(MainActivity.EXTRA_AUTO_CONNECT, true)
@@ -155,6 +161,7 @@ class QuickDownloadActionCallback : ActionCallback, KoinComponent {
 
         val wifiDetails = repository?.getWifiDetails()?.getOrNull()
         if (wifiDetails == null || wifiDetails.ssid.isNullOrBlank() || wifiDetails.password.isNullOrBlank()) {
+            AppLogger.w("QuickDownloadWidget", "onAction: missing Wi-Fi credentials, launching MainActivity")
             // If Wi-Fi credentials have not been set up yet, open MainActivity once for initial setup.
             val activityIntent = Intent(context, MainActivity::class.java).apply {
                 flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
@@ -164,6 +171,7 @@ class QuickDownloadActionCallback : ActionCallback, KoinComponent {
             return
         }
 
+        AppLogger.d("QuickDownloadWidget", "onAction: starting PhotoDownloadService QUICK_DOWNLOAD")
         dataTransferTool?.widgetStateFlow?.value = WidgetState.Connecting("BT…")
         QuickDownloadWidget().updateAll(context)
 

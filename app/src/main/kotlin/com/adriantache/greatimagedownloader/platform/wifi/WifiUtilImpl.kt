@@ -19,6 +19,7 @@ import android.os.Build
 import android.util.Log
 import androidx.core.content.ContextCompat
 import com.adriantache.greatimagedownloader.domain.wifi.WifiUtil
+import com.adriantache.greatimagedownloader.logging.AppLogger
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -68,7 +69,7 @@ class WifiUtilImpl(
             val resolvedBssid = findBssidFromScanResults(cleanSsid)
                 ?: latestBssid
                 ?: bssid?.takeIf { isValidBssid(it) }
-            Log.d("WifiUtilImpl", "Already connected to $cleanSsid (bssid=$resolvedBssid)")
+            AppLogger.d("WifiUtilImpl", "Already connected to $cleanSsid (hasBssid=${resolvedBssid != null})")
             return Pair(true, resolvedBssid)
         }
 
@@ -176,7 +177,10 @@ class WifiUtilImpl(
             } finally {
                 periodicScanJob.cancel()
             }
-        } ?: Pair(false, null) // Timeout case
+        } ?: run {
+            AppLogger.w("WifiUtilImpl", "connectToWifi timed out after 15s (hasBssid=${effectiveBssid != null})")
+            Pair(false, null) // Timeout case
+        }
     }
 
     private fun handleOnAvailable(
@@ -201,13 +205,14 @@ class WifiUtilImpl(
             latestBssid = newBssid
         }
 
+        AppLogger.d("WifiUtilImpl", "handleOnAvailable: network=$network, hasBssid=${newBssid != null}")
         if (continuation.isActive) {
             continuation.resume(Pair(true, newBssid))
         }
     }
 
     private fun handleOnLost(network: android.net.Network) {
-        Log.w("WifiUtilImpl", "Wi-Fi network lost: $network")
+        AppLogger.w("WifiUtilImpl", "Wi-Fi network lost: $network (wasCameraNet=${connectedCameraNetwork == network})")
         if (connectedCameraNetwork == network) {
             connectedCameraNetwork = null
         }
@@ -219,6 +224,7 @@ class WifiUtilImpl(
     private fun handleOnUnavailable(
         continuation: kotlinx.coroutines.CancellableContinuation<Pair<Boolean, String?>>,
     ) {
+        AppLogger.w("WifiUtilImpl", "Wi-Fi network unavailable")
         if (continuation.isActive) {
             continuation.resume(Pair(false, null))
         }

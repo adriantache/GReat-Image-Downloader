@@ -5,6 +5,11 @@ plugins {
     alias(libs.plugins.kotlin.parcelize)
 }
 
+if (file("google-services.json").exists()) {
+    apply plugin: libs.plugins.google.services.get().pluginId
+    apply plugin: libs.plugins.firebase.crashlytics.get().pluginId
+}
+
 android {
     namespace = 'com.adriantache.greatimagedownloader'
     compileSdk = 37
@@ -13,8 +18,8 @@ android {
         applicationId = "com.adriantache.greatimagedownloader"
         minSdk = 30
         targetSdk = 37
-        versionCode = 10209
-        versionName = "1.2.9"
+        versionCode = 10210
+        versionName = "1.2.10"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -98,6 +103,8 @@ dependencies {
     implementation libs.kotlinx.serialization.json
     implementation libs.okhttp.logging
     implementation libs.play.services.wearable
+    implementation platform(libs.firebase.bom)
+    implementation libs.firebase.crashlytics
     testImplementation libs.junit
     testImplementation libs.assertj.core
     testImplementation libs.mockk

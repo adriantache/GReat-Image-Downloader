@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "550521668538",
+    "project_id": "great-image-downloader",
+    "storage_bucket": "great-image-downloader.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:550521668538:android:05d4d3ce330f4960ec1383",
+        "android_client_info": {
+          "package_name": "com.adriantache.greatimagedownloader"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBJT7sn0YMWdqbSKCMhiIN_THcWxx1os5A"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

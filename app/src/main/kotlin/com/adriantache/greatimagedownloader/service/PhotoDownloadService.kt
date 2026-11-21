@@ -21,6 +21,7 @@ import com.adriantache.greatimagedownloader.domain.model.DomainError
 import com.adriantache.greatimagedownloader.domain.model.DomainException
 import com.adriantache.greatimagedownloader.domain.utils.model.Event
 import com.adriantache.greatimagedownloader.domain.wifi.WifiUtil
+import com.adriantache.greatimagedownloader.logging.AppLogger
 import com.adriantache.greatimagedownloader.service.DataTransferTool.ServiceState
 import com.adriantache.greatimagedownloader.service.DataTransferTool.WidgetState
 import com.adriantache.greatimagedownloader.service.model.PhotoFileItem
@@ -59,6 +60,7 @@ class PhotoDownloadService : Service(), KoinComponent {
 
     override fun onCreate() {
         super.onCreate()
+        AppLogger.d("PhotoDownloadService", "onCreate")
 
         registerNotificationChannel(this)
 
@@ -78,6 +80,8 @@ class PhotoDownloadService : Service(), KoinComponent {
 
         scope.launch {
             dataTransferTool.serviceStateFlow.collect { state ->
+                AppLogger.setKey("service_state", state.name)
+                AppLogger.d("PhotoDownloadService", "serviceState -> $state")
                 when (state) {
                     ServiceState.CONNECTING -> {
                         hasEnteredActiveState = true
@@ -169,6 +173,7 @@ class PhotoDownloadService : Service(), KoinComponent {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        AppLogger.d("PhotoDownloadService", "onStartCommand: action=${intent?.action}, serviceState=${dataTransferTool.serviceStateFlow.value}")
         when (intent?.action) {
             Actions.START.name -> {
                 Log.d("PhotoDownloadService", "onStartCommand: START")
@@ -230,6 +235,7 @@ class PhotoDownloadService : Service(), KoinComponent {
     }
 
     override fun onDestroy() {
+        AppLogger.d("PhotoDownloadService", "onDestroy")
         super.onDestroy()
         releaseLocks()
         scope.cancel()
@@ -266,6 +272,17 @@ class PhotoDownloadService : Service(), KoinComponent {
             DomainError.NetworkError -> "Connection failed. Please check if the camera is on."
             is DomainError.Unknown -> "An error occurred: ${error.message}"
         }
+
+        AppLogger.e(
+            tag = "PhotoDownloadService",
+            message = "handleError: $error -> $message",
+            keys = mapOf(
+                "error_type" to (error::class.simpleName ?: "Unknown"),
+                "service_state" to dataTransferTool.serviceStateFlow.value.name,
+                "connection_stage" to (dataTransferTool.connectionStageFlow.value?.name ?: "none"),
+                "wifi_bound" to wifiUtil.ensureBound().toString(),
+            ),
+        )
 
         val notificationManager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
         notificationManager.notify(2, getErrorNotification(this, message))
@@ -370,7 +387,7 @@ class PhotoDownloadService : Service(), KoinComponent {
                 }
 
                 if (attemptFailed && attempt < maxRetries) {
-                    Log.w("PhotoDownloadService", "Download of ${photo.name} failed (attempt $attempt/$maxRetries, error: $lastDomainError). Retrying...")
+                    AppLogger.w("PhotoDownloadService", "Download of ${photo.name} failed (attempt $attempt/$maxRetries, error: $lastDomainError). Retrying...")
                     ensureCameraWifiConnected(forceReconnect = attempt >= 2)
                     delay(500L * attempt)
                 }
@@ -378,7 +395,14 @@ class PhotoDownloadService : Service(), KoinComponent {
 
             if (!photoDownloaded && continueDownload) {
                 isError = true
-                Log.e("PhotoDownloadService", "downloadPhotos: All $maxRetries attempts failed for ${photo.name}")
+                AppLogger.e(
+                    tag = "PhotoDownloadService",
+                    message = "All $maxRetries attempts failed for ${photo.name}: $lastDomainError",
+                    keys = mapOf(
+                        "photo_name" to photo.name,
+                        "photo_index" to "${index + 1}/${photosToDownload.size}",
+                    ),
+                )
                 handleError(lastDomainError ?: DomainError.NetworkError)
                 break
             }
@@ -419,7 +443,7 @@ class PhotoDownloadService : Service(), KoinComponent {
             return wifiUtil.ensureBound()
         }
 
-        Log.w(
+        AppLogger.w(
             "PhotoDownloadService",
             "ensureCameraWifiConnected: Reconnecting to camera Wi-Fi (ssid=$ssid, forceReconnect=$forceReconnect)",
         )

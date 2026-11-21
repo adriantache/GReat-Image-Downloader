@@ -23,6 +23,7 @@ import com.adriantache.greatimagedownloader.domain.model.States.RequestWifiCrede
 import com.adriantache.greatimagedownloader.domain.model.WifiDetailsEntity
 import com.adriantache.greatimagedownloader.domain.utils.model.Event
 import com.adriantache.greatimagedownloader.domain.wifi.WifiUtil
+import com.adriantache.greatimagedownloader.logging.AppLogger
 import com.adriantache.greatimagedownloader.service.DataTransferTool
 import com.adriantache.greatimagedownloader.service.DataTransferTool.ServiceState
 import com.adriantache.greatimagedownloader.service.DataTransferTool.WidgetState
@@ -169,6 +170,17 @@ class DownloadPhotosUseCaseImpl(
     }
 
     private fun onError(error: DomainError) {
+        AppLogger.e(
+            tag = "DownloadPhotosUseCase",
+            message = "onError: $error",
+            keys = mapOf(
+                "error_type" to (error::class.simpleName ?: "Unknown"),
+                "ui_state" to (state.value::class.simpleName ?: "Unknown"),
+                "service_state" to dataTransferTool.serviceStateFlow.value.name,
+                "connection_stage" to (dataTransferTool.connectionStageFlow.value?.name ?: "none"),
+                "is_background_sync" to isBackgroundSync.toString(),
+            ),
+        )
         connectionJob?.cancel()
         connectionJob = null
         fetchJob?.cancel()
@@ -233,17 +245,19 @@ class DownloadPhotosUseCaseImpl(
 
     override fun startBackgroundSync() {
         if (dataTransferTool.serviceStateFlow.value != ServiceState.IDLE || isBackgroundSync) {
-            Log.d("DownloadPhotosUseCase", "startBackgroundSync: ignored, already active (state=${dataTransferTool.serviceStateFlow.value}, isBackgroundSync=$isBackgroundSync)")
+            AppLogger.w("DownloadPhotosUseCase", "startBackgroundSync: ignored, already active (state=${dataTransferTool.serviceStateFlow.value}, isBackgroundSync=$isBackgroundSync)")
             return
         }
 
         val wifiDetails = repository.getWifiDetails().getOrNull()?.toEntity() ?: WifiDetailsEntity()
         if (!wifiDetails.isValid || wifiUtil.isWifiDisabled) {
+            AppLogger.w("DownloadPhotosUseCase", "startBackgroundSync: invalid wifiDetails=${wifiDetails.isValid}, wifiDisabled=${wifiUtil.isWifiDisabled}")
             dataTransferTool.widgetStateFlow.value = WidgetState.Error
             dataTransferTool.serviceStateFlow.value = ServiceState.IDLE
             return
         }
 
+        AppLogger.d("DownloadPhotosUseCase", "startBackgroundSync: starting")
         isBackgroundSync = true
         startWifiConnection(wifiDetails)
     }
@@ -288,6 +302,10 @@ class DownloadPhotosUseCaseImpl(
     }
 
     private fun onInit() {
+        AppLogger.d(
+            "DownloadPhotosUseCase",
+            "onInit: currentState=${state.value::class.simpleName}, serviceState=${dataTransferTool.serviceStateFlow.value}, isBackgroundSync=$isBackgroundSync",
+        )
         state.value = RequestPermissions(::onPermissionsGranted)
     }
 
@@ -359,6 +377,8 @@ class DownloadPhotosUseCaseImpl(
     }
 
     private fun startWifiConnection(wifiDetails: WifiDetailsEntity) {
+        AppLogger.setKey("is_background_sync", isBackgroundSync)
+        AppLogger.d("DownloadPhotosUseCase", "startWifiConnection: hasBssid=${!wifiDetails.bssid.isNullOrBlank()}, isBackgroundSync=$isBackgroundSync")
         connectionJob?.cancel()
         connectionJob = scope.launch {
             state.value = buildConnectWifiState(
@@ -423,6 +443,8 @@ class DownloadPhotosUseCaseImpl(
                 )
                 dataTransferTool.connectionStageFlow.value = ConnectionStage.JOINING_WIFI
                 dataTransferTool.connectionAttemptFlow.value = attempt
+                AppLogger.setKey("connection_stage", ConnectionStage.JOINING_WIFI.name)
+                AppLogger.setKey("wifi_attempt", attempt)
                 val stageText = if (attempt > 1) "Join $attempt…" else "Join…"
                 dataTransferTool.widgetStateFlow.value = WidgetState.Connecting(stageText)
 
@@ -450,11 +472,13 @@ class DownloadPhotosUseCaseImpl(
                 }
 
                 if (attemptIsConnected) {
+                    AppLogger.d("DownloadPhotosUseCase", "startWifiConnection: connected on attempt $attempt/$maxRetries (hasNewBssid=${!attemptNewBssid.isNullOrBlank()})")
                     isConnected = true
                     newBssid = attemptNewBssid ?: currentBssid
                     break
                 }
 
+                AppLogger.w("DownloadPhotosUseCase", "startWifiConnection: attempt $attempt/$maxRetries failed (hasBssid=${attemptBssid != null})")
                 if (attempt < maxRetries) delay(5.seconds)
             }
 
@@ -478,6 +502,15 @@ class DownloadPhotosUseCaseImpl(
                 dataTransferTool.serviceStateFlow.value = ServiceState.FETCHING
                 // fetchPhotosFromCamera() will be called via serviceStateFlow collector
             } else {
+                AppLogger.e(
+                    tag = "DownloadPhotosUseCase",
+                    message = "Wi-Fi connection hard timeout after $maxRetries attempts",
+                    keys = mapOf(
+                        "is_background_sync" to isBackgroundSync.toString(),
+                        "has_bssid" to (currentBssid != null).toString(),
+                        "wifi_disabled" to wifiUtil.isWifiDisabled.toString(),
+                    ),
+                )
                 isBackgroundSync = false
                 bleUtil?.disconnect()
                 wifiUtil.cleanup()
@@ -657,6 +690,11 @@ class DownloadPhotosUseCaseImpl(
                     }
                 },
                 onFailure = { throwable ->
+                    AppLogger.e(
+                        tag = "DownloadPhotosUseCase",
+                        message = "getCameraPhotoList failed: ${throwable.message}",
+                        throwable = throwable,
+                    )
                     val error = (throwable as? DomainException)?.domainError ?: DomainError.Unknown(throwable.message)
                     onError(error)
                 }
