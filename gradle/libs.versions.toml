@@ -24,7 +24,7 @@ robolectric = "4.18.1"
 playServicesWearable = "20.0.1"
 wearCompose = "1.7.1"
 googleServices = "4.4.2"
-firebaseCrashlyticsPlugin = "3.0.3"
+firebaseCrashlyticsPlugin = "3.0.8"
 firebaseBom = "33.7.0"
 
 [libraries]
