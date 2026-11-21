@@ -486,6 +486,9 @@ class DownloadPhotosUseCaseImpl(
             if (!isActive) return@launch
 
             if (isConnected) {
+                // Wi-Fi handoff succeeded; release the BLE GATT link so the camera's 2.4 GHz radio isn't tied up during transfer
+                bleUtil?.disconnect()
+
                 // Save new BSSID (never overwrite an existing valid BSSID with null if SSID is unchanged)
                 repository.getWifiDetails().getOrNull()?.let { currentDetails ->
                     val resolvedBssid = newBssid?.takeIf { it.isNotBlank() }
