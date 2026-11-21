@@ -23,7 +23,7 @@ kotlinxCoroutinesTest = "1.11.0"
 robolectric = "4.18.1"
 playServicesWearable = "20.0.1"
 wearCompose = "1.7.1"
-googleServices = "4.4.2"
+googleServices = "4.6.0"
 firebaseCrashlyticsPlugin = "3.0.3"
 firebaseBom = "33.7.0"
 
