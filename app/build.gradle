@@ -12,7 +12,11 @@ if (file("google-services.json").exists()) {
 
 android {
     namespace = 'com.adriantache.greatimagedownloader'
-    compileSdk = 37
+    compileSdk {
+        version = release(37) {
+            minorApiLevel = 1
+        }
+    }
 
     defaultConfig {
         applicationId = "com.adriantache.greatimagedownloader"
